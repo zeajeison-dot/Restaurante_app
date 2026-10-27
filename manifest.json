@@ -1,7 +1,7 @@
 {
   "name": "Restaurante POS Pro",
   "short_name": "RestoPOS",
-"start_url": "/Restaurante_app/index.html",
+  "start_url": "/Restaurante_app/index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1e293b",
