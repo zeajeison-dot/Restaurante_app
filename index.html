@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RestoPOS - Control de Restaurante</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e293b">
+    <!-- Tailwind CSS CDN para diseño profesional y rápido en móviles -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- CONTENEDOR GENERAL -->
+    <div id="app" class="flex-1 flex flex-col">
+        
+        <!-- VISTA: LOGIN -->
+        <div id="view-login" class="flex-1 flex flex-col justify-center items-center p-6">
+            <div class="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+                <div class="text-center mb-6">
+                    <span class="text-4xl">🍽️</span>
+                    <h1 class="text-2xl font-bold text-slate-900 mt-2">RestoPOS</h1>
+                    <p class="text-sm text-slate-500">Ingrese sus credenciales</p>
+                </div>
+                
+                <form id="login-form" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Usuario</label>
+                        <input type="text" id="username" required class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-base" placeholder="Ej: admin o mesero1">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Contraseña o PIN</label>
+                        <input type="password" id="password" required class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-base" placeholder="••••">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 rounded-xl shadow-lg transition-all active:scale-95 text-base">
+                        Iniciar Sesión
+                    </button>
+                </form>
+                <div id="login-error" class="mt-4 text-center text-red-500 text-sm hidden"></div>
+            </div>
+            <p class="text-xs text-slate-400 mt-6 text-center">Modo PWA Android • Optimizado para Celulares</p>
+        </div>
+
+        <!-- VISTA: PANEL PRINCIPAL (DASHBOARD) -->
+        <div id="view-dashboard" class="flex-1 flex flex-col hidden">
+            <!-- Barra Superior -->
+            <header class="bg-slate-900 text-white px-4 py-3 flex justify-between items-center shadow-md">
+                <div>
+                    <h2 class="font-bold text-lg" id="user-display-name">Restaurante</h2>
+                    <span class="text-xs bg-slate-800 text-blue-400 px-2 py-0.5 rounded-full font-medium" id="user-display-role">Rol</span>
+                </div>
+                <button id="btn-logout" class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition-all">
+                    Salir
+                </button>
+            </header>
+
+            <!-- Contenido Dinámico según el Rol -->
+            <main class="flex-1 p-4 max-w-4xl w-full mx-auto">
+                
+                <!-- Panel de Administrador -->
+                <div id="panel-admin" class="space-y-4 hidden">
+                    <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl">
+                        <p class="text-sm text-amber-800 font-medium">Panel de Control Administrativo activo. Tienes permisos completos.</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
+                            <span class="text-3xl">🪑</span>
+                            <h3 class="font-semibold mt-2 text-sm">Gestionar Mesas</h3>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
+                            <span class="text-3xl">🍔</span>
+                            <h3 class="font-semibold mt-2 text-sm">Catálogo y Precios</h3>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
+                            <span class="text-3xl">📦</span>
+                            <h3 class="font-semibold mt-2 text-sm">Inventario y Recetas</h3>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
+                            <span class="text-3xl">📊</span>
+                            <h3 class="font-semibold mt-2 text-sm">Caja y Reportes</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel de Mesero -->
+                <div id="panel-waiter" class="space-y-4 hidden">
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-xl">
+                        <p class="text-sm text-blue-800 font-medium">Panel de Mesero activo. Seleccione una mesa para iniciar o revisar pedidos.</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
+                            <span class="text-3xl">🪑</span>
+                            <h3 class="font-bold mt-2 text-slate-800">Ver Mesas</h3>
+                            <p class="text-xs text-slate-500">Abrir y tomar pedidos</p>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
+                            <span class="text-3xl">📋</span>
+                            <h3 class="font-bold mt-2 text-slate-800">Mis Pedidos</h3>
+                            <p class="text-xs text-slate-500">Estado en cocina</p>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+
+    </div>
+
+    <!-- LÓGICA DE LA APLICACIÓN -->
+    <script>
+        // Base de usuarios simulada (en fases posteriores se conectará con Google Sheets / Backend)
+        const USERS_DB = [
+            { username: "admin", password: "123", name: "Administrador General", role: "ADMINISTRADOR" },
+            { username: "mesero1", password: "123", name: "Carlos Mesero", role: "MESERO" }
+        ];
+
+        const viewLogin = document.getElementById('view-login');
+        const viewDashboard = document.getElementById('view-dashboard');
+        const loginForm = document.getElementById('login-form');
+        const loginError = document.getElementById('login-error');
+        const btnLogout = document.getElementById('btn-logout');
+        
+        const panelAdmin = document.getElementById('panel-admin');
+        const panelWaiter = document.getElementById('panel-waiter');
+        const userDisplayName = document.getElementById('user-display-name');
+        const userDisplayRole = document.getElementById('user-display-role');
+
+        // Verificar si ya hay una sesión activa en el celular
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedUser = localStorage.getItem('restopos_user');
+            if (savedUser) {
+                const user = JSON.parse(savedUser);
+                showDashboard(user);
+            }
+
+            // Registrar Service Worker para PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(() => console.log('Service Worker registrado con éxito.'))
+                    .catch(err => console.log('Error al registrar Service Worker:', err));
+            }
+        });
+
+        // Manejar Login
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const u = document.getElementById('username').value.trim();
+            const p = document.getElementById('password').value.trim();
+
+            const foundUser = USERS_DB.find(item => item.username === u && item.password === p);
+
+            if (foundUser) {
+                loginError.classList.add('hidden');
+                localStorage.setItem('restopos_user', JSON.stringify(foundUser));
+                showDashboard(foundUser);
+            } else {
+                loginError.textContent = 'Usuario o contraseña incorrectos.';
+                loginError.classList.remove('hidden');
+            }
+        });
+
+        // Mostrar Panel según Rol
+        function showDashboard(user) {
+            viewLogin.classList.add('hidden');
+            viewDashboard.classList.remove('hidden');
+
+            userDisplayName.textContent = user.name;
+            userDisplayRole.textContent = user.role;
+
+            if (user.role === 'ADMINISTRADOR') {
+                panelAdmin.classList.remove('hidden');
+                panelWaiter.classList.add('hidden');
+            } else {
+                panelWaiter.classList.remove('hidden');
+                panelAdmin.classList.add('hidden');
+            }
+        }
+
+        // Manejar Logout
+        btnLogout.addEventListener('click', () => {
+            localStorage.removeItem('restopos_user');
+            viewDashboard.classList.add('hidden');
+            viewLogin.classList.remove('hidden');
+            document.getElementById('login-form').reset();
+        });
+    </script>
+</body>
+</html>
