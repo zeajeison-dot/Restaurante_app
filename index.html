@@ -4,185 +4,212 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RestoPOS - Control de Restaurante</title>
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#1e293b">
-    <!-- Tailwind CSS CDN para diseño profesional y rápido en móviles -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --success: #16a34a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background-color: var(--background); color: var(--text); padding: 1rem; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .card { background: var(--surface); border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); margin-bottom: 1rem; }
+        h1, h2 { color: var(--text); margin-bottom: 1rem; font-size: 1.5rem; }
+        .btn { background: var(--primary); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 0.5rem; }
+        .btn:hover { background: var(--primary-dark); }
+        .btn-secondary { background: #64748b; }
+        .input-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-secondary); }
+        input, select { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; }
+        .hidden { display: none !important; }
+        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-top: 1rem; }
+        .menu-card { background: var(--surface); border: 2px solid var(--border); border-radius: 10px; padding: 1rem; text-align: center; cursor: pointer; transition: 0.2s; }
+        .menu-card:active { transform: scale(0.98); }
+        .menu-card h3 { font-size: 1.1rem; margin-bottom: 0.25rem; }
+        .badge { background: #dbeafe; color: #1e40af; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem; display: inline-block; margin-bottom: 0.5rem; }
+        .table-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-top: 1rem; }
+        .table-item { background: #f1f5f9; border: 2px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; cursor: pointer; font-weight: bold; }
+        .table-item.ocupada { background: #fee2e2; border-color: #ef4444; color: #b91c1c; }
+        .table-item.libre { background: #dcfce7; border-color: #22c55e; color: #15803d; }
+    </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
-
-    <!-- CONTENEDOR GENERAL -->
-    <div id="app" class="flex-1 flex flex-col">
-        
-        <!-- VISTA: LOGIN -->
-        <div id="view-login" class="flex-1 flex flex-col justify-center items-center p-6">
-            <div class="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
-                <div class="text-center mb-6">
-                    <span class="text-4xl">🍽️</span>
-                    <h1 class="text-2xl font-bold text-slate-900 mt-2">RestoPOS</h1>
-                    <p class="text-sm text-slate-500">Ingrese sus credenciales</p>
-                </div>
-                
-                <form id="login-form" class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Usuario</label>
-                        <input type="text" id="username" required class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-base" placeholder="Ej: admin o mesero1">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Contraseña o PIN</label>
-                        <input type="password" id="password" required class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-base" placeholder="••••">
-                    </div>
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 rounded-xl shadow-lg transition-all active:scale-95 text-base">
-                        Iniciar Sesión
-                    </button>
-                </form>
-                <div id="login-error" class="mt-4 text-center text-red-500 text-sm hidden"></div>
+<body>
+    <div class="container">
+        <!-- VISTA DE LOGIN -->
+        <div id="login-view" class="card">
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <h2>RestoPOS</h2>
+                <p style="color: var(--text-secondary);">Ingrese sus credenciales</p>
             </div>
-            <p class="text-xs text-slate-400 mt-6 text-center">Modo PWA Android • Optimizado para Celulares</p>
+            <div class="input-group">
+                <label>Usuario</label>
+                <input type="text" id="userInput" placeholder="Ej: admin">
+            </div>
+            <div class="input-group">
+                <label>Contraseña / PIN</label>
+                <input type="password" id="passInput" placeholder="••••">
+            </div>
+            <button class="btn" onclick="login()">Iniciar Sesión</button>
+            <p style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">Usuario admin / PIN 123</p>
         </div>
 
-        <!-- VISTA: PANEL PRINCIPAL (DASHBOARD) -->
-        <div id="view-dashboard" class="flex-1 flex flex-col hidden">
-            <!-- Barra Superior -->
-            <header class="bg-slate-900 text-white px-4 py-3 flex justify-between items-center shadow-md">
-                <div>
-                    <h2 class="font-bold text-lg" id="user-display-name">Restaurante</h2>
-                    <span class="text-xs bg-slate-800 text-blue-400 px-2 py-0.5 rounded-full font-medium" id="user-display-role">Rol</span>
+        <!-- PANEL PRINCIPAL -->
+        <div id="dashboard-view" class="hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2 id="welcome-msg" style="margin: 0; font-size: 1.2rem;">Panel</h2>
+                <button class="btn btn-secondary" style="width: auto; padding: 0.5rem 1rem; margin: 0;" onclick="logout()">Salir</button>
+            </div>
+            
+            <div class="grid">
+                <div class="menu-card" onclick="showSection('tables-section')">
+                    <h3>🪑 Mesas</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Gestión de salón</p>
                 </div>
-                <button id="btn-logout" class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition-all">
-                    Salir
-                </button>
-            </header>
-
-            <!-- Contenido Dinámico según el Rol -->
-            <main class="flex-1 p-4 max-w-4xl w-full mx-auto">
-                
-                <!-- Panel de Administrador -->
-                <div id="panel-admin" class="space-y-4 hidden">
-                    <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl">
-                        <p class="text-sm text-amber-800 font-medium">Panel de Control Administrativo activo. Tienes permisos completos.</p>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
-                            <span class="text-3xl">🪑</span>
-                            <h3 class="font-semibold mt-2 text-sm">Gestionar Mesas</h3>
-                        </div>
-                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
-                            <span class="text-3xl">🍔</span>
-                            <h3 class="font-semibold mt-2 text-sm">Catálogo y Precios</h3>
-                        </div>
-                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
-                            <span class="text-3xl">📦</span>
-                            <h3 class="font-semibold mt-2 text-sm">Inventario y Recetas</h3>
-                        </div>
-                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
-                            <span class="text-3xl">📊</span>
-                            <h3 class="font-semibold mt-2 text-sm">Caja y Reportes</h3>
-                        </div>
-                    </div>
+                <div class="menu-card" onclick="showSection('catalog-section')">
+                    <h3>🍔 Catálogo</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Precios y productos</p>
                 </div>
-
-                <!-- Panel de Mesero -->
-                <div id="panel-waiter" class="space-y-4 hidden">
-                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-xl">
-                        <p class="text-sm text-blue-800 font-medium">Panel de Mesero activo. Seleccione una mesa para iniciar o revisar pedidos.</p>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
-                            <span class="text-3xl">🪑</span>
-                            <h3 class="font-bold mt-2 text-slate-800">Ver Mesas</h3>
-                            <p class="text-xs text-slate-500">Abrir y tomar pedidos</p>
-                        </div>
-                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 text-center cursor-pointer hover:bg-slate-50">
-                            <span class="text-3xl">📋</span>
-                            <h3 class="font-bold mt-2 text-slate-800">Mis Pedidos</h3>
-                            <p class="text-xs text-slate-500">Estado en cocina</p>
-                        </div>
-                    </div>
+                <div class="menu-card" onclick="alert('Módulo disponible en la siguiente fase')">
+                    <h3>📦 Inventario</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Recetas y stock</p>
                 </div>
-
-            </main>
+                <div class="menu-card" onclick="alert('Módulo disponible en la siguiente fase')">
+                    <h3>📊 Reportes</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Caja y ventas</p>
+                </div>
+            </div>
         </div>
 
+        <!-- SECCIÓN: GESTIÓN DE MESAS -->
+        <div id="tables-section" class="card hidden">
+            <h2>Gestión de Mesas</h2>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">Seleccione una mesa para cambiar su estado:</p>
+            <div class="table-grid" id="tableGridContainer">
+                <!-- Generado por JS -->
+            </div>
+            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
+        </div>
+
+        <!-- SECCIÓN: CATÁLOGO Y PRECIOS -->
+        <div id="catalog-section" class="card hidden">
+            <h2>Catálogo de Productos</h2>
+            <div class="input-group">
+                <label>Nuevo Producto</label>
+                <input type="text" id="newProdName" placeholder="Ej: Hamburguesa Especial">
+            </div>
+            <div class="input-group">
+                <label>Precio ($)</label>
+                <input type="number" id="newProdPrice" placeholder="Ej: 25000">
+            </div>
+            <button class="btn" onclick="addProduct()">Agregar al Catálogo</button>
+            
+            <div style="margin-top: 1.5rem;">
+                <h3>Productos Existentes</h3>
+                <div id="productList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
+                    <!-- Generado por JS -->
+                </div>
+            </div>
+            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
+        </div>
     </div>
 
-    <!-- LÓGICA DE LA APLICACIÓN -->
     <script>
-        // Base de usuarios simulada (en fases posteriores se conectará con Google Sheets / Backend)
-        const USERS_DB = [
-            { username: "admin", password: "123", name: "Administrador General", role: "ADMINISTRADOR" },
-            { username: "mesero1", password: "123", name: "Carlos Mesero", role: "MESERO" }
+        // Simulación de datos iniciales
+        let tables = [
+            { id: 1, name: 'Mesa 1', status: 'libre' },
+            { id: 2, name: 'Mesa 2', status: 'ocupada' },
+            { id: 3, name: 'Mesa 3', status: 'libre' },
+            { id: 4, name: 'Mesa 4', status: 'libre' },
+            { id: 5, name: 'Mesa 5', status: 'ocupada' },
+            { id: 6, name: 'Mesa 6', status: 'libre' }
         ];
 
-        const viewLogin = document.getElementById('view-login');
-        const viewDashboard = document.getElementById('view-dashboard');
-        const loginForm = document.getElementById('login-form');
-        const loginError = document.getElementById('login-error');
-        const btnLogout = document.getElementById('btn-logout');
-        
-        const panelAdmin = document.getElementById('panel-admin');
-        const panelWaiter = document.getElementById('panel-waiter');
-        const userDisplayName = document.getElementById('user-display-name');
-        const userDisplayRole = document.getElementById('user-display-role');
+        let products = [
+            { name: 'Hamburguesa Sencilla', price: 18000 },
+            { name: 'Papas Francesas', price: 8000 },
+            { name: 'Gaseosa 400ml', price: 4000 }
+        ];
 
-        // Verificar si ya hay una sesión activa en el celular
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedUser = localStorage.getItem('restopos_user');
-            if (savedUser) {
-                const user = JSON.parse(savedUser);
-                showDashboard(user);
-            }
-
-            // Registrar Service Worker para PWA
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(() => console.log('Service Worker registrado con éxito.'))
-                    .catch(err => console.log('Error al registrar Service Worker:', err));
-            }
-        });
-
-        // Manejar Login
-        loginForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const u = document.getElementById('username').value.trim();
-            const p = document.getElementById('password').value.trim();
-
-            const foundUser = USERS_DB.find(item => item.username === u && item.password === p);
-
-            if (foundUser) {
-                loginError.classList.add('hidden');
-                localStorage.setItem('restopos_user', JSON.stringify(foundUser));
-                showDashboard(foundUser);
+        function login() {
+            const user = document.getElementById('userInput').value;
+            const pass = document.getElementById('passInput').value;
+            if(user === 'admin' && pass === '123') {
+                document.getElementById('login-view').classList.add('hidden');
+                document.getElementById('dashboard-view').classList.remove('hidden');
+                document.getElementById('welcome-msg').innerText = 'Administrador General';
             } else {
-                loginError.textContent = 'Usuario o contraseña incorrectos.';
-                loginError.classList.remove('hidden');
-            }
-        });
-
-        // Mostrar Panel según Rol
-        function showDashboard(user) {
-            viewLogin.classList.add('hidden');
-            viewDashboard.classList.remove('hidden');
-
-            userDisplayName.textContent = user.name;
-            userDisplayRole.textContent = user.role;
-
-            if (user.role === 'ADMINISTRADOR') {
-                panelAdmin.classList.remove('hidden');
-                panelWaiter.classList.add('hidden');
-            } else {
-                panelWaiter.classList.remove('hidden');
-                panelAdmin.classList.add('hidden');
+                alert('Credenciales incorrectas. Usa admin / 123');
             }
         }
 
-        // Manejar Logout
-        btnLogout.addEventListener('click', () => {
-            localStorage.removeItem('restopos_user');
-            viewDashboard.classList.add('hidden');
-            viewLogin.classList.remove('hidden');
-            document.getElementById('login-form').reset();
-        });
+        function logout() {
+            document.getElementById('dashboard-view').classList.add('hidden');
+            document.getElementById('login-view').classList.remove('hidden');
+            document.getElementById('userInput').value = '';
+            document.getElementById('passInput').value = '';
+        }
+
+        function showSection(sectionId) {
+            document.getElementById('dashboard-view').classList.add('hidden');
+            document.getElementById('tables-section').classList.add('hidden');
+            document.getElementById('catalog-section').classList.add('hidden');
+            
+            document.getElementById(sectionId).classList.remove('hidden');
+            if(sectionId === 'tables-section') renderTables();
+            if(sectionId === 'catalog-section') renderProducts();
+        }
+
+        function renderTables() {
+            const container = document.getElementById('tableGridContainer');
+            container.innerHTML = '';
+            tables.forEach(t => {
+                const div = document.createElement('div');
+                div.className = `table-item ${t.status}`;
+                div.innerHTML = `${t.name}<br><span style="font-size:0.75rem; text-transform:uppercase;">${t.status}</span>`;
+                div.onclick = () => toggleTableStatus(t.id);
+                container.appendChild(div);
+            });
+        }
+
+        function toggleTableStatus(id) {
+            const table = tables.find(t => t.id === id);
+            if(table) {
+                table.status = table.status === 'libre' ? 'ocupada' : 'libre';
+                renderTables();
+            }
+        }
+
+        function renderProducts() {
+            const list = document.getElementById('productList');
+            list.innerHTML = '';
+            products.forEach(p => {
+                const item = document.createElement('div');
+                item.style.cssText = "display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid var(--border);";
+                item.innerHTML = `<span>${p.name}</span><strong>$ ${p.price.toLocaleString()}</strong>`;
+                list.appendChild(item);
+            });
+        }
+
+        function addProduct() {
+            const name = document.getElementById('newProdName').value;
+            const price = parseFloat(document.getElementById('newProdPrice').value);
+            if(name && price) {
+                products.push({ name, price });
+                document.getElementById('newProdName').value = '';
+                document.getElementById('newProdPrice').value = '';
+                renderProducts();
+                alert('Producto agregado con éxito');
+            } else {
+                alert('Por favor complete ambos campos');
+            }
+        }
     </script>
 </body>
 </html>
