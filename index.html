@@ -27,7 +27,7 @@
             <button class="btn" onclick="login()">Iniciar Sesión</button>
             <p style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">Usuario admin / PIN 123</p>
             <p style="text-align: center; margin-top: 1.5rem; font-size: 0.75rem; color: #94a3b8;" id="update-timestamp">
-                Actualizado: 2026-10-28 01:00
+                Actualizado: 2026-10-28 01:25
             </p>
         </div>
 
@@ -92,9 +92,28 @@
                 </div>
             </div>
             
-            <button class="btn btn-danger" onclick="clearTableOrder()">Liberar Mesa / Pagar</button>
+            <button class="btn" style="background: var(--success);" onclick="openBillSection()">💳 Ver Cuenta / Dividir Pago</button>
             <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="showSection('tables-section')">Volver a Mesas</button>
         </div>
+        
+        
+           <!-- SECCIÓN: GESTIÓN DE CUENTAS Y RECIBOS INDEPENDIENTES -->
+        <div id="bill-section" class="card hidden">
+            <h2 id="bill-title">Resumen de Cuenta</h2>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem;">Selecciona los platos para emitir el recibo parcial de cada comensal:</p>
+            
+            <div id="billItemsList" style="max-height: 160px; overflow-y: auto; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;"></div>
+            
+            <div style="background: #f1f5f9; padding: 0.6rem; border-radius: 8px; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: bold; font-size: 0.9rem;">Subtotal Selección:</span>
+                <span id="selectedPartialTotal" style="font-weight: bold; font-size: 1.05rem; color: var(--primary);">$ 0</span>
+            </div>
+
+            <button class="btn" style="background: var(--primary); margin-top: 0;" onclick="generateReceipt()">📄 Generar Recibo (Bloquear Ítems)</button>
+            <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="backToOrderSection()">Volver al Pedido</button>
+        </div>
+
+
 
         <!-- SECCIÓN: CATÁLOGO Y RECETAS -->
         <div id="catalog-section" class="card hidden">

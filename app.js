@@ -7,12 +7,12 @@ window.onload = function() {
 };
 
 let tables = JSON.parse(localStorage.getItem('restopos_tables')) || [
-    { id: 1, name: 'Mesa 1', status: 'libre', items: [] },
-    { id: 2, name: 'Mesa 2', status: 'libre', items: [] },
-    { id: 3, name: 'Mesa 3', status: 'libre', items: [] },
-    { id: 4, name: 'Mesa 4', status: 'libre', items: [] },
-    { id: 5, name: 'Mesa 5', status: 'libre', items: [] },
-    { id: 6, name: 'Mesa 6', status: 'libre', items: [] }
+    { id: 1, name: 'Mesa 1', status: 'libre', items: [], receipts: [] },
+    { id: 2, name: 'Mesa 2', status: 'libre', items: [], receipts: [] },
+    { id: 3, name: 'Mesa 3', status: 'libre', items: [], receipts: [] },
+    { id: 4, name: 'Mesa 4', status: 'libre', items: [], receipts: [] },
+    { id: 5, name: 'Mesa 5', status: 'libre', items: [], receipts: [] },
+    { id: 6, name: 'Mesa 6', status: 'libre', items: [], receipts: [] }
 ];
 
 let addons = JSON.parse(localStorage.getItem('restopos_addons')) || [
@@ -60,6 +60,7 @@ function showSection(sectionId) {
     document.getElementById('dashboard-view').classList.add('hidden');
     document.getElementById('tables-section').classList.add('hidden');
     document.getElementById('order-section').classList.add('hidden');
+    document.getElementById('bill-section').classList.add('hidden');
     document.getElementById('catalog-section').classList.add('hidden');
     document.getElementById('addons-section').classList.add('hidden');
     document.getElementById('inventory-section').classList.add('hidden');
@@ -86,6 +87,13 @@ function renderTables() {
 function openTableOrder(id) {
     currentTableId = id;
     const table = tables.find(t => t.id === id);
+    if (!table.receipts) table.receipts = [];
+    
+    // Asegurar que todos los ítems antiguos tengan un uid único
+    table.items.forEach(item => {
+        if (!item.uid) item.uid = '_' + Math.random().toString(36).substr(2, 9);
+    });
+
     document.getElementById('order-title').innerText = `Pedido - ${table.name}`;
     
     const select = document.getElementById('productSelect');
@@ -201,16 +209,20 @@ function saveOrderCustomization() {
     });
 
     const orderItemData = {
+        uid: '_' + Math.random().toString(36).substr(2, 9), // ID único por ítem
         productId: product.id,
         name: product.name,
         basePrice: product.price,
         finalPrice: finalPrice,
         modifications: modifications,
         componentChoices: componentChoices,
-        addonIds: addonIds
+        addonIds: addonIds,
+        billed: false
     };
 
     if (editingOrderItemIndex !== null) {
+        orderItemData.uid = table.items[editingOrderItemIndex].uid || orderItemData.uid;
+        orderItemData.billed = table.items[editingOrderItemIndex].billed || false;
         table.items[editingOrderItemIndex] = orderItemData;
     } else {
         table.items.push(orderItemData);
@@ -227,15 +239,18 @@ function editOrderItem(index) {
     const item = table.items[index];
     if (!item) return;
 
+    if (item.billed) {
+        alert('Este plato ya fue facturado. Anule el recibo asociado para poder editarlo.');
+        return;
+    }
+
     editingOrderItemIndex = index;
     document.getElementById('productSelect').value = item.productId;
-    
     loadProductRecipeOptions(item.componentChoices || [], item.addonIds || []);
 
     document.getElementById('customizationBoxTitle').innerText = `Editando: ${item.name}`;
     document.getElementById('btnAddOrUpdateOrder').innerText = 'Guardar Cambios del Plato';
     document.getElementById('btnCancelOrderEdit').classList.remove('hidden');
-    
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -269,15 +284,17 @@ function renderOrderItems() {
                 });
             }
 
+            let billedBadge = item.billed ? `<span style="font-size:0.7rem; background:#fee2e2; color:#dc2626; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">FACTURADO</span>` : '';
+
             row.innerHTML = `
                 <div>
-                    <strong>${item.name}</strong>
+                    <strong>${item.name}</strong> ${billedBadge}
                     ${modsHtml}
                 </div>
                 <div style="text-align: right; display: flex; align-items: center; gap: 0.2rem;">
                     <strong>$${item.finalPrice.toLocaleString()}</strong>
-                    <button onclick="editOrderItem(${index})" class="action-btn" title="Editar Plato">✏️</button>
-                    <button onclick="removeOrderItem(${index})" class="action-btn" title="Eliminar Plato">❌</button>
+                    <button onclick="editOrderItem(${index})" class="action-btn" title="Editar Plato" ${item.billed ? 'style="opacity:0.4;"' : ''}>✏️</button>
+                    <button onclick="removeOrderItem(${index})" class="action-btn" title="Eliminar Plato" ${item.billed ? 'style="opacity:0.4;"' : ''}>❌</button>
                 </div>
             `;
             list.appendChild(row);
@@ -288,6 +305,11 @@ function renderOrderItems() {
 
 function removeOrderItem(index) {
     const table = tables.find(t => t.id === currentTableId);
+    const item = table.items[index];
+    if (item && item.billed) {
+        alert('Este plato ya fue facturado. Anule el recibo asociado para poder eliminarlo.');
+        return;
+    }
     if (editingOrderItemIndex === index) cancelOrderEdit();
     table.items.splice(index, 1);
     if (table.items.length === 0) table.status = 'libre';
@@ -297,13 +319,265 @@ function removeOrderItem(index) {
 
 function clearTableOrder() {
     const table = tables.find(t => t.id === currentTableId);
-    if (confirm(`¿Desea cerrar la cuenta y liberar la ${table.name}?`)) {
-        table.items = [];
+    if (table.items.length === 0) {
         table.status = 'libre';
-        cancelOrderEdit();
         saveData();
         showSection('tables-section');
+        return;
     }
+    openBillSection();
+}
+
+/* --- MÓDULO DE CUENTAS Y RECIBOS CON IDENTIFICADORES ÚNICOS (UUID) --- */
+
+function openBillSection() {
+    const table = tables.find(t => t.id === currentTableId);
+    if (!table || table.items.length === 0) {
+        alert('Esta mesa no tiene pedidos activos.');
+        return;
+    }
+    if (!table.receipts) table.receipts = [];
+
+    // Limpieza de seguridad: Si hay ítems marcados como billed pero no pertenecen a ningún recibo activo, los liberamos automáticamente
+    let activeBilledUids = [];
+    table.receipts.forEach(r => {
+        if (r.itemUids) activeBilledUids.push(...r.itemUids);
+    });
+    table.items.forEach(item => {
+        if (item.billed && !activeBilledUids.includes(item.uid)) {
+            item.billed = false;
+        }
+    });
+    saveData();
+
+    document.getElementById('bill-title').innerText = `Cuenta - ${table.name}`;
+    
+    const list = document.getElementById('billItemsList');
+    list.innerHTML = '';
+
+    table.items.forEach((item, index) => {
+        let modsHtml = '';
+        if (item.modifications && item.modifications.length > 0) {
+            item.modifications.forEach(m => {
+                modsHtml += `<span class="mod-tag">↳ ${m}</span>`;
+            });
+        }
+
+        const div = document.createElement('div');
+        div.className = 'order-item';
+        
+        if (item.billed) {
+            div.innerHTML = `
+                <div style="flex: 1; opacity: 0.5;">
+                    <span style="font-size:0.7rem; background:#fee2e2; color:#dc2626; padding:0.1rem 0.3rem; border-radius:4px; font-weight:bold;">[ ASIGNADO A RECIBO ]</span>
+                    <strong>${item.name}</strong>
+                    ${modsHtml}
+                </div>
+                <strong style="text-decoration: line-through;">$${item.finalPrice.toLocaleString()}</strong>
+            `;
+        } else {
+            div.innerHTML = `
+                <label class="checkbox-label" style="flex: 1;">
+                    <input type="checkbox" class="bill-item-chk" value="${index}" data-price="${item.finalPrice}" onchange="calculatePartialTotal()">
+                    <div>
+                        <strong>${item.name}</strong>
+                        ${modsHtml}
+                    </div>
+                </label>
+                <strong style="margin-left: 1rem;">$${item.finalPrice.toLocaleString()}</strong>
+            `;
+        }
+        list.appendChild(div);
+    });
+
+    calculatePartialTotal();
+    renderReceiptsManager();
+
+    document.getElementById('order-section').classList.add('hidden');
+    document.getElementById('bill-section').classList.remove('hidden');
+}
+
+function calculatePartialTotal() {
+    let partialTotal = 0;
+    document.querySelectorAll('.bill-item-chk:checked').forEach(chk => {
+        partialTotal += parseFloat(chk.getAttribute('data-price')) || 0;
+    });
+    document.getElementById('selectedPartialTotal').innerText = `$ ${partialTotal.toLocaleString()}`;
+}
+
+function generateReceipt() {
+    const table = tables.find(t => t.id === currentTableId);
+    let selectedIndexes = [];
+    let partialTotal = 0;
+    let receiptItems = [];
+    let receiptItemUids = [];
+
+    document.querySelectorAll('.bill-item-chk:checked').forEach(chk => {
+        let idx = parseInt(chk.value);
+        selectedIndexes.push(idx);
+        let item = table.items[idx];
+        partialTotal += item.finalPrice;
+        receiptItems.push(item);
+        receiptItemUids.push(item.uid);
+    });
+
+    if (selectedIndexes.length === 0) {
+        alert('Seleccione al menos un plato no facturado para generar el recibo.');
+        return;
+    }
+
+    // Marcar ítems como facturados
+    selectedIndexes.forEach(idx => {
+        table.items[idx].billed = true;
+    });
+
+    const newReceipt = {
+        id: Date.now(),
+        items: receiptItems,
+        itemUids: receiptItemUids,
+        total: partialTotal,
+        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    table.receipts.push(newReceipt);
+    saveData();
+    openBillSection();
+}
+
+function printReceiptDoc(receiptId) {
+    const table = tables.find(t => t.id === currentTableId);
+    const receipt = table.receipts.find(r => r.id === receiptId);
+    if (!receipt) return;
+
+    let selectedItemsHtml = '';
+    receipt.items.forEach(item => {
+        let itemModsHtml = '';
+        if (item.modifications && item.modifications.length > 0) {
+            item.modifications.forEach(m => {
+                if (m.includes('(+$') || m.includes('($')) {
+                    itemModsHtml += `<div style="font-size: 0.8rem; color: #555; margin-left: 10px;">&bull; ${m}</div>`;
+                }
+            });
+        }
+
+        selectedItemsHtml += `
+            <div style="margin-bottom: 6px; text-align: left;">
+                <strong>${item.name}</strong> — <strong>$${item.finalPrice.toLocaleString()}</strong>
+                ${itemModsHtml}
+            </div>
+        `;
+    });
+
+    let receiptWindow = window.open('', '_blank', 'width=400,height=600');
+    receiptWindow.document.write(`
+        <html>
+        <head><title>Recibo - ${table.name}</title></head>
+        <body style="font-family: monospace; padding: 1rem; text-align: center;">
+            <h3>RestoPOS - Recibo de Venta</h3>
+            <p>${table.name} | Hora: ${receipt.date}</p>
+            <hr>
+            <div style="text-align: left;">
+                ${selectedItemsHtml}
+            </div>
+            <hr>
+            <h3 style="text-align: right;">TOTAL: $${receipt.total.toLocaleString()}</h3>
+            <p>¡Gracias por su visita!</p>
+        </body>
+        </html>
+    `);
+    receiptWindow.document.close();
+    receiptWindow.print();
+}
+
+function renderReceiptsManager() {
+    const table = tables.find(t => t.id === currentTableId);
+    let container = document.getElementById('receiptsManagerContainer');
+    
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'receiptsManagerContainer';
+        container.style.cssText = "margin-top: 1rem; border-top: 2px dashed var(--border); padding-top: 0.75rem;";
+        document.getElementById('bill-section').insertBefore(container, document.getElementById('billItemsList').nextSibling);
+    }
+
+    if (!table.receipts || table.receipts.length === 0) {
+        container.innerHTML = '<p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">No hay recibos generados aún.</p>';
+        return;
+    }
+
+    let html = `<h4 style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text);">Recibos Generados (Seleccione para pagar o anular):</h4>`;
+    
+    table.receipts.forEach((rc, rIdx) => {
+        let itemNames = rc.items.map(i => i.name).join(', ');
+        html += `
+            <div style="background: #f1f5f9; padding: 0.6rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                <div>
+                    <strong>Recibo #${rIdx + 1}</strong> (${rc.date})<br>
+                    <span style="color: var(--text-secondary);">${itemNames}</span><br>
+                    <strong style="color: var(--primary);">Total: $${rc.total.toLocaleString()}</strong>
+                </div>
+                <div style="display: flex; gap: 0.3rem;">
+                    <button class="btn btn-secondary" style="padding: 0.3rem 0.5rem; font-size: 0.75rem; width: auto; margin:0;" onclick="printReceiptDoc(${rc.id})">🖨️</button>
+                    <button class="btn btn-success" style="padding: 0.3rem 0.5rem; font-size: 0.75rem; width: auto; margin:0; background: var(--success);" onclick="confirmPayReceipt(${rc.id})">Pagar</button>
+                    <button class="btn btn-danger" style="padding: 0.3rem 0.5rem; font-size: 0.75rem; width: auto; margin:0;" onclick="cancelReceipt(${rc.id})">Anular</button>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+function confirmPayReceipt(receiptId) {
+    const table = tables.find(t => t.id === currentTableId);
+    const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
+    if (receiptIndex === -1) return;
+
+    let receipt = table.receipts[receiptIndex];
+
+    if (confirm(`¿Confirmar pago del Recibo por valor de $${receipt.total.toLocaleString()}?`)) {
+        // Eliminar definitivamente de la mesa los ítems que estaban en este recibo usando sus uids
+        table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
+
+        // Eliminar el recibo
+        table.receipts.splice(receiptIndex, 1);
+
+        if (table.items.length === 0) {
+            table.status = 'libre';
+            table.receipts = [];
+            saveData();
+            showSection('tables-section');
+        } else {
+            saveData();
+            openBillSection();
+        }
+    }
+}
+
+function cancelReceipt(receiptId) {
+    const table = tables.find(t => t.id === currentTableId);
+    const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
+    if (receiptIndex === -1) return;
+
+    let receipt = table.receipts[receiptIndex];
+
+    if (confirm(`¿Anular este recibo? Los platos asociados volverán a estar disponibles en la cuenta.`)) {
+        // Liberar los ítems usando sus uids para que dejen de estar bloqueados
+        table.items.forEach(item => {
+            if (receipt.itemUids.includes(item.uid)) {
+                item.billed = false;
+            }
+        });
+
+        table.receipts.splice(receiptIndex, 1);
+        saveData();
+        openBillSection();
+    }
+}
+
+function backToOrderSection() {
+    document.getElementById('bill-section').classList.add('hidden');
+    document.getElementById('order-section').classList.remove('hidden');
 }
 
 /* --- GESTIÓN DE CATÁLOGO Y RECETAS --- */
@@ -337,7 +611,7 @@ function renderProducts() {
         item.innerHTML = `
             <div class="product-info">
                 <span><strong>${p.name}</strong></span>
-                <span style="font-size:0.75rem; color:var(--text-secondary); display:block;">Incluye: ${compNames || 'Sin componentes base'}</span>
+                <span style="font-size:0.75rem; color: var(--text-secondary); display:block;">Incluye: ${compNames || 'Sin componentes base'}</span>
             </div>
             <div class="product-actions">
                 <strong>$${p.price.toLocaleString()}</strong>
@@ -418,7 +692,7 @@ function deleteProduct(id) {
 
 /* --- GESTIÓN DE ADICIONALES --- */
 
-function renderAddons() {
+fnrenderAddons = function() {
     const list = document.getElementById('addonsList');
     list.innerHTML = '';
     addons.forEach(ad => {
@@ -436,7 +710,9 @@ function renderAddons() {
         `;
         list.appendChild(item);
     });
-}
+};
+// Alias de compatibilidad por si se llama sin la 'fn'
+function renderAddons() { return fnrenderAddons(); }
 
 function saveAddon() {
     const name = document.getElementById('addonName').value.trim();
@@ -496,11 +772,13 @@ function renderInventory() {
     });
 }
 function saveInventoryItem() {
-    const name = document.getElementById('invName').value;
+    const name = document.getElementById('invName5') || document.getElementById('invName');
+    // compatibilidad general
+    const nameVal = document.getElementById('invName').value;
     const stock = parseFloat(document.getElementById('invStock').value);
     const unit = document.getElementById('invUnit').value;
-    if(name && !isNaN(stock) && unit) {
-        inventory.push({ id: inventory.length + 1, name, stock, unit });
+    if(nameVal && !isNaN(stock) && unit) {
+        inventory.push({ id: inventory.length + 1, name: nameVal, stock, unit });
         saveData();
         renderInventory();
         document.getElementById('invName').value = '';
