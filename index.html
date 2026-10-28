@@ -26,9 +26,6 @@
             </div>
             <button class="btn" onclick="login()">Iniciar Sesión</button>
             <p style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">Usuario admin / PIN 123</p>
-            <p style="text-align: center; margin-top: 1.5rem; font-size: 0.75rem; color: #94a3b8;" id="update-timestamp">
-                Actualizado: 2026-10-28 01:25
-            </p>
         </div>
 
         <!-- PANEL PRINCIPAL -->
@@ -44,8 +41,12 @@
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Control de salón</p>
                 </div>
                 <div class="menu-card" onclick="showSection('catalog-section')">
-                    <h3>🍔 Catálogo & Recetas</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Platos y componentes</p>
+                    <h3>🍔 Catálogo de Platos</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Platos y recetas</p>
+                </div>
+                <div class="menu-card" onclick="showSection('drinks-section')">
+                    <h3>🥤 Bebidas</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Gestión de bebidas</p>
                 </div>
                 <div class="menu-card" onclick="showSection('addons-section')">
                     <h3>➕ Adicionales</h3>
@@ -53,7 +54,7 @@
                 </div>
                 <div class="menu-card" onclick="showSection('inventory-section')">
                     <h3>📦 Inventario</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Insumos y stock</p>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Control de insumos</p>
                 </div>
             </div>
         </div>
@@ -70,7 +71,7 @@
         <div id="order-section" class="card hidden">
             <h2 id="order-title">Pedido de Mesa</h2>
             <div class="input-group">
-                <label>Seleccionar Plato Principal</label>
+                <label>Seleccionar Plato o Bebida</label>
                 <select id="productSelect" onchange="loadProductRecipeOptions()"></select>
             </div>
             
@@ -80,7 +81,7 @@
                 <div id="addonsSelectionList"></div>
             </div>
 
-            <button class="btn" id="btnAddOrUpdateOrder" onclick="saveOrderCustomization()">Agregar Plato al Pedido</button>
+            <button class="btn" id="btnAddOrUpdateOrder" onclick="saveOrderCustomization()">Agregar al Pedido</button>
             <button class="btn btn-secondary hidden" id="btnCancelOrderEdit" onclick="cancelOrderEdit()">Cancelar Edición</button>
             
             <div style="margin-top: 1.5rem;">
@@ -92,12 +93,11 @@
                 </div>
             </div>
             
-            <button class="btn" style="background: var(--success);" onclick="openBillSection()">💳 Ver Cuenta / Dividir Pago</button>
+            <button class="btn" style="background: var(--success);" onclick="openBillSection()">💳 Ver Cuenta / Recibos</button>
             <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="showSection('tables-section')">Volver a Mesas</button>
         </div>
-        
-        
-           <!-- SECCIÓN: GESTIÓN DE CUENTAS Y RECIBOS INDEPENDIENTES -->
+
+        <!-- SECCIÓN: GESTIÓN DE CUENTAS Y RECIBOS -->
         <div id="bill-section" class="card hidden">
             <h2 id="bill-title">Resumen de Cuenta</h2>
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem;">Selecciona los platos para emitir el recibo parcial de cada comensal:</p>
@@ -113,9 +113,7 @@
             <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="backToOrderSection()">Volver al Pedido</button>
         </div>
 
-
-
-        <!-- SECCIÓN: CATÁLOGO Y RECETAS -->
+        <!-- SECCIÓN: CATÁLOGO DE PLATOS -->
         <div id="catalog-section" class="card hidden">
             <h2>Catálogo de Platos & Recetas</h2>
             <div class="input-group">
@@ -142,17 +140,36 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- SECCIÓN: ADICIONALES Y COMPONENTES -->
-        <div id="addons-section" class="card hidden">
-            <h2>Gestión de Adicionales y Acompañamientos</h2>
-            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Crea elementos como Papas, Ensalada, Queso extra, Plátano, etc. (Si el precio es 0, sirve como componente base o sustituto).</p>
-            
+        <!-- SECCIÓN: GESTIÓN DE BEBIDAS -->
+        <div id="drinks-section" class="card hidden">
+            <h2>Gestión de Bebidas</h2>
             <div class="input-group">
-                <label id="formAddonTitle">Nombre del Adicional / Componente</label>
-                <input type="text" id="addonName" placeholder="Ej: Ensalada">
+                <label id="formDrinkTitle">Nombre de la Bebida</label>
+                <input type="text" id="drinkName" placeholder="Ej: Gaseosa 400ml">
             </div>
             <div class="input-group">
-                <label>Precio Adicional ($) [0 si es componente base o sustituto]</label>
+                <label>Precio ($) [0 si es cortesía]</label>
+                <input type="number" id="drinkPrice" placeholder="Ej: 4000 o 0">
+            </div>
+            <button class="btn" id="btnSaveDrink" onclick="saveDrink()">Guardar Bebida</button>
+            <button class="btn btn-secondary hidden" id="btnCancelDrinkEdit" onclick="cancelEditDrink()">Cancelar Edición</button>
+            
+            <div style="margin-top: 1.5rem;">
+                <h3>Bebidas Registradas</h3>
+                <div id="drinksList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
+            </div>
+            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
+        </div>
+
+        <!-- SECCIÓN: ADICIONALES -->
+        <div id="addons-section" class="card hidden">
+            <h2>Gestión de Adicionales y Acompañamientos</h2>
+            <div class="input-group">
+                <label id="formAddonTitle">Nombre del Adicional</label>
+                <input type="text" id="addonName" placeholder="Ej: Tocineta extra">
+            </div>
+            <div class="input-group">
+                <label>Precio Adicional ($) [0 si es sustituto]</label>
                 <input type="number" id="addonPrice" placeholder="Ej: 3000 o 0">
             </div>
             <button class="btn" id="btnSaveAddon" onclick="saveAddon()">Guardar Adicional</button>
@@ -165,23 +182,26 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- SECCIÓN: INVENTARIO DE INSUMOS -->
+        <!-- SECCIÓN: INVENTARIO -->
         <div id="inventory-section" class="card hidden">
-            <h2>Inventario de Insumos</h2>
+            <h2>Control de Inventario e Insumos</h2>
             <div class="input-group">
                 <label>Nombre del Insumo</label>
-                <input type="text" id="invName" placeholder="Ej: Costillar de cerdo (kg)">
+                <input type="text" id="invName" placeholder="Ej: Carne de Res">
             </div>
             <div class="input-group">
-                <label>Stock / Cantidad</label>
-                <input type="number" id="invStock" placeholder="Ej: 20">
+                <label>Cantidad / Stock</label>
+                <input type="number" id="invStock" placeholder="Ej: 50">
             </div>
             <div class="input-group">
-                <label>Unidad</label>
-                <input type="text" id="invUnit" placeholder="Ej: kg, unid">
+                <label>Unidad de Medida</label>
+                <input type="text" id="invUnit" placeholder="Ej: Gramos, Unidades, Litros">
             </div>
             <button class="btn" onclick="saveInventoryItem()">Guardar Insumo</button>
-            <div style="margin-top: 1.5rem;" id="inventoryList"></div>
+            
+            <div style="margin-top: 1.5rem;">
+                <div id="inventoryList"></div>
+            </div>
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
     </div>

@@ -55,3 +55,7 @@ input, select { width: 100%; padding: 0.75rem; border: 1px solid var(--border); 
     margin: 0;
     cursor: pointer;
 }
+.orderItemsList, #billItemsList {
+    max-height: 45vh !important;
+    overflow-y: auto !important;
+}
