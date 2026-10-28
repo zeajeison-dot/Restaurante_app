@@ -40,8 +40,30 @@
         .table-item { background: #f1f5f9; border: 2px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; cursor: pointer; font-weight: bold; }
         .table-item.ocupada { background: #fee2e2; border-color: #ef4444; color: #b91c1c; }
         .table-item.libre { background: #dcfce7; border-color: #22c55e; color: #15803d; }
-        .order-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
-        .action-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; margin-left: 6px; }
+        
+        .order-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+        .product-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--border); gap: 1rem; }
+        .product-info { flex: 1; min-width: 0; }
+        .product-actions { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; }
+        
+        .action-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 0.2rem; }
+        .mod-tag { font-size: 0.75rem; color: var(--warning); display: block; margin-top: 2px; }
+        
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            cursor: pointer;
+            font-weight: normal;
+            font-size: 0.95rem;
+            margin: 0;
+        }
+        .checkbox-label input[type="checkbox"] {
+            width: 1.1rem;
+            height: 1.1rem;
+            margin: 0;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -63,7 +85,7 @@
             <button class="btn" onclick="login()">Iniciar Sesión</button>
             <p style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">Usuario admin / PIN 123</p>
             <p style="text-align: center; margin-top: 1.5rem; font-size: 0.75rem; color: #94a3b8;" id="update-timestamp">
-                Actualizado: 2026-10-27 21:10
+                Actualizado: 2026-10-28 00:30
             </p>
         </div>
 
@@ -80,16 +102,16 @@
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Control de salón</p>
                 </div>
                 <div class="menu-card" onclick="showSection('catalog-section')">
-                    <h3>🍔 Catálogo</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Precios y productos</p>
+                    <h3>🍔 Catálogo & Recetas</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Platos y componentes</p>
+                </div>
+                <div class="menu-card" onclick="showSection('addons-section')">
+                    <h3>➕ Adicionales</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Extras con/sin costo</p>
                 </div>
                 <div class="menu-card" onclick="showSection('inventory-section')">
                     <h3>📦 Inventario</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Insumos y stock</p>
-                </div>
-                <div class="menu-card" onclick="alert('Módulo de reportes disponible en la siguiente fase')">
-                    <h3>📊 Reportes</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Caja y ventas</p>
                 </div>
             </div>
         </div>
@@ -102,14 +124,22 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- SECCIÓN: TOMA DE PEDIDOS POR MESA -->
+        <!-- SECCIÓN: TOMA DE PEDIDOS AVANZADA -->
         <div id="order-section" class="card hidden">
             <h2 id="order-title">Pedido de Mesa</h2>
             <div class="input-group">
-                <label>Agregar Producto</label>
-                <select id="productSelect"></select>
+                <label>Seleccionar Plato Principal</label>
+                <select id="productSelect" onchange="loadProductRecipeOptions()"></select>
             </div>
-            <button class="btn" onclick="addToOrder()">Agregar al Pedido</button>
+            
+            <div id="dishCustomizationBox" style="background: #f1f5f9; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: none;">
+                <h4 id="customizationBoxTitle" style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text);">Personalización del Plato:</h4>
+                <div id="recipeComponentsList" style="margin-bottom: 0.75rem;"></div>
+                <div id="addonsSelectionList"></div>
+            </div>
+
+            <button class="btn" id="btnAddOrUpdateOrder" onclick="saveOrderCustomization()">Agregar Plato al Pedido</button>
+            <button class="btn btn-secondary hidden" id="btnCancelOrderEdit" onclick="cancelOrderEdit()">Cancelar Edición</button>
             
             <div style="margin-top: 1.5rem;">
                 <h3>Cuenta Actual</h3>
@@ -124,23 +154,52 @@
             <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="showSection('tables-section')">Volver a Mesas</button>
         </div>
 
-        <!-- SECCIÓN: CATÁLOGO Y PRECIOS -->
+        <!-- SECCIÓN: CATÁLOGO Y RECETAS -->
         <div id="catalog-section" class="card hidden">
-            <h2>Catálogo de Productos</h2>
+            <h2>Catálogo de Platos & Recetas</h2>
             <div class="input-group">
-                <label id="formProductTitle">Nuevo Producto</label>
-                <input type="text" id="newProdName" placeholder="Ej: Hamburguesa Especial">
+                <label id="formProductTitle">Nombre del Plato Principal</label>
+                <input type="text" id="newProdName" placeholder="Ej: Costillas BBQ">
             </div>
             <div class="input-group">
-                <label>Precio ($)</label>
-                <input type="number" id="newProdPrice" placeholder="Ej: 25000">
+                <label>Precio Base ($)</label>
+                <input type="number" id="newProdPrice" placeholder="Ej: 22000">
             </div>
-            <button class="btn" id="btnSaveProduct" onclick="saveProduct()">Agregar al Catálogo</button>
+            
+            <div class="input-group">
+                <label>Componentes que incluye por defecto:</label>
+                <div id="recipeComponentsSelector" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border); padding: 0.6rem; border-radius: 8px; background: #fafafa; display: flex; flex-direction: column; gap: 0.5rem;"></div>
+            </div>
+
+            <button class="btn" id="btnSaveProduct" onclick="saveProduct()">Guardar Plato</button>
             <button class="btn btn-secondary hidden" id="btnCancelEdit" onclick="cancelEditProduct()">Cancelar Edición</button>
             
             <div style="margin-top: 1.5rem;">
-                <h3>Productos Existentes</h3>
+                <h3>Platos Registrados</h3>
                 <div id="productList" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
+            </div>
+            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
+        </div>
+
+        <!-- SECCIÓN: ADICIONALES Y COMPONENTES -->
+        <div id="addons-section" class="card hidden">
+            <h2>Gestión de Adicionales y Acompañamientos</h2>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Crea elementos como Papas, Ensalada, Queso extra, Plátano, etc. (Si el precio es 0, sirve como componente base o sustituto).</p>
+            
+            <div class="input-group">
+                <label id="formAddonTitle">Nombre del Adicional / Componente</label>
+                <input type="text" id="addonName" placeholder="Ej: Ensalada">
+            </div>
+            <div class="input-group">
+                <label>Precio Adicional ($) [0 si es componente base o sustituto]</label>
+                <input type="number" id="addonPrice" placeholder="Ej: 3000 o 0">
+            </div>
+            <button class="btn" id="btnSaveAddon" onclick="saveAddon()">Guardar Adicional</button>
+            <button class="btn btn-secondary hidden" id="btnCancelAddonEdit" onclick="cancelEditAddon()">Cancelar Edición</button>
+            
+            <div style="margin-top: 1.5rem;">
+                <h3>Adicionales Registrados</h3>
+                <div id="addonsList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
             </div>
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
@@ -149,29 +208,32 @@
         <div id="inventory-section" class="card hidden">
             <h2>Inventario de Insumos</h2>
             <div class="input-group">
-                <label id="formInventoryTitle">Nuevo Insumo</label>
-                <input type="text" id="invName" placeholder="Ej: Carne molida (kg)">
+                <label>Nombre del Insumo</label>
+                <input type="text" id="invName" placeholder="Ej: Costillar de cerdo (kg)">
             </div>
             <div class="input-group">
-                <label>Cantidad / Stock</label>
-                <input type="number" id="invStock" placeholder="Ej: 10">
+                <label>Stock / Cantidad</label>
+                <input type="number" id="invStock" placeholder="Ej: 20">
             </div>
             <div class="input-group">
-                <label>Unidad de Medida</label>
-                <input type="text" id="invUnit" placeholder="Ej: kg, g, unid, L">
+                <label>Unidad</label>
+                <input type="text" id="invUnit" placeholder="Ej: kg, unid">
             </div>
-            <button class="btn" id="btnSaveInv" onclick="saveInventoryItem()">Guardar Insumo</button>
-            <button class="btn btn-secondary hidden" id="btnCancelInvEdit" onclick="cancelEditInv()">Cancelar Edición</button>
-            
-            <div style="margin-top: 1.5rem;">
-                <h3>Insumos Registrados</h3>
-                <div id="inventoryList" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
-            </div>
+            <button class="btn" onclick="saveInventoryItem()">Guardar Insumo</button>
+            <div style="margin-top: 1.5rem;" id="inventoryList"></div>
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
     </div>
 
     <script>
+        window.onload = function() {
+            if (localStorage.getItem('restopos_logged') === 'true') {
+                document.getElementById('login-view').classList.add('hidden');
+                document.getElementById('dashboard-view').classList.remove('hidden');
+                document.getElementById('welcome-msg').innerText = 'Administrador General';
+            }
+        };
+
         let tables = JSON.parse(localStorage.getItem('restopos_tables')) || [
             { id: 1, name: 'Mesa 1', status: 'libre', items: [] },
             { id: 2, name: 'Mesa 2', status: 'libre', items: [] },
@@ -181,41 +243,41 @@
             { id: 6, name: 'Mesa 6', status: 'libre', items: [] }
         ];
 
+        let addons = JSON.parse(localStorage.getItem('restopos_addons')) || [
+            { id: 1, name: 'Papas a la francesa', price: 0 },
+            { id: 2, name: 'Ensalada', price: 0 },
+            { id: 3, name: 'Plátano maduro', price: 0 },
+            { id: 4, name: 'Queso extra', price: 3000 }
+        ];
+
         let products = JSON.parse(localStorage.getItem('restopos_products')) || [
-            { id: 1, name: 'Hamburguesa Sencilla', price: 18000 },
-            { id: 2, name: 'Papas Francesas', price: 8000 },
-            { id: 3, name: 'Gaseosa 400ml', price: 4000 }
+            { id: 1, name: 'Costillas BBQ', price: 22000, components: [1, 2] }
         ];
 
-        let inventory = JSON.parse(localStorage.getItem('restopos_inventory')) || [
-            { id: 1, name: 'Pan de Hamburguesa', stock: 50, unit: 'unid' },
-            { id: 2, name: 'Carne 150g', stock: 30, unit: 'unid' },
-            { id: 3, name: 'Papas (kg)', stock: 15, unit: 'kg' }
-        ];
-
+        let inventory = JSON.parse(localStorage.getItem('restopos_inventory')) || [];
         let currentTableId = null;
         let editingProductId = null;
-        let editingInvId = null;
+        let editingAddonId = null;
+        let editingOrderItemIndex = null; // Índice del ítem del pedido que se está editando
 
         function saveData() {
             localStorage.setItem('restopos_tables', JSON.stringify(tables));
+            localStorage.setItem('restopos_addons', JSON.stringify(addons));
             localStorage.setItem('restopos_products', JSON.stringify(products));
             localStorage.setItem('restopos_inventory', JSON.stringify(inventory));
         }
 
         function login() {
-            const user = document.getElementById('userInput').value;
-            const pass = document.getElementById('passInput').value;
-            if(user === 'admin' && pass === '123') {
+            if(document.getElementById('userInput').value === 'admin' && document.getElementById('passInput').value === '123') {
+                localStorage.setItem('restopos_logged', 'true');
                 document.getElementById('login-view').classList.add('hidden');
                 document.getElementById('dashboard-view').classList.remove('hidden');
                 document.getElementById('welcome-msg').innerText = 'Administrador General';
-            } else {
-                alert('Credenciales incorrectas. Usa admin / 123');
-            }
+            } else { alert('Credenciales incorrectas (admin / 123)'); }
         }
 
         function logout() {
+            localStorage.removeItem('restopos_logged');
             document.getElementById('dashboard-view').classList.add('hidden');
             document.getElementById('login-view').classList.remove('hidden');
             document.getElementById('userInput').value = '';
@@ -227,18 +289,14 @@
             document.getElementById('tables-section').classList.add('hidden');
             document.getElementById('order-section').classList.add('hidden');
             document.getElementById('catalog-section').classList.add('hidden');
+            document.getElementById('addons-section').classList.add('hidden');
             document.getElementById('inventory-section').classList.add('hidden');
             
             document.getElementById(sectionId).classList.remove('hidden');
             if(sectionId === 'tables-section') renderTables();
-            if(sectionId === 'catalog-section') {
-                cancelEditProduct();
-                renderProducts();
-            }
-            if(sectionId === 'inventory-section') {
-                cancelEditInv();
-                renderInventory();
-            }
+            if(sectionId === 'catalog-section') { cancelEditProduct(); renderRecipeCheckboxes(); renderProducts(); }
+            if(sectionId === 'addons-section') { cancelEditAddon(); renderAddons(); }
+            if(sectionId === 'inventory-section') renderInventory();
         }
 
         function renderTables() {
@@ -259,7 +317,7 @@
             document.getElementById('order-title').innerText = `Pedido - ${table.name}`;
             
             const select = document.getElementById('productSelect');
-            select.innerHTML = '';
+            select.innerHTML = '<option value="">-- Seleccione un plato --</option>';
             products.forEach(p => {
                 const opt = document.createElement('option');
                 opt.value = p.id;
@@ -267,22 +325,162 @@
                 select.appendChild(opt);
             });
 
+            cancelOrderEdit();
             renderOrderItems();
             document.getElementById('tables-section').classList.add('hidden');
             document.getElementById('order-section').classList.remove('hidden');
         }
 
-        function addToOrder() {
+        function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonIds = []) {
+            const prodId = parseInt(document.getElementById('productSelect').value);
+            const box = document.getElementById('dishCustomizationBox');
+            if (!prodId) { box.style.display = 'none'; return; }
+
+            const product = products.find(p => p.id === prodId);
+            box.style.display = 'block';
+
+            // 1. Componentes base
+            const compList = document.getElementById('recipeComponentsList');
+            compList.innerHTML = '<strong style="font-size:0.85rem; color:var(--text-secondary);">Componentes Base:</strong>';
+            
+            if (product.components && product.components.length > 0) {
+                product.components.forEach((compId, idx) => {
+                    const addonObj = addons.find(a => a.id === compId);
+                    if (addonObj) {
+                        const div = document.createElement('div');
+                        div.style.cssText = "display: flex; align-items: center; justify-content: space-between; margin-top: 0.4rem; font-size: 0.9rem;";
+                        
+                        let subOptions = `<option value="Mantener (${addonObj.name})">Mantener (${addonObj.name})</option>`;
+                        addons.filter(a => a.price === 0).forEach(freeA => {
+                            if (freeA.id !== compId) {
+                                subOptions += `<option value="Cambiado por ${freeA.name}">Cambiar por ${freeA.name} (Sin costo)</option>`;
+                            }
+                        });
+                        subOptions += `<option value="SIN ${addonObj.name}">[Retirar sin sustituto]</option>`;
+
+                        div.innerHTML = `
+                            <span>${addonObj.name}</span>
+                            <select class="component-choice" data-original="${addonObj.name}" style="width: 55%; padding: 0.3rem; font-size: 0.85rem;">
+                                ${subOptions}
+                            </select>
+                        `;
+                        compList.appendChild(div);
+
+                        // Si estamos editando, seleccionamos la opción guardada previamente
+                        if (selectedComponentChoices.length > 0 && selectedComponentChoices[idx]) {
+                            const selectEl = div.querySelector('.component-choice');
+                            selectEl.value = selectedComponentChoices[idx];
+                        }
+                    }
+                });
+            } else {
+                compList.innerHTML += '<p style="font-size:0.85rem; color:var(--text-secondary);">Este plato no tiene componentes base.</p>';
+            }
+
+            // 2. Adicionales
+            const addonsBox = document.getElementById('addonsSelectionList');
+            addonsBox.innerHTML = '<strong style="font-size:0.85rem; color:var(--text-secondary); display:block; margin-top:0.75rem;">Adicionales con costo extra:</strong>';
+            
+            let extraAddonsExist = false;
+            addons.forEach(ad => {
+                if (ad.price > 0) {
+                    extraAddonsExist = true;
+                    const isChecked = selectedAddonIds.includes(ad.id) ? 'checked' : '';
+                    const div = document.createElement('div');
+                    div.style.cssText = "display: flex; align-items: center; margin-top: 0.4rem;";
+                    div.innerHTML = `
+                        <label class="checkbox-label">
+                            <input type="checkbox" class="addon-checkbox" value="${ad.id}" data-price="${ad.price}" data-name="${ad.name}" ${isChecked}>
+                            <span>${ad.name} (+$${ad.price.toLocaleString()})</span>
+                        </label>
+                    `;
+                    addonsBox.appendChild(div);
+                }
+            });
+            if (!extraAddonsExist) {
+                addonsBox.innerHTML += '<p style="font-size:0.85rem; color:var(--text-secondary);">No hay adicionales con costo registrados.</p>';
+            }
+        }
+
+        function saveOrderCustomization() {
             const prodId = parseInt(document.getElementById('productSelect').value);
             const product = products.find(p => p.id === prodId);
             const table = tables.find(t => t.id === currentTableId);
 
-            if (product && table) {
-                table.items.push({ name: product.name, price: product.price });
-                table.status = 'ocupada';
-                saveData();
-                renderOrderItems();
+            if (!product || !table) { alert('Seleccione un plato válido.'); return; }
+
+            let finalPrice = product.price;
+            let modifications = [];
+            let componentChoices = [];
+            let addonIds = [];
+
+            document.querySelectorAll('.component-choice').forEach(select => {
+                const choice = select.value;
+                componentChoices.push(choice);
+                if (choice.startsWith('SIN ') || choice.startsWith('Cambiado por ')) {
+                    modifications.push(choice);
+                }
+            });
+
+            document.querySelectorAll('.addon-checkbox:checked').forEach(chk => {
+                const id = parseInt(chk.value);
+                const name = chk.getAttribute('data-name');
+                const price = parseFloat(chk.getAttribute('data-price')) || 0;
+                addonIds.push(id);
+                finalPrice += price;
+                modifications.push(`Adicional: ${name} (+$${price.toLocaleString()})`);
+            });
+
+            const orderItemData = {
+                productId: product.id,
+                name: product.name,
+                basePrice: product.price,
+                finalPrice: finalPrice,
+                modifications: modifications,
+                componentChoices: componentChoices,
+                addonIds: addonIds
+            };
+
+            if (editingOrderItemIndex !== null) {
+                // Actualizar ítem existente sin borrarlo
+                table.items[editingOrderItemIndex] = orderItemData;
+            } else {
+                // Agregar nuevo ítem
+                table.items.push(orderItemData);
             }
+
+            table.status = 'ocupada';
+            saveData();
+            cancelOrderEdit();
+            renderOrderItems();
+        }
+
+        function editOrderItem(index) {
+            const table = tables.find(t => t.id === currentTableId);
+            const item = table.items[index];
+            if (!item) return;
+
+            editingOrderItemIndex = index;
+            document.getElementById('productSelect').value = item.productId;
+            
+            // Cargar opciones marcando las elecciones previas
+            loadProductRecipeOptions(item.componentChoices || [], item.addonIds || []);
+
+            document.getElementById('customizationBoxTitle').innerText = `Editando: ${item.name}`;
+            document.getElementById('btnAddOrUpdateOrder').innerText = 'Guardar Cambios del Plato';
+            document.getElementById('btnCancelOrderEdit').classList.remove('hidden');
+            
+            // Hacer scroll hacia arriba para ver el panel de edición
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function cancelOrderEdit() {
+            editingOrderItemIndex = null;
+            document.getElementById('productSelect').value = '';
+            document.getElementById('dishCustomizationBox').style.display = 'none';
+            document.getElementById('customizationBoxTitle').innerText = 'Personalización del Plato:';
+            document.getElementById('btnAddOrUpdateOrder').innerText = 'Agregar Plato al Pedido';
+            document.getElementById('btnCancelOrderEdit').classList.add('hidden');
         }
 
         function renderOrderItems() {
@@ -295,10 +493,28 @@
                 list.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No hay productos en esta mesa.</p>';
             } else {
                 table.items.forEach((item, index) => {
-                    total += item.price;
+                    total += item.finalPrice;
                     const row = document.createElement('div');
                     row.className = 'order-item';
-                    row.innerHTML = `<span>${item.name}</span> <div><strong>$${item.price.toLocaleString()}</strong> <button onclick="removeOrderItem(${index})" class="action-btn">❌</button></div>`;
+                    
+                    let modsHtml = '';
+                    if (item.modifications && item.modifications.length > 0) {
+                        item.modifications.forEach(m => {
+                            modsHtml += `<span class="mod-tag">↳ ${m}</span>`;
+                        });
+                    }
+
+                    row.innerHTML = `
+                        <div>
+                            <strong>${item.name}</strong>
+                            ${modsHtml}
+                        </div>
+                        <div style="text-align: right; display: flex; align-items: center; gap: 0.2rem;">
+                            <strong>$${item.finalPrice.toLocaleString()}</strong>
+                            <button onclick="editOrderItem(${index})" class="action-btn" title="Editar Plato">✏️</button>
+                            <button onclick="removeOrderItem(${index})" class="action-btn" title="Eliminar Plato">❌</button>
+                        </div>
+                    `;
                     list.appendChild(row);
                 });
             }
@@ -307,10 +523,9 @@
 
         function removeOrderItem(index) {
             const table = tables.find(t => t.id === currentTableId);
+            if (editingOrderItemIndex === index) cancelOrderEdit();
             table.items.splice(index, 1);
-            if (table.items.length === 0) {
-                table.status = 'libre';
-            }
+            if (table.items.length === 0) table.status = 'libre';
             saveData();
             renderOrderItems();
         }
@@ -320,22 +535,46 @@
             if (confirm(`¿Desea cerrar la cuenta y liberar la ${table.name}?`)) {
                 table.items = [];
                 table.status = 'libre';
+                cancelOrderEdit();
                 saveData();
                 showSection('tables-section');
             }
         }
 
-        /* --- GESTIÓN DE CATÁLOGO --- */
+        /* --- GESTIÓN DE CATÁLOGO Y RECETAS --- */
+
+        function renderRecipeCheckboxes() {
+            const container = document.getElementById('recipeComponentsSelector');
+            container.innerHTML = '';
+            addons.forEach(ad => {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="recipe-comp-chk" value="${ad.id}">
+                        <span>${ad.name} ${ad.price > 0 ? '($' + ad.price + ')' : '(Base)'}</span>
+                    </label>
+                `;
+                container.appendChild(div);
+            });
+        }
 
         function renderProducts() {
             const list = document.getElementById('productList');
             list.innerHTML = '';
             products.forEach(p => {
+                let compNames = (p.components || []).map(cid => {
+                    let a = addons.find(x => x.id === cid);
+                    return a ? a.name : '';
+                }).filter(Boolean).join(', ');
+
                 const item = document.createElement('div');
-                item.className = 'order-item';
+                item.className = 'product-row';
                 item.innerHTML = `
-                    <span>${p.name}</span>
-                    <div>
+                    <div class="product-info">
+                        <span><strong>${p.name}</strong></span>
+                        <span style="font-size:0.75rem; color:var(--text-secondary); display:block;">Incluye: ${compNames || 'Sin componentes base'}</span>
+                    </div>
+                    <div class="product-actions">
                         <strong>$${p.price.toLocaleString()}</strong>
                         <button onclick="editProduct(${p.id})" class="action-btn" title="Editar">✏️</button>
                         <button onclick="deleteProduct(${p.id})" class="action-btn" title="Eliminar">🗑️</button>
@@ -349,20 +588,23 @@
             const name = document.getElementById('newProdName').value.trim();
             const price = parseFloat(document.getElementById('newProdPrice').value);
 
-            if (!name || isNaN(price)) {
-                alert('Por favor complete ambos campos correctamente.');
-                return;
-            }
+            if (!name || isNaN(price)) { alert('Complete nombre y precio del plato.'); return; }
+
+            let selectedComponents = [];
+            document.querySelectorAll('.recipe-comp-chk:checked').forEach(chk => {
+                selectedComponents.push(parseInt(chk.value));
+            });
 
             if (editingProductId !== null) {
                 const product = products.find(p => p.id === editingProductId);
                 if (product) {
                     product.name = name;
                     product.price = price;
+                    product.components = selectedComponents;
                 }
             } else {
                 const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
-                products.push({ id: newId, name, price });
+                products.push({ id: newId, name, price, components: selectedComponents });
             }
 
             saveData();
@@ -377,7 +619,14 @@
                 document.getElementById('newProdName').value = product.name;
                 document.getElementById('newProdPrice').value = product.price;
                 
-                document.getElementById('formProductTitle').innerText = 'Editar Producto';
+                renderRecipeCheckboxes();
+                document.querySelectorAll('.recipe-comp-chk').forEach(chk => {
+                    if (product.components && product.components.includes(parseInt(chk.value))) {
+                        chk.checked = true;
+                    }
+                });
+
+                document.getElementById('formProductTitle').innerText = 'Editar Plato Principal';
                 document.getElementById('btnSaveProduct').innerText = 'Guardar Cambios';
                 document.getElementById('btnCancelEdit').classList.remove('hidden');
             }
@@ -387,103 +636,111 @@
             editingProductId = null;
             document.getElementById('newProdName').value = '';
             document.getElementById('newProdPrice').value = '';
-            
-            document.getElementById('formProductTitle').innerText = 'Nuevo Producto';
-            document.getElementById('btnSaveProduct').innerText = 'Agregar al Catálogo';
+            renderRecipeCheckboxes();
+            document.getElementById('formProductTitle').innerText = 'Nombre del Plato Principal';
+            document.getElementById('btnSaveProduct').innerText = 'Guardar Plato';
             document.getElementById('btnCancelEdit').classList.add('hidden');
         }
 
         function deleteProduct(id) {
-            const product = products.find(p => p.id === id);
-            if (product && confirm(`¿Seguro que deseas eliminar "${product.name}"?`)) {
+            if (confirm('¿Desea eliminar este plato?')) {
                 products = products.filter(p => p.id !== id);
-                if (editingProductId === id) {
-                    cancelEditProduct();
-                }
+                if (editingProductId === id) cancelEditProduct();
                 saveData();
                 renderProducts();
             }
         }
 
-        /* --- GESTIÓN DE INVENTARIO --- */
+        /* --- GESTIÓN DE ADICIONALES --- */
 
-        function renderInventory() {
-            const list = document.getElementById('inventoryList');
+        function renderAddons() {
+            const list = document.getElementById('addonsList');
             list.innerHTML = '';
-            inventory.forEach(item => {
-                const row = document.createElement('div');
-                row.className = 'order-item';
-                row.innerHTML = `
-                    <span>${item.name}</span>
-                    <div>
-                        <strong>${item.stock} ${item.unit}</strong>
-                        <button onclick="editInvItem(${item.id})" class="action-btn" title="Editar">✏️</button>
-                        <button onclick="deleteInvItem(${item.id})" class="action-btn" title="Eliminar">🗑️</button>
+            addons.forEach(ad => {
+                const item = document.createElement('div');
+                item.className = 'product-row';
+                item.innerHTML = `
+                    <div class="product-info">
+                        <span>${ad.name} ${ad.price === 0 ? '<span style="color:var(--success); font-size:0.75rem; display:block;">(Base / Sustitución gratuita)</span>' : ''}</span>
+                    </div>
+                    <div class="product-actions">
+                        <strong>$${ad.price.toLocaleString()}</strong>
+                        <button onclick="editAddon(${ad.id})" class="action-btn" title="Editar">✏️</button>
+                        <button onclick="deleteAddon(${ad.id})" class="action-btn" title="Eliminar">🗑️</button>
                     </div>
                 `;
-                list.appendChild(row);
+                list.appendChild(item);
             });
         }
 
-        function saveInventoryItem() {
-            const name = document.getElementById('invName').value.trim();
-            const stock = parseFloat(document.getElementById('invStock').value);
-            const unit = document.getElementById('invUnit').value.trim();
+        function saveAddon() {
+            const name = document.getElementById('addonName').value.trim();
+            const price = parseFloat(document.getElementById('addonPrice').value);
 
-            if (!name || isNaN(stock) || !unit) {
-                alert('Por favor complete todos los campos del insumo.');
-                return;
-            }
+            if (!name || isNaN(price)) { alert('Complete nombre y precio del adicional.'); return; }
 
-            if (editingInvId !== null) {
-                const item = inventory.find(i => i.id === editingInvId);
-                if (item) {
-                    item.name = name;
-                    item.stock = stock;
-                    item.unit = unit;
-                }
+            if (editingAddonId !== null) {
+                const addon = addons.find(a => a.id === editingAddonId);
+                if (addon) { addon.name = name; addon.price = price; }
             } else {
-                const newId = inventory.length > 0 ? Math.max(...inventory.map(i => i.id)) + 1 : 1;
-                inventory.push({ id: newId, name, stock, unit });
+                const newId = addons.length > 0 ? Math.max(...addons.map(a => a.id)) + 1 : 1;
+                addons.push({ id: newId, name, price });
             }
 
             saveData();
-            cancelEditInv();
-            renderInventory();
+            cancelEditAddon();
+            renderAddons();
         }
 
-        function editInvItem(id) {
-            const item = inventory.find(i => i.id === id);
-            if (item) {
-                editingInvId = id;
-                document.getElementById('invName').value = item.name;
-                document.getElementById('invStock').value = item.stock;
-                document.getElementById('invUnit').value = item.unit;
-
-                document.getElementById('formInventoryTitle').innerText = 'Editar Insumo';
-                document.getElementById('btnSaveInv').innerText = 'Guardar Cambios';
-                document.getElementById('btnCancelInvEdit').classList.remove('hidden');
+        function editAddon(id) {
+            const addon = addons.find(a => a.id === id);
+            if (addon) {
+                editingAddonId = id;
+                document.getElementById('addonName').value = addon.name;
+                document.getElementById('addonPrice').value = addon.price;
+                document.getElementById('formAddonTitle').innerText = 'Editar Adicional';
+                document.getElementById('btnSaveAddon').innerText = 'Guardar Cambios';
+                document.getElementById('btnCancelAddonEdit').classList.remove('hidden');
             }
         }
 
-        function cancelEditInv() {
-            editingInvId = null;
-            document.getElementById('invName').value = '';
-            document.getElementById('invStock').value = '';
-            document.getElementById('invUnit').value = '';
-
-            document.getElementById('formInventoryTitle').innerText = 'Nuevo Insumo';
-            document.getElementById('btnSaveInv').innerText = 'Guardar Insumo';
-            document.getElementById('btnCancelInvEdit').classList.add('hidden');
+        function cancelEditAddon() {
+            editingAddonId = null;
+            document.getElementById('addonName').value = '';
+            document.getElementById('addonPrice').value = '';
+            document.getElementById('formAddonTitle').innerText = 'Nombre del Adicional / Componente';
+            document.getElementById('btnSaveAddon').innerText = 'Guardar Adicional';
+            document.getElementById('btnCancelAddonEdit').classList.add('hidden');
         }
 
-        function deleteInvItem(id) {
-            const item = inventory.find(i => i.id === id);
-            if (item && confirm(`¿Seguro que deseas eliminar "${item.name}" del inventario?`)) {
-                inventory = inventory.filter(i => i.id !== id);
-                if (editingInvId === id) cancelEditInv();
+        function deleteAddon(id) {
+            if (confirm('¿Desea eliminar este adicional?')) {
+                addons = addons.filter(a => a.id !== id);
+                if (editingAddonId === id) cancelEditAddon();
+                saveData();
+                renderAddons();
+            }
+        }
+
+        /* --- INVENTARIO --- */
+        function renderInventory() {
+            const list = document.getElementById('inventoryList');
+            list.innerHTML = '<h3>Insumos Registrados</h3>';
+            inventory.forEach(i => {
+                list.innerHTML += `<div class="order-item"><span>${i.name}</span><strong>${i.stock} ${i.unit}</strong></div>`;
+            });
+        }
+        function saveInventoryItem() {
+            const name = document.getElementById('invName').value;
+            const stock = parseFloat(document.getElementById('invStock').value);
+            const unit = document.getElementById('invUnit').value;
+            if(name && !isNaN(stock) && unit) {
+                inventory.push({ id: inventory.length + 1, name, stock, unit });
                 saveData();
                 renderInventory();
+                document.getElementById('invName').value = '';
+                document.getElementById('invStock').value = '';
+                document.getElementById('invUnit').value = '';
             }
         }
     </script>
