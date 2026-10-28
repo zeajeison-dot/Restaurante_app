@@ -16,15 +16,19 @@
             --text-secondary: #64748b;
             --border: #e2e8f0;
             --success: #16a34a;
+            --danger: #dc2626;
+            --warning: #d97706;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
         body { background-color: var(--background); color: var(--text); padding: 1rem; }
         .container { max-width: 600px; margin: 0 auto; }
         .card { background: var(--surface); border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); margin-bottom: 1rem; }
-        h1, h2 { color: var(--text); margin-bottom: 1rem; font-size: 1.5rem; }
+        h1, h2, h3 { color: var(--text); margin-bottom: 1rem; }
         .btn { background: var(--primary); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 0.5rem; }
         .btn:hover { background: var(--primary-dark); }
         .btn-secondary { background: #64748b; }
+        .btn-danger { background: var(--danger); }
+        .btn-warning { background: var(--warning); }
         .input-group { margin-bottom: 1rem; }
         label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-secondary); }
         input, select { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; }
@@ -33,11 +37,12 @@
         .menu-card { background: var(--surface); border: 2px solid var(--border); border-radius: 10px; padding: 1rem; text-align: center; cursor: pointer; transition: 0.2s; }
         .menu-card:active { transform: scale(0.98); }
         .menu-card h3 { font-size: 1.1rem; margin-bottom: 0.25rem; }
-        .badge { background: #dbeafe; color: #1e40af; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem; display: inline-block; margin-bottom: 0.5rem; }
         .table-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-top: 1rem; }
         .table-item { background: #f1f5f9; border: 2px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; cursor: pointer; font-weight: bold; }
         .table-item.ocupada { background: #fee2e2; border-color: #ef4444; color: #b91c1c; }
         .table-item.libre { background: #dcfce7; border-color: #22c55e; color: #15803d; }
+        .order-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+        .action-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; margin-left: 6px; }
     </style>
 </head>
 <body>
@@ -69,18 +74,18 @@
             
             <div class="grid">
                 <div class="menu-card" onclick="showSection('tables-section')">
-                    <h3>🪑 Mesas</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Gestión de salón</p>
+                    <h3>🪑 Mesas & Pedidos</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Control de salón</p>
                 </div>
                 <div class="menu-card" onclick="showSection('catalog-section')">
                     <h3>🍔 Catálogo</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Precios y productos</p>
                 </div>
-                <div class="menu-card" onclick="alert('Módulo disponible en la siguiente fase')">
+                <div class="menu-card" onclick="alert('Módulo de inventario en desarrollo')">
                     <h3>📦 Inventario</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Recetas y stock</p>
                 </div>
-                <div class="menu-card" onclick="alert('Módulo disponible en la siguiente fase')">
+                <div class="menu-card" onclick="alert('Módulo de reportes en desarrollo')">
                     <h3>📊 Reportes</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Caja y ventas</p>
                 </div>
@@ -90,52 +95,73 @@
         <!-- SECCIÓN: GESTIÓN DE MESAS -->
         <div id="tables-section" class="card hidden">
             <h2>Gestión de Mesas</h2>
-            <p style="color: var(--text-secondary); font-size: 0.9rem;">Seleccione una mesa para cambiar su estado:</p>
-            <div class="table-grid" id="tableGridContainer">
-                <!-- Generado por JS -->
-            </div>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">Toca una mesa para ver o tomar su pedido:</p>
+            <div class="table-grid" id="tableGridContainer"></div>
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
+        </div>
+
+        <!-- SECCIÓN: TOMA DE PEDIDOS POR MESA -->
+        <div id="order-section" class="card hidden">
+            <h2 id="order-title">Pedido de Mesa</h2>
+            <div class="input-group">
+                <label>Agregar Producto</label>
+                <select id="productSelect"></select>
+            </div>
+            <button class="btn" onclick="addToOrder()">Agregar al Pedido</button>
+            
+            <div style="margin-top: 1.5rem;">
+                <h3>Cuenta Actual</h3>
+                <div id="orderItemsList" style="max-height: 180px; overflow-y: auto; margin-bottom: 1rem;"></div>
+                <div style="display: flex; justify-content: space-between; font-size: 1.2rem; font-weight: bold; margin-bottom: 1rem;">
+                    <span>Total:</span>
+                    <span id="orderTotal">$ 0</span>
+                </div>
+            </div>
+            
+            <button class="btn btn-danger" onclick="clearTableOrder()">Liberar Mesa / Pagar</button>
+            <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="showSection('tables-section')">Volver a Mesas</button>
         </div>
 
         <!-- SECCIÓN: CATÁLOGO Y PRECIOS -->
         <div id="catalog-section" class="card hidden">
             <h2>Catálogo de Productos</h2>
             <div class="input-group">
-                <label>Nuevo Producto</label>
+                <label id="formProductTitle">Nuevo Producto</label>
                 <input type="text" id="newProdName" placeholder="Ej: Hamburguesa Especial">
             </div>
             <div class="input-group">
                 <label>Precio ($)</label>
                 <input type="number" id="newProdPrice" placeholder="Ej: 25000">
             </div>
-            <button class="btn" onclick="addProduct()">Agregar al Catálogo</button>
+            <button class="btn" id="btnSaveProduct" onclick="saveProduct()">Agregar al Catálogo</button>
+            <button class="btn btn-secondary hidden" id="btnCancelEdit" onclick="cancelEditProduct()">Cancelar Edición</button>
             
             <div style="margin-top: 1.5rem;">
                 <h3>Productos Existentes</h3>
-                <div id="productList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
-                    <!-- Generado por JS -->
-                </div>
+                <div id="productList" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
             </div>
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
     </div>
 
     <script>
-        // Simulación de datos iniciales
         let tables = [
-            { id: 1, name: 'Mesa 1', status: 'libre' },
-            { id: 2, name: 'Mesa 2', status: 'ocupada' },
-            { id: 3, name: 'Mesa 3', status: 'libre' },
-            { id: 4, name: 'Mesa 4', status: 'libre' },
-            { id: 5, name: 'Mesa 5', status: 'ocupada' },
-            { id: 6, name: 'Mesa 6', status: 'libre' }
+            { id: 1, name: 'Mesa 1', status: 'libre', items: [] },
+            { id: 2, name: 'Mesa 2', status: 'libre', items: [] },
+            { id: 3, name: 'Mesa 3', status: 'libre', items: [] },
+            { id: 4, name: 'Mesa 4', status: 'libre', items: [] },
+            { id: 5, name: 'Mesa 5', status: 'libre', items: [] },
+            { id: 6, name: 'Mesa 6', status: 'libre', items: [] }
         ];
 
         let products = [
-            { name: 'Hamburguesa Sencilla', price: 18000 },
-            { name: 'Papas Francesas', price: 8000 },
-            { name: 'Gaseosa 400ml', price: 4000 }
+            { id: 1, name: 'Hamburguesa Sencilla', price: 18000 },
+            { id: 2, name: 'Papas Francesas', price: 8000 },
+            { id: 3, name: 'Gaseosa 400ml', price: 4000 }
         ];
+
+        let currentTableId = null;
+        let editingProductId = null;
 
         function login() {
             const user = document.getElementById('userInput').value;
@@ -159,11 +185,15 @@
         function showSection(sectionId) {
             document.getElementById('dashboard-view').classList.add('hidden');
             document.getElementById('tables-section').classList.add('hidden');
+            document.getElementById('order-section').classList.add('hidden');
             document.getElementById('catalog-section').classList.add('hidden');
             
             document.getElementById(sectionId).classList.remove('hidden');
             if(sectionId === 'tables-section') renderTables();
-            if(sectionId === 'catalog-section') renderProducts();
+            if(sectionId === 'catalog-section') {
+                cancelEditProduct();
+                renderProducts();
+            }
         }
 
         function renderTables() {
@@ -173,41 +203,157 @@
                 const div = document.createElement('div');
                 div.className = `table-item ${t.status}`;
                 div.innerHTML = `${t.name}<br><span style="font-size:0.75rem; text-transform:uppercase;">${t.status}</span>`;
-                div.onclick = () => toggleTableStatus(t.id);
+                div.onclick = () => openTableOrder(t.id);
                 container.appendChild(div);
             });
         }
 
-        function toggleTableStatus(id) {
+        function openTableOrder(id) {
+            currentTableId = id;
             const table = tables.find(t => t.id === id);
-            if(table) {
-                table.status = table.status === 'libre' ? 'ocupada' : 'libre';
-                renderTables();
+            document.getElementById('order-title').innerText = `Pedido - ${table.name}`;
+            
+            const select = document.getElementById('productSelect');
+            select.innerHTML = '';
+            products.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.innerText = `${p.name} - $${p.price.toLocaleString()}`;
+                select.appendChild(opt);
+            });
+
+            renderOrderItems();
+            document.getElementById('tables-section').classList.add('hidden');
+            document.getElementById('order-section').classList.remove('hidden');
+        }
+
+        function addToOrder() {
+            const prodId = parseInt(document.getElementById('productSelect').value);
+            const product = products.find(p => p.id === prodId);
+            const table = tables.find(t => t.id === currentTableId);
+
+            if (product && table) {
+                table.items.push({ name: product.name, price: product.price });
+                table.status = 'ocupada';
+                renderOrderItems();
             }
         }
+
+        function renderOrderItems() {
+            const table = tables.find(t => t.id === currentTableId);
+            const list = document.getElementById('orderItemsList');
+            list.innerHTML = '';
+            
+            let total = 0;
+            if (table.items.length === 0) {
+                list.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No hay productos en esta mesa.</p>';
+            } else {
+                table.items.forEach((item, index) => {
+                    total += item.price;
+                    const row = document.createElement('div');
+                    row.className = 'order-item';
+                    row.innerHTML = `<span>${item.name}</span> <div><strong>$${item.price.toLocaleString()}</strong> <button onclick="removeOrderItem(${index})" class="action-btn">❌</button></div>`;
+                    list.appendChild(row);
+                });
+            }
+            document.getElementById('orderTotal').innerText = `$ ${total.toLocaleString()}`;
+        }
+
+        function removeOrderItem(index) {
+            const table = tables.find(t => t.id === currentTableId);
+            table.items.splice(index, 1);
+            if (table.items.length === 0) {
+                table.status = 'libre';
+            }
+            renderOrderItems();
+        }
+
+        function clearTableOrder() {
+            const table = tables.find(t => t.id === currentTableId);
+            if (confirm(`¿Desea cerrar la cuenta y liberar la ${table.name}?`)) {
+                table.items = [];
+                table.status = 'libre';
+                showSection('tables-section');
+            }
+        }
+
+        /* --- GESTIÓN DE CATÁLOGO (AGREGAR, EDITAR, ELIMINAR) --- */
 
         function renderProducts() {
             const list = document.getElementById('productList');
             list.innerHTML = '';
             products.forEach(p => {
                 const item = document.createElement('div');
-                item.style.cssText = "display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid var(--border);";
-                item.innerHTML = `<span>${p.name}</span><strong>$ ${p.price.toLocaleString()}</strong>`;
+                item.className = 'order-item';
+                item.innerHTML = `
+                    <span>${p.name}</span>
+                    <div>
+                        <strong>$${p.price.toLocaleString()}</strong>
+                        <button onclick="editProduct(${p.id})" class="action-btn" title="Editar">✏️</button>
+                        <button onclick="deleteProduct(${p.id})" class="action-btn" title="Eliminar">🗑️</button>
+                    </div>
+                `;
                 list.appendChild(item);
             });
         }
 
-        function addProduct() {
-            const name = document.getElementById('newProdName').value;
+        function saveProduct() {
+            const name = document.getElementById('newProdName').value.trim();
             const price = parseFloat(document.getElementById('newProdPrice').value);
-            if(name && price) {
-                products.push({ name, price });
-                document.getElementById('newProdName').value = '';
-                document.getElementById('newProdPrice').value = '';
-                renderProducts();
-                alert('Producto agregado con éxito');
+
+            if (!name || isNaN(price)) {
+                alert('Por favor complete ambos campos correctamente.');
+                return;
+            }
+
+            if (editingProductId !== null) {
+                // Actualizar existente
+                const product = products.find(p => p.id === editingProductId);
+                if (product) {
+                    product.name = name;
+                    product.price = price;
+                }
             } else {
-                alert('Por favor complete ambos campos');
+                // Crear nuevo
+                const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+                products.push({ id: newId, name, price });
+            }
+
+            cancelEditProduct();
+            renderProducts();
+        }
+
+        function editProduct(id) {
+            const product = products.find(p => p.id === id);
+            if (product) {
+                editingProductId = id;
+                document.getElementById('newProdName').value = product.name;
+                document.getElementById('newProdPrice').value = product.price;
+                
+                document.getElementById('formProductTitle').innerText = 'Editar Producto';
+                document.getElementById('btnSaveProduct').innerText = 'Guardar Cambios';
+                document.getElementById('btnCancelEdit').classList.remove('hidden');
+            }
+        }
+
+        function cancelEditProduct() {
+            editingProductId = null;
+            document.getElementById('newProdName').value = '';
+            document.getElementById('newProdPrice').value = '';
+            
+            document.getElementById('formProductTitle').innerText = 'Nuevo Producto';
+            document.getElementById('btnSaveProduct').innerText = 'Agregar al Catálogo';
+            document.getElementById('btnCancelEdit').classList.add('hidden');
+        }
+
+        function deleteProduct(id) {
+            const product = products.find(p => p.id === id);
+            if (product && confirm(`¿Seguro que deseas eliminar "${product.name}"?`)) {
+                products = products.filter(p => p.id !== id);
+                if (editingProductId === id) {
+                    cancelEditProduct();
+                }
+                renderProducts();
             }
         }
     </script>
