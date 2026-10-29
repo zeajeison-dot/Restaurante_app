@@ -915,6 +915,25 @@ function renderInventory() {
     });
 }
 
+function showSection(sectionId) {
+    const sections = ['dashboard-view', 'tables-section', 'tables-admin-section', 'order-section', 'bill-section', 'catalog-section', 'drinks-section', 'addons-section', 'inventory-section'];
+    sections.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+    
+    const target = document.getElementById(sectionId);
+    if (target) target.classList.remove('hidden');
+
+    if(sectionId === 'tables-section') renderTables();
+    if(sectionId === 'tables-admin-section') renderTablesAdmin();
+    if(sectionId === 'catalog-section') { cancelEditProduct(); renderRecipeCheckboxes(); renderProducts(); }
+    if(sectionId === 'drinks-section') { cancelEditDrink(); renderDrinks(); }
+    if(sectionId === 'addons-section') { cancelEditAddon(); renderAddons(); }
+    if(sectionId === 'inventory-section') renderInventory();
+}
+
+
 function saveInventoryItem() {
     const nameVal = document.getElementById('invName').value;
     const stock = parseFloat(document.getElementById('invStock').value);
@@ -926,5 +945,66 @@ function saveInventoryItem() {
         document.getElementById('invName').value = '';
         document.getElementById('invStock').value = '';
         document.getElementById('invUnit').value = '';
+    }
+}
+/* --- GESTIÓN Y ADMINISTRACIÓN DE MESAS --- */
+
+function renderTablesAdmin() {
+    const list = document.getElementById('tablesAdminList');
+    if (!list) return;
+    list.innerHTML = '';
+    
+    tables.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'product-row';
+        item.innerHTML = `
+            <div class="product-info">
+                <span><strong>${t.name}</strong></span>
+                <span style="font-size:0.75rem; color: var(--text-secondary); display:block; text-transform:uppercase;">Estado: ${t.status}</span>
+            </div>
+            <div class="product-actions">
+                <button onclick="deleteTable(${t.id})" class="action-btn" title="Eliminar Mesa">🗑️</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+function saveNewTable() {
+    const nameInput = document.getElementById('newTableName');
+    const name = nameInput.value.trim();
+    if (!name) {
+        alert('Por favor ingrese el nombre de la mesa.');
+        return;
+    }
+
+    const newId = tables.length > 0 ? Math.max(...tables.map(t => t.id)) + 1 : 1;
+    tables.push({
+        id: newId,
+        name: name,
+        status: 'libre',
+        items: [],
+        receipts: []
+    });
+
+    saveData();
+    nameInput.value = '';
+    renderTablesAdmin();
+    alert(`Mesa "${name}" creada exitosamente.`);
+}
+
+function deleteTable(id) {
+    const table = tables.find(t => t.id === id);
+    if (!table) return;
+
+    if (table.status === 'ocupada' || (table.items && table.items.length > 0)) {
+        alert('No se puede eliminar una mesa que se encuentra ocupada o tiene pedidos activos.');
+        return;
+    }
+
+    if (confirm(`¿Desea eliminar la ${table.name}?`)) {
+        tables = tables.filter(t => t.id !== id);
+        saveData();
+        renderTablesAdmin();
     }
 }

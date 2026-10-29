@@ -40,6 +40,10 @@
                     <h3>🪑 Mesas & Pedidos</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Control de salón</p>
                 </div>
+                <div class="menu-card" onclick="showSection('tables-admin-section')">
+                    <h3>⚙️ Gestionar Mesas</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Crear / Eliminar mesas</p>
+                </div>
                 <div class="menu-card" onclick="showSection('catalog-section')">
                     <h3>🍔 Catálogo de Platos</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Platos y recetas</p>
@@ -64,6 +68,22 @@
             <h2>Gestión de Mesas</h2>
             <p style="color: var(--text-secondary); font-size: 0.9rem;">Toca una mesa para ver o tomar su pedido:</p>
             <div class="table-grid" id="tableGridContainer"></div>
+            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
+        </div>
+
+        <!-- SECCIÓN: ADMINISTRACIÓN DE MESAS -->
+        <div id="tables-admin-section" class="card hidden">
+            <h2>Administración de Mesas</h2>
+            <div class="input-group">
+                <label>Nombre de la Nueva Mesa</label>
+                <input type="text" id="newTableName" placeholder="Ej: Mesa VIP, Terraza 1">
+            </div>
+            <button class="btn" onclick="saveNewTable()">Guardar Nueva Mesa</button>
+            
+            <div style="margin-top: 1.5rem;">
+                <h3>Mesas Existentes</h3>
+                <div id="tablesAdminList" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
+            </div>
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
