@@ -4,7 +4,8 @@ window.onload = function() {
         document.getElementById('dashboard-view').classList.remove('hidden');
         document.getElementById('welcome-msg').innerText = 'Administrador General';
     }
-};
+}
+
 
 let tables = JSON.parse(localStorage.getItem('restopos_tables')) || [
     { id: 1, name: 'Mesa 1', status: 'libre', items: [], receipts: [] },
@@ -40,14 +41,8 @@ let editingDrinkId = null;
 let editingAddonId = null;
 let editingOrderItemIndex = null;
 
-function saveData() {
-    localStorage.setItem('restopos_tables', JSON.stringify(tables));
-    localStorage.setItem('restopos_addons', JSON.stringify(addons));
-    localStorage.setItem('restopos_products', JSON.stringify(products));
-    localStorage.setItem('restopos_drinks', JSON.stringify(drinks));
-    localStorage.setItem('restopos_inventory', JSON.stringify(inventory));
-}
 
+/*
 function login() {
     if(document.getElementById('userInput').value === 'admin' && document.getElementById('passInput').value === '123') {
         localStorage.setItem('restopos_logged', 'true');
@@ -56,6 +51,22 @@ function login() {
         document.getElementById('welcome-msg').innerText = 'Administrador General';
     } else { alert('Credenciales incorrectas (admin / 123)'); }
 }
+*/
+
+function login() {
+    const userInput = document.getElementById('userInput').value.trim();
+    const passInput = document.getElementById('passInput').value.trim();
+
+    if(userInput === 'admin' && passInput === '123') {
+        localStorage.setItem('restopos_logged', 'true');
+        document.getElementById('login-view').classList.add('hidden');
+        document.getElementById('dashboard-view').classList.remove('hidden');
+        document.getElementById('welcome-msg').innerText = 'Administrador General';
+    } else { 
+        alert('Credenciales incorrectas (admin / 123)'); 
+    }
+}
+
 
 function logout() {
     localStorage.removeItem('restopos_logged');
@@ -1007,4 +1018,65 @@ function deleteTable(id) {
         saveData();
         renderTablesAdmin();
     }
+}
+
+
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxjUwp_InItsq8J-tSl7a2e96zxWX_29H_YgN5b-Ujmx7IuHp4JDJPyM5gaoVFScSr_rQ/exec";
+
+// Cargar datos desde Google Sheets al iniciar
+async function loadDataFromCloud() {
+    try {
+        let response = await fetch(WEB_APP_URL + "?action=getData");
+        let cloudData = await response.json();
+        
+        if (cloudData.tables && cloudData.tables.length > 0) {
+            tables = cloudData.tables;
+            addons = cloudData.addons || addons;
+            products = cloudData.products || products;
+            drinks = cloudData.drinks || drinks;
+            inventory = cloudData.inventory || inventory;
+            
+            // Actualizar el almacenamiento local con los datos de la nube
+            saveData();
+            console.log("Datos sincronizados desde Google Sheets exitosamente.");
+        }
+    } catch (error) {
+        console.warn("No se pudo conectar a la nube, cargando desde localStorage local.", error);
+    }
+}
+async function syncDataToCloud() {
+    try {
+        const payload = {
+            tables: tables,
+            products: products,
+            drinks: drinks,
+            addons: addons,
+            inventory: inventory
+        };
+
+        let response = await fetch(WEB_APP_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        let result = await response.json();
+        if (result.status === 'success') {
+            console.log("Datos sincronizados con Google Sheets correctamente.");
+        } else {
+            console.error("Error en el servidor de Sheets:", result.message);
+        }
+    } catch (error) {
+        console.error("No se pudo conectar con la nube para sincronizar:", error);
+    }
+}
+
+function saveData() {
+    localStorage.setItem('restopos_tables', JSON.stringify(tables));
+    localStorage.setItem('restopos_addons', JSON.stringify(addons));
+    localStorage.setItem('restopos_products', JSON.stringify(products));
+    localStorage.setItem('restopos_drinks', JSON.stringify(drinks));
+    localStorage.setItem('restopos_inventory', JSON.stringify(inventory));
+
+    // Llamar a la sincronización
+    syncDataToCloud();
 }
