@@ -45,6 +45,7 @@ let currentTableId = null;
 let editingProductId = null;
 let editingDrinkId = null;
 let editingAddonId = null;
+let editingTableId = null; // Control de edición de mesas
 let editingOrderItemIndex = null;
 let kitchenInterval = null; // Control del temporizador automático del KDS
 
@@ -135,6 +136,7 @@ function showSection(sectionId) {
 
     // Administración de mesas
     if (sectionId === 'tables-admin-section') {
+        cancelEditTable();
         renderTablesAdmin();
     }
 
@@ -176,7 +178,7 @@ function renderTables() {
     tables.forEach(t => {
         const div = document.createElement('div');
         div.className = `table-item ${t.status}`;
-        div.innerHTML = `${t.name}<br><span style="font-size:0.75rem; text-transform:uppercase;">${t.status}</span>`;
+        div.innerHTML = `${t.name}<br><span style="font-size:0.65rem; text-transform:uppercase;">${t.status}</span>`;
         div.onclick = () => openTableOrder(t.id);
         container.appendChild(div);
     });
@@ -196,6 +198,7 @@ function renderTablesAdmin() {
                 <span style="font-size:0.75rem; color: var(--text-secondary); display:block; text-transform:uppercase;">Estado: ${t.status}</span>
             </div>
             <div class="product-actions">
+                <button onclick="editTable(${t.id})" class="action-btn" title="Editar Mesa">✏️</button>
                 <button onclick="deleteTable(${t.id})" class="action-btn" title="Eliminar Mesa">🗑️</button>
             </div>
         `;
@@ -211,19 +214,67 @@ function saveNewTable() {
         return;
     }
 
-    const newId = tables.length > 0 ? Math.max(...tables.map(t => t.id)) + 1 : 1;
-    tables.push({
-        id: newId,
-        name: name,
-        status: 'libre',
-        items: [],
-        receipts: []
-    });
+    if (editingTableId !== null) {
+        const table = tables.find(t => t.id === editingTableId);
+        if (table) {
+            table.name = name;
+            alert(`Mesa actualizada a "${name}" exitosamente.`);
+        }
+        cancelEditTable();
+    } else {
+        const newId = tables.length > 0 ? Math.max(...tables.map(t => t.id)) + 1 : 1;
+        tables.push({
+            id: newId,
+            name: name,
+            status: 'libre',
+            items: [],
+            receipts: []
+        });
+        alert(`Mesa "${name}" creada exitosamente.`);
+    }
 
     saveData();
     nameInput.value = '';
     renderTablesAdmin();
-    alert(`Mesa "${name}" creada exitosamente.`);
+}
+
+function editTable(id) {
+    const table = tables.find(t => t.id === id);
+    if (table) {
+        editingTableId = id;
+        document.getElementById('newTableName').value = table.name;
+        
+        let container = document.getElementById('tablesAdminFormContainer');
+        if(!container) {
+            container = document.getElementById('newTableName').closest('.input-group').parentNode;
+        }
+
+        let cancelBtn = document.getElementById('btnCancelTableEdit');
+        if (!cancelBtn) {
+            cancelBtn = document.createElement('button');
+            cancelBtn.id = 'btnCancelTableEdit';
+            cancelBtn.className = 'btn btn-secondary';
+            cancelBtn.innerText = 'Cancelar Edición';
+            cancelBtn.onclick = cancelEditTable;
+            container.insertBefore(cancelBtn, container.querySelector('button').nextSibling);
+        } else {
+            cancelBtn.classList.remove('hidden');
+        }
+
+        container.querySelector('button').innerText = 'Guardar Cambios de Mesa';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
+
+function cancelEditTable() {
+    editingTableId = null;
+    document.getElementById('newTableName').value = '';
+    
+    const saveBtn = document.querySelector('#tablesAdminSection button, #tables-admin-section button');
+    if (saveBtn) saveBtn.innerText = 'Guardar Nueva Mesa';
+
+    const cancelBtn = document.getElementById('btnCancelTableEdit');
+    if (cancelBtn) cancelBtn.classList.add('hidden');
 }
 
 function deleteTable(id) {
@@ -237,6 +288,7 @@ function deleteTable(id) {
 
     if (confirm(`¿Desea eliminar la ${table.name}?`)) {
         tables = tables.filter(t => t.id !== id);
+        if (editingTableId === id) cancelEditTable();
         saveData();
         renderTablesAdmin();
     }
@@ -606,7 +658,6 @@ function renderKitchenOrders() {
     let activeOrders = [];
 
     tables.forEach(table => {
-        // Solo mostrar ítems enviados a cocina y que aún no hayan sido marcados como servidos
         const activeItems = table.items.filter(item => item.sentToKitchen && !item.served);
         if (activeItems.length > 0) {
             let earliestSentAt = Math.min(...activeItems.map(i => i.sentAt || now));
@@ -646,16 +697,16 @@ function renderKitchenOrders() {
         let textColor = '#15803d';
         let cardExtraClass = '';
 
-        if (isExpired || remainingSecs <= 60) { // Menos de 1 min o tiempo agotado -> Rojo con parpadeo
+        if (isExpired || remainingSecs <= 60) {
             cardBg = '#fee2e2';
             borderColor = '#ef4444';
             textColor = '#b91c1c';
             cardExtraClass = 'kitchen-card-alert';
-        } else if (remainingSecs <= 300) { // Menos de 5 minutos -> Rojo fijo
+        } else if (remainingSecs <= 300) {
             cardBg = '#fee2e2';
             borderColor = '#ef4444';
             textColor = '#b91c1c';
-        } else if (remainingSecs <= 600) { // Entre 10 y 5 minutos -> Amarillo
+        } else if (remainingSecs <= 600) {
             cardBg = '#fef9c3';
             borderColor = '#eab308';
             textColor = '#a16207';
@@ -721,7 +772,7 @@ function markOrderServed(tableId) {
     if (confirm(`¿Marcar todos los ítems de la ${table.name} como servidos/despachados de cocina?`)) {
         table.items.forEach(item => {
             if (item.sentToKitchen) {
-                item.served = true; // Marcar como servido/despachado sin afectar la facturación
+                item.served = true;
             }
         });
         saveData();
@@ -1327,4 +1378,6 @@ function saveData() {
 }
 
 
-/*TEMPORIZADOR MENOR A 1 MINUTO PARPADEA ROJO*/
+
+
+/*EDICION NOMBRE DE MESAS */
