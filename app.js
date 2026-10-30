@@ -4,9 +4,9 @@
 
 window.onload = function() {
     if (localStorage.getItem('restopos_logged') === 'true') {
-        document.getElementById('login-view').classList.add('hidden');
-        document.getElementById('dashboard-view').classList.remove('hidden');
-        document.getElementById('welcome-msg').innerText = 'Administrador General';
+        const username = localStorage.getItem('restopos_current_user') || 'admin';
+        const role = localStorage.getItem('restopos_current_role') || 'admin';
+        setupUserSession(username, role, false);
     }
 }
 
@@ -18,6 +18,12 @@ let tables = JSON.parse(localStorage.getItem('restopos_tables')) || [
     { id: 4, name: 'Mesa 4', status: 'libre', items: [], receipts: [] },
     { id: 5, name: 'Mesa 5', status: 'libre', items: [], receipts: [] },
     { id: 6, name: 'Mesa 6', status: 'libre', items: [], receipts: [] }
+];
+
+let users = JSON.parse(localStorage.getItem('restopos_users')) || [
+    { id: 1, username: 'admin', pass: '123', role: 'admin' },
+    { id: 2, username: 'mesero', pass: '123', role: 'mesero' },
+    { id: 3, username: 'cocina', pass: '123', role: 'cocinero' }
 ];
 
 let addons = JSON.parse(localStorage.getItem('restopos_addons')) || [
@@ -45,9 +51,10 @@ let currentTableId = null;
 let editingProductId = null;
 let editingDrinkId = null;
 let editingAddonId = null;
-let editingTableId = null; // Control de edición de mesas
+let editingTableId = null;
+let editingUserId = null;
 let editingOrderItemIndex = null;
-let kitchenInterval = null; // Control del temporizador automático del KDS
+let kitchenInterval = null;
 
 
 /* ========================================================== */
@@ -58,30 +65,117 @@ function login() {
     const userInput = document.getElementById('userInput').value.trim();
     const passInput = document.getElementById('passInput').value.trim();
 
-    if (userInput === 'admin' && passInput === '123') {
+    const foundUser = users.find(u => u.username === userInput && u.pass === passInput);
+
+    if (foundUser) {
         localStorage.setItem('restopos_logged', 'true');
-        document.getElementById('login-view').classList.add('hidden');
-        document.getElementById('dashboard-view').classList.remove('hidden');
-        document.getElementById('welcome-msg').innerText = 'Administrador General';
-    } else { 
-        alert('Credenciales incorrectas (admin / 123)'); 
+        localStorage.setItem('restopos_current_user', foundUser.username);
+        localStorage.setItem('restopos_current_role', foundUser.role);
+        setupUserSession(foundUser.username, foundUser.role, true);
+    } else {
+        alert('Usuario o contraseña incorrectos.');
     }
+}
+
+function setupUserSession(username, role, isNewLogin = false) {
+    document.getElementById('login-view').classList.add('hidden');
+    document.getElementById('welcome-msg').innerText = `Usuario: ${username}`;
+    document.getElementById('userRoleBadge').innerText = `Rol: ${role}`;
+
+    if (isNewLogin) {
+        if (role === 'cocinero') {
+            showSection('kitchen-section');
+            return;
+        } else if (role === 'mesero') {
+            showSection('tables-section');
+            return;
+        }
+    }
+
+    if (role === 'admin') {
+        document.getElementById('dashboard-view').classList.remove('hidden');
+        renderDashboardMenu(role);
+    } else if (role === 'cocinero') {
+        showSection('kitchen-section');
+    } else if (role === 'mesero') {
+        showSection('tables-section');
+    }
+}
+
+function renderDashboardMenu(role) {
+    const grid = document.getElementById('dashboardMenuGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    let menuCards = [
+        { title: '🪑 Mesas & Pedidos', desc: 'Control de salón', action: "showSection('tables-section')" },
+        { title: '👨‍🍳 Módulo de Cocina', desc: 'Comandas en tiempo real', action: "showSection('kitchen-section')" },
+        { title: '👥 Gestión de Usuarios', desc: 'Crear usuarios y permisos', action: "showSection('users-admin-section')" },
+        { title: '⚙️ Gestionar Mesas', desc: 'Crear / Editar mesas', action: "showSection('tables-admin-section')" },
+        { title: '🍔 Catálogo de Platos', desc: 'Platos y recetas', action: "showSection('catalog-section')" },
+        { title: '🥤 Bebidas', desc: 'Gestión de bebidas', action: "showSection('drinks-section')" },
+        { title: '➕ Adicionales', desc: 'Extras con/sin costo', action: "showSection('addons-section')" },
+        { title: '📦 Inventario', desc: 'Control de insumos', action: "showSection('inventory-section')" }
+    ];
+
+    menuCards.forEach(card => {
+        const div = document.createElement('div');
+        div.className = 'menu-card';
+        div.setAttribute('onclick', card.action);
+        div.innerHTML = `
+            <h3>${card.title}</h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary);">${card.desc}</p>
+        `;
+        grid.appendChild(div);
+    });
 }
 
 function logout() {
     localStorage.removeItem('restopos_logged');
-    document.getElementById('dashboard-view').classList.add('hidden');
-    document.getElementById('login-view').classList.add('hidden');
+    localStorage.removeItem('restopos_current_user');
+    localStorage.removeItem('restopos_current_role');
+    
+    const sections = [
+        'dashboard-view',
+        'tables-section',
+        'kitchen-section',
+        'users-admin-section',
+        'tables-admin-section',
+        'order-section',
+        'bill-section',
+        'catalog-section',
+        'drinks-section',
+        'addons-section',
+        'inventory-section'
+    ];
+    sections.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+
     document.getElementById('login-view').classList.remove('hidden');
     document.getElementById('userInput').value = '';
     document.getElementById('passInput').value = '';
 }
 
 function showSection(sectionId) {
+    const role = localStorage.getItem('restopos_current_role') || 'admin';
+    const username = localStorage.getItem('restopos_current_user') || '';
+
+    if (role === 'mesero' && sectionId !== 'tables-section' && sectionId !== 'order-section' && sectionId !== 'bill-section') {
+        alert('Acceso no autorizado para el rol de mesero.');
+        return;
+    }
+    if (role === 'cocinero' && sectionId !== 'kitchen-section') {
+        alert('Acceso no autorizado para el rol de cocinero.');
+        return;
+    }
+
     const sections = [
         'dashboard-view',
         'tables-section',
         'kitchen-section',
+        'users-admin-section',
         'tables-admin-section',
         'order-section',
         'bill-section',
@@ -97,77 +191,179 @@ function showSection(sectionId) {
     });
 
     const target = document.getElementById(sectionId);
+    if (target) target.classList.remove('hidden');
 
-    if (target) {
-        target.classList.remove('hidden');
-    }
-
-    // Detener el intervalo anterior
     if (kitchenInterval) {
         clearInterval(kitchenInterval);
         kitchenInterval = null;
     }
 
-    // Sección de mesas
+    // Ocultar botones de volver al menú para mesero y cocinero
+    const backBtns = document.querySelectorAll('.admin-back-btn');
+    backBtns.forEach(btn => {
+        if (role === 'admin') {
+            btn.style.display = 'block';
+        } else {
+            btn.style.display = 'none';
+        }
+    });
+
     if (sectionId === 'tables-section') {
+        const headerBar = document.getElementById('tablesHeaderBar');
+        const userTitle = document.getElementById('tablesUserTitle');
+        const roleBadge = document.getElementById('tablesRoleBadge');
+
+        if (role === 'mesero') {
+            // Ocultar por completo nombre y rol en la vista del mesero, dejando limpio el encabezado con el botón Salir
+            userTitle.innerText = "Gestión de Mesas";
+            if (roleBadge) roleBadge.style.display = 'none';
+            headerBar.style.display = 'flex';
+        } else if (role === 'admin') {
+            headerBar.style.display = 'none';
+        }
         renderTables();
-    }
-
-    // Sección de cocina
-    if (sectionId === 'kitchen-section') {
+    } else if (sectionId === 'kitchen-section') {
         const kitchenSection = document.getElementById('kitchen-section');
-
         if (!kitchenSection) return;
 
-        renderKitchenOrders();
+        const timerConfigBox = document.getElementById('kitchenTimerConfigBox');
+        if (timerConfigBox) {
+            timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
+        }
 
+        renderKitchenOrders();
         kitchenInterval = setInterval(() => {
-            if (
-                kitchenSection &&
-                !kitchenSection.classList.contains('hidden')
-            ) {
+            if (kitchenSection && !kitchenSection.classList.contains('hidden')) {
                 renderKitchenOrders();
             } else {
                 clearInterval(kitchenInterval);
                 kitchenInterval = null;
             }
         }, 1000);
-    }
-
-    // Administración de mesas
-    if (sectionId === 'tables-admin-section') {
+    } else if (sectionId === 'users-admin-section') {
+        cancelEditUser();
+        renderUsersAdmin();
+    } else if (sectionId === 'tables-admin-section') {
         cancelEditTable();
         renderTablesAdmin();
-    }
-
-    // Catálogo de productos
-    if (sectionId === 'catalog-section') {
+    } else if (sectionId === 'catalog-section') {
         cancelEditProduct();
         renderRecipeCheckboxes();
         renderProducts();
-    }
-
-    // Bebidas
-    if (sectionId === 'drinks-section') {
+    } else if (sectionId === 'drinks-section') {
         cancelEditDrink();
         renderDrinks();
-    }
-
-    // Adicionales
-    if (sectionId === 'addons-section') {
+    } else if (sectionId === 'addons-section') {
         cancelEditAddon();
         renderAddons();
-    }
-
-    // Inventario
-    if (sectionId === 'inventory-section') {
+    } else if (sectionId === 'inventory-section') {
         renderInventory();
     }
 }
 
 
 /* ========================================================== */
-/* 3. GESTIÓN Y ADMINISTRACIÓN DE MESAS                       */
+/* 3. MÓDULO DE GESTIÓN DE USUARIOS Y PERMISOS                */
+/* ========================================================== */
+
+function renderUsersAdmin() {
+    const list = document.getElementById('usersList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    users.forEach(u => {
+        const item = document.createElement('div');
+        item.className = 'product-row';
+        item.innerHTML = `
+            <div class="product-info">
+                <span><strong>${u.username}</strong></span>
+                <span style="font-size:0.75rem; color: var(--text-secondary); display:block; text-transform:uppercase;">Rol: ${u.role}</span>
+            </div>
+            <div class="product-actions">
+                <button onclick="editUser(${u.id})" class="action-btn" title="Editar Usuario">✏️</button>
+                <button onclick="deleteUser(${u.id})" class="action-btn" title="Eliminar Usuario">🗑️</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+function saveUser() {
+    const username = document.getElementById('newUsername').value.trim();
+    const pass = document.getElementById('newUserPass').value.trim();
+    const role = document.getElementById('newUserRole').value;
+
+    if (!username || !pass) {
+        alert('Por favor ingrese el nombre de usuario y la contraseña.');
+        return;
+    }
+
+    if (editingUserId !== null) {
+        const user = users.find(u => u.id === editingUserId);
+        if (user) {
+            user.username = username;
+            user.pass = pass;
+            user.role = role;
+            alert(`Usuario "${username}" actualizado exitosamente.`);
+        }
+        cancelEditUser();
+    } else {
+        const newId = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
+        users.push({ id: newId, username, pass, role });
+        alert(`Usuario "${username}" creado exitosamente.`);
+    }
+
+    saveData();
+    document.getElementById('newUsername').value = '';
+    document.getElementById('newUserPass').value = '';
+    renderUsersAdmin();
+}
+
+function editUser(id) {
+    const user = users.find(u => u.id === id);
+    if (user) {
+        editingUserId = id;
+        document.getElementById('newUsername').value = user.username;
+        document.getElementById('newUserPass').value = user.pass;
+        document.getElementById('newUserRole').value = user.role;
+
+        document.getElementById('formUserTitle').innerText = 'Editar Usuario';
+        document.getElementById('btnSaveUser').innerText = 'Guardar Cambios de Usuario';
+        document.getElementById('btnCancelUserEdit').classList.remove('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
+
+function cancelEditUser() {
+    editingUserId = null;
+    document.getElementById('newUsername').value = '';
+    document.getElementById('newUserPass').value = '';
+    document.getElementById('newUserRole').value = 'mesero';
+    document.getElementById('formUserTitle').innerText = 'Nombre de Usuario';
+    document.getElementById('btnSaveUser').innerText = 'Crear / Guardar Usuario';
+    document.getElementById('btnCancelUserEdit').classList.add('hidden');
+}
+
+function deleteUser(id) {
+    const user = users.find(u => u.id === id);
+    if (!user) return;
+
+    if (user.username === 'admin') {
+        alert('No se puede eliminar el usuario administrador principal.');
+        return;
+    }
+
+    if (confirm(`¿Desea eliminar permanentemente al usuario "${user.username}"?`)) {
+        users = users.filter(u => u.id !== id);
+        if (editingUserId === id) cancelEditUser();
+        saveData();
+        renderUsersAdmin();
+    }
+}
+
+
+/* ========================================================== */
+/* 4. GESTIÓN Y ADMINISTRACIÓN DE MESAS                       */
 /* ========================================================== */
 
 function renderTables() {
@@ -244,22 +440,9 @@ function editTable(id) {
         editingTableId = id;
         document.getElementById('newTableName').value = table.name;
         
-        let container = document.getElementById('tablesAdminFormContainer');
-        if(!container) {
-            container = document.getElementById('newTableName').closest('.input-group').parentNode;
-        }
-
-        let cancelBtn = document.getElementById('btnCancelTableEdit');
-        if (!cancelBtn) {
-            cancelBtn = document.createElement('button');
-            cancelBtn.id = 'btnCancelTableEdit';
-            cancelBtn.className = 'btn btn-secondary';
-            cancelBtn.innerText = 'Cancelar Edición';
-            cancelBtn.onclick = cancelEditTable;
-            container.insertBefore(cancelBtn, container.querySelector('button').nextSibling);
-        } else {
-            cancelBtn.classList.remove('hidden');
-        }
+        const container = document.getElementById('newTableName').closest('.input-group').parentNode;
+        const cancelBtn = document.getElementById('btnCancelTableEdit');
+        if (cancelBtn) cancelBtn.classList.remove('hidden');
 
         container.querySelector('button').innerText = 'Guardar Cambios de Mesa';
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -270,8 +453,8 @@ function cancelEditTable() {
     editingTableId = null;
     document.getElementById('newTableName').value = '';
     
-    const saveBtn = document.querySelector('#tablesAdminSection button, #tables-admin-section button');
-    if (saveBtn) saveBtn.innerText = 'Guardar Nueva Mesa';
+    const saveBtn = document.querySelector('#tables-admin-section button');
+    if (saveBtn) saveBtn.innerText = 'Guardar Mesa';
 
     const cancelBtn = document.getElementById('btnCancelTableEdit');
     if (cancelBtn) cancelBtn.classList.add('hidden');
@@ -296,7 +479,7 @@ function deleteTable(id) {
 
 
 /* ========================================================== */
-/* 4. MÓDULO DE PEDIDOS Y PERSONALIZACIÓN                     */
+/* 5. MÓDULO DE PEDIDOS Y PERSONALIZACIÓN                     */
 /* ========================================================== */
 
 function openTableOrder(id) {
@@ -612,7 +795,7 @@ function removeOrderItem(index) {
 
 
 /* ========================================================== */
-/* 5. MÓDULO DE COCINA (KDS) Y CRONÓMETRO                     */
+/* 6. MÓDULO DE COCINA (KDS) Y CRONÓMETRO                     */
 /* ========================================================== */
 
 function sendOrderToKitchen() {
@@ -782,7 +965,7 @@ function markOrderServed(tableId) {
 
 
 /* ========================================================== */
-/* 6. MÓDULO DE CUENTAS, FACTURACIÓN Y RECIBOS               */
+/* 7. MÓDULO DE CUENTAS, FACTURACIÓN Y RECIBOS               */
 /* ========================================================== */
 
 function openBillSection() {
@@ -1031,7 +1214,7 @@ function backToOrderSection() {
 
 
 /* ========================================================== */
-/* 7. GESTIÓN DE CATÁLOGO (PLATOS, BEBIDAS, ADICIONALES)      */
+/* 8. GESTIÓN DE CATÁLOGO (PLATOS, BEBIDAS, ADICIONALES)      */
 /* ========================================================== */
 
 function renderRecipeCheckboxes() {
@@ -1288,7 +1471,7 @@ function deleteAddon(id) {
 
 
 /* ========================================================== */
-/* 8. GESTIÓN DE INVENTARIO                                   */
+/* 9. GESTIÓN DE INVENTARIO                                   */
 /* ========================================================== */
 
 function renderInventory() {
@@ -1316,7 +1499,7 @@ function saveInventoryItem() {
 
 
 /* ========================================================== */
-/* 9. SINCRONIZACIÓN CON GOOGLE SHEETS Y LOCALSTORAGE         */
+/* 10. SINCRONIZACIÓN CON GOOGLE SHEETS Y LOCALSTORAGE        */
 /* ========================================================== */
 
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxjUwp_InItsq8J-tSl7a2e96zxWX_29H_YgN5b-Ujmx7IuHp4JDJPyM5gaoVFScSr_rQ/exec";
@@ -1332,6 +1515,7 @@ async function loadDataFromCloud() {
             products = cloudData.products || products;
             drinks = cloudData.drinks || drinks;
             inventory = cloudData.inventory || inventory;
+            users = cloudData.users || users;
 
             saveData();
             console.log("Datos sincronizados desde Google Sheets exitosamente.");
@@ -1348,7 +1532,8 @@ async function syncDataToCloud() {
             products: products,
             drinks: drinks,
             addons: addons,
-            inventory: inventory
+            inventory: inventory,
+            users: users
         };
 
         let response = await fetch(WEB_APP_URL, {
@@ -1373,11 +1558,11 @@ function saveData() {
     localStorage.setItem('restopos_products', JSON.stringify(products));
     localStorage.setItem('restopos_drinks', JSON.stringify(drinks));
     localStorage.setItem('restopos_inventory', JSON.stringify(inventory));
+    localStorage.setItem('restopos_users', JSON.stringify(users));
 
     syncDataToCloud();
 }
 
 
 
-
-/*EDICION NOMBRE DE MESAS */
+/* CREACION MODULO ADMINISTRACION DE USUARIOS Y PERMISOS*/

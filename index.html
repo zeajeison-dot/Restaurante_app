@@ -8,7 +8,6 @@
     <meta name="theme-color" content="#1e293b">
     <link rel="stylesheet" href="./styles.css">
     <style>
-        /* Estilo para el efecto de parpadeo (alerta en rojo) en comandas vencidas */
         @keyframes blink-animation {
             0% { opacity: 1; border-color: #ef4444; }
             50% { opacity: 0.4; border-color: #b91c1c; }
@@ -32,81 +31,100 @@
             </div>
             <div class="input-group">
                 <label>Usuario</label>
-                <input type="text" id="userInput" placeholder="Ej: admin">
+                <input type="text" id="userInput" placeholder="Ej: admin, mesero1">
             </div>
             <div class="input-group">
                 <label>Contraseña / PIN</label>
                 <input type="password" id="passInput" placeholder="••••">
             </div>
             <button class="btn" onclick="login()">Iniciar Sesión</button>
-            <p style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">Usuario admin / PIN 123</p>
+            <p style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">Admin por defecto: admin / 123</p>
         </div>
 
         <!-- ========================================== -->
-        <!-- PANEL PRINCIPAL (DASHBOARD)                -->
+        <!-- PANEL PRINCIPAL (DASHBOARD - ADMIN)        -->
         <!-- ========================================== -->
         <div id="dashboard-view" class="hidden">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h2 id="welcome-msg" style="margin: 0; font-size: 1.2rem;">Panel</h2>
+                <div>
+                    <h2 id="welcome-msg" style="margin: 0; font-size: 1.2rem;">Panel</h2>
+                    <span id="userRoleBadge" style="font-size: 0.75rem; background: #e2e8f0; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: bold; text-transform: uppercase;"></span>
+                </div>
                 <button class="btn btn-secondary" style="width: auto; padding: 0.5rem 1rem; margin: 0;" onclick="logout()">Salir</button>
             </div>
 
-            <div class="grid">
-                <div class="menu-card" onclick="showSection('tables-section')">
-                    <h3>🪑 Mesas & Pedidos</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Control de salón</p>
-                </div>
-                <div class="menu-card" onclick="showSection('kitchen-section')">
-                    <h3>👨‍🍳 Módulo de Cocina</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Comandas en tiempo real</p>
-                </div>
-                <div class="menu-card" onclick="showSection('tables-admin-section')">
-                    <h3>⚙️ Gestionar Mesas</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Crear / Eliminar mesas</p>
-                </div>
-                <div class="menu-card" onclick="showSection('catalog-section')">
-                    <h3>🍔 Catálogo de Platos</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Platos y recetas</p>
-                </div>
-                <div class="menu-card" onclick="showSection('drinks-section')">
-                    <h3>🥤 Bebidas</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Gestión de bebidas</p>
-                </div>
-                <div class="menu-card" onclick="showSection('addons-section')">
-                    <h3>➕ Adicionales</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Extras con/sin costo</p>
-                </div>
-                <div class="menu-card" onclick="showSection('inventory-section')">
-                    <h3>📦 Inventario</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Control de insumos</p>
-                </div>
-            </div>
+            <div class="grid" id="dashboardMenuGrid"></div>
         </div>
 
         <!-- ========================================== -->
         <!-- SECCIÓN: GESTIÓN DE MESAS                  -->
         <!-- ========================================== -->
         <div id="tables-section" class="card hidden">
-            <h2>Gestión de Mesas</h2>
+            <!-- Cabecera dinámica (Oculta datos de usuario para meseros, visible con botón Salir) -->
+            <div id="tablesHeaderBar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+                <div>
+                    <h2 style="margin: 0; font-size: 1.1rem;" id="tablesUserTitle">Gestión de Mesas</h2>
+                    <span id="tablesRoleBadge" style="font-size: 0.7rem; background: #e2e8f0; padding: 0.1rem 0.3rem; border-radius: 4px; font-weight: bold; text-transform: uppercase;"></span>
+                </div>
+                <button class="btn btn-secondary" style="width: auto; padding: 0.4rem 0.8rem; margin: 0; font-size: 0.85rem;" onclick="logout()">Salir</button>
+            </div>
+
             <p style="color: var(--text-secondary); font-size: 0.9rem;">Toca una mesa para ver o tomar su pedido:</p>
             <div class="table-grid" id="tableGridContainer"></div>
-            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
+            
+            <button class="btn btn-secondary admin-back-btn" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
         <!-- ========================================== -->
         <!-- SECCIÓN: MÓDULO DE COCINA (KDS)            -->
         <!-- ========================================== -->
         <div id="kitchen-section" class="card hidden">
-            <h2>👨‍🍳 Comandas en Cocina</h2>
+            <!-- Cabecera limpia sin texto de rol redundante -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+                <h2 style="margin: 0; font-size: 1.1rem;">👨‍🍳 Comandas en Cocina</h2>
+                <button class="btn btn-secondary" style="width: auto; padding: 0.4rem 0.8rem; margin: 0; font-size: 0.85rem;" onclick="logout()">Salir</button>
+            </div>
+
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Pedidos enviados por los meseros ordenados cronológicamente:</p>
             
-            <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; background: #f1f5f9; padding: 0.75rem; border-radius: 8px;">
+            <div id="kitchenTimerConfigBox" style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; background: #f1f5f9; padding: 0.75rem; border-radius: 8px;">
                 <label style="font-size: 0.85rem; margin:0; font-weight: bold;">Tiempo límite alerta (min):</label>
                 <input type="number" id="kitchenTimerParam" value="15" min="1" max="60" style="width: 80px; padding: 0.3rem;" onchange="renderKitchenOrders()">
             </div>
 
             <div id="kitchenOrdersContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; max-height: 55vh; overflow-y: auto;"></div>
             
+            <button class="btn btn-secondary admin-back-btn" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SECCIÓN: ADMINISTRACIÓN DE USUARIOS        -->
+        <!-- ========================================== -->
+        <div id="users-admin-section" class="card hidden">
+            <h2>👥 Gestión de Usuarios y Permisos</h2>
+            <div class="input-group">
+                <label id="formUserTitle">Nombre de Usuario</label>
+                <input type="text" id="newUsername" placeholder="Ej: mesero_carlos">
+            </div>
+            <div class="input-group">
+                <label>Contraseña / PIN</label>
+                <input type="password" id="newUserPass" placeholder="••••">
+            </div>
+            <div class="input-group">
+                <label>Rol / Permisos en el Sistema</label>
+                <select id="newUserRole">
+                    <option value="mesero">Mesero (Solo Mesas y Pedidos)</option>
+                    <option value="cocinero">Cocinero (Solo Módulo de Cocina)</option>
+                    <option value="admin">Administrador (Acceso Total)</option>
+                </select>
+            </div>
+            <button class="btn" id="btnSaveUser" onclick="saveUser()">Crear / Guardar Usuario</button>
+            <button class="btn btn-secondary hidden" id="btnCancelUserEdit" onclick="cancelEditUser()">Cancelar Edición</button>
+
+            <div style="margin-top: 1.5rem;">
+                <h3>Usuarios Registrados</h3>
+                <div id="usersList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
+            </div>
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
@@ -116,10 +134,11 @@
         <div id="tables-admin-section" class="card hidden">
             <h2>Administración de Mesas</h2>
             <div class="input-group">
-                <label>Nombre de la Nueva Mesa</label>
+                <label>Nombre de la Mesa</label>
                 <input type="text" id="newTableName" placeholder="Ej: Mesa VIP, Terraza 1">
             </div>
-            <button class="btn" onclick="saveNewTable()">Guardar Nueva Mesa</button>
+            <button class="btn" onclick="saveNewTable()">Guardar Mesa</button>
+            <button class="btn btn-secondary hidden" id="btnCancelTableEdit" onclick="cancelEditTable()">Cancelar Edición</button>
 
             <div style="margin-top: 1.5rem;">
                 <h3>Mesas Existentes</h3>
