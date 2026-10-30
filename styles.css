@@ -59,3 +59,36 @@ input, select { width: 100%; padding: 0.75rem; border: 1px solid var(--border); 
     max-height: 45vh !important;
     overflow-y: auto !important;
 }
+
+.table-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 1rem;
+    padding: 0.5rem 0;
+}
+
+.table-item {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem;
+    text-align: center;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.table-item:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+}
+
+.table-item.libre {
+    border-color: #22c55e; /* Verde si está libre */
+}
+
+.table-item.ocupada {
+    border-color: #ef4444; /* Rojo si está ocupada */
+    background: #fef2f2;
+}

@@ -34,7 +34,7 @@
                 <h2 id="welcome-msg" style="margin: 0; font-size: 1.2rem;">Panel</h2>
                 <button class="btn btn-secondary" style="width: auto; padding: 0.5rem 1rem; margin: 0;" onclick="logout()">Salir</button>
             </div>
-            
+
             <div class="grid">
                 <div class="menu-card" onclick="showSection('tables-section')">
                     <h3>🪑 Mesas & Pedidos</h3>
@@ -79,14 +79,14 @@
                 <input type="text" id="newTableName" placeholder="Ej: Mesa VIP, Terraza 1">
             </div>
             <button class="btn" onclick="saveNewTable()">Guardar Nueva Mesa</button>
-            
+
             <div style="margin-top: 1.5rem;">
                 <h3>Mesas Existentes</h3>
                 <div id="tablesAdminList" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
             </div>
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
-
+        
         <!-- SECCIÓN: TOMA DE PEDIDOS AVANZADA -->
         <div id="order-section" class="card hidden">
             <h2 id="order-title">Pedido de Mesa</h2>
@@ -94,7 +94,7 @@
                 <label>Seleccionar Plato o Bebida</label>
                 <select id="productSelect" onchange="loadProductRecipeOptions()"></select>
             </div>
-            
+
             <div id="dishCustomizationBox" style="background: #f1f5f9; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: none;">
                 <h4 id="customizationBoxTitle" style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text);">Personalización del Plato:</h4>
                 <div id="recipeComponentsList" style="margin-bottom: 0.75rem;"></div>
@@ -103,7 +103,7 @@
 
             <button class="btn" id="btnAddOrUpdateOrder" onclick="saveOrderCustomization()">Agregar al Pedido</button>
             <button class="btn btn-secondary hidden" id="btnCancelOrderEdit" onclick="cancelOrderEdit()">Cancelar Edición</button>
-            
+
             <div style="margin-top: 1.5rem;">
                 <h3>Cuenta Actual</h3>
                 <div id="orderItemsList" style="max-height: 180px; overflow-y: auto; margin-bottom: 1rem;"></div>
@@ -112,18 +112,22 @@
                     <span id="orderTotal">$ 0</span>
                 </div>
             </div>
+
+            <!-- NUEVO BOTÓN DE ENVÍO A COCINA -->
+            <button class="btn" style="background: #f59e0b; color: white;" onclick="sendOrderToKitchen()">👨‍🍳 Enviar a Cocina</button>
             
-            <button class="btn" style="background: var(--success);" onclick="openBillSection()">💳 Ver Cuenta / Recibos</button>
+            <button class="btn" style="background: var(--success); margin-top: 0.5rem;" onclick="openBillSection()">💳 Ver Cuenta / Recibos</button>
             <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="showSection('tables-section')">Volver a Mesas</button>
         </div>
+
 
         <!-- SECCIÓN: GESTIÓN DE CUENTAS Y RECIBOS -->
         <div id="bill-section" class="card hidden">
             <h2 id="bill-title">Resumen de Cuenta</h2>
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem;">Selecciona los platos para emitir el recibo parcial de cada comensal:</p>
-            
+
             <div id="billItemsList" style="max-height: 160px; overflow-y: auto; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;"></div>
-            
+
             <div style="background: #f1f5f9; padding: 0.6rem; border-radius: 8px; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
                 <span style="font-weight: bold; font-size: 0.9rem;">Subtotal Selección:</span>
                 <span id="selectedPartialTotal" style="font-weight: bold; font-size: 1.05rem; color: var(--primary);">$ 0</span>
@@ -144,7 +148,7 @@
                 <label>Precio Base ($)</label>
                 <input type="number" id="newProdPrice" placeholder="Ej: 22000">
             </div>
-            
+
             <div class="input-group">
                 <label>Componentes que incluye por defecto:</label>
                 <div id="recipeComponentsSelector" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border); padding: 0.6rem; border-radius: 8px; background: #fafafa; display: flex; flex-direction: column; gap: 0.5rem;"></div>
@@ -152,7 +156,7 @@
 
             <button class="btn" id="btnSaveProduct" onclick="saveProduct()">Guardar Plato</button>
             <button class="btn btn-secondary hidden" id="btnCancelEdit" onclick="cancelEditProduct()">Cancelar Edición</button>
-            
+
             <div style="margin-top: 1.5rem;">
                 <h3>Platos Registrados</h3>
                 <div id="productList" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
@@ -173,7 +177,7 @@
             </div>
             <button class="btn" id="btnSaveDrink" onclick="saveDrink()">Guardar Bebida</button>
             <button class="btn btn-secondary hidden" id="btnCancelDrinkEdit" onclick="cancelEditDrink()">Cancelar Edición</button>
-            
+
             <div style="margin-top: 1.5rem;">
                 <h3>Bebidas Registradas</h3>
                 <div id="drinksList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
@@ -194,7 +198,7 @@
             </div>
             <button class="btn" id="btnSaveAddon" onclick="saveAddon()">Guardar Adicional</button>
             <button class="btn btn-secondary hidden" id="btnCancelAddonEdit" onclick="cancelEditAddon()">Cancelar Edición</button>
-            
+
             <div style="margin-top: 1.5rem;">
                 <h3>Adicionales Registrados</h3>
                 <div id="addonsList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
@@ -218,7 +222,7 @@
                 <input type="text" id="invUnit" placeholder="Ej: Gramos, Unidades, Litros">
             </div>
             <button class="btn" onclick="saveInventoryItem()">Guardar Insumo</button>
-            
+
             <div style="margin-top: 1.5rem;">
                 <div id="inventoryList"></div>
             </div>

@@ -42,17 +42,6 @@ let editingAddonId = null;
 let editingOrderItemIndex = null;
 
 
-/*
-function login() {
-    if(document.getElementById('userInput').value === 'admin' && document.getElementById('passInput').value === '123') {
-        localStorage.setItem('restopos_logged', 'true');
-        document.getElementById('login-view').classList.add('hidden');
-        document.getElementById('dashboard-view').classList.remove('hidden');
-        document.getElementById('welcome-msg').innerText = 'Administrador General';
-    } else { alert('Credenciales incorrectas (admin / 123)'); }
-}
-*/
-
 function login() {
     const userInput = document.getElementById('userInput').value.trim();
     const passInput = document.getElementById('passInput').value.trim();
@@ -82,7 +71,7 @@ function showSection(sectionId) {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
     });
-    
+
     const target = document.getElementById(sectionId);
     if (target) target.classList.remove('hidden');
 
@@ -110,19 +99,19 @@ function openTableOrder(id) {
     currentTableId = id;
     const table = tables.find(t => t.id === id);
     if (!table.receipts) table.receipts = [];
-    
+
     table.items.forEach(item => {
         if (!item.uid) item.uid = '_' + Math.random().toString(36).substr(2, 9);
     });
 
     document.getElementById('order-title').innerText = `Pedido - ${table.name}`;
-    
+
     const select = document.getElementById('productSelect');
     select.innerHTML = '<option value="">-- Seleccione un plato o bebida --</option>';
     products.forEach(p => {
         const opt = document.createElement('option');
         opt.value = 'prod_' + p.id;
-        opt.innerText = `${p.name} - $${p.price.toLocaleString()}`;
+        opt.innerText = `🍛 ${p.name} - $${p.price.toLocaleString()}`;
         select.appendChild(opt);
     });
 
@@ -157,14 +146,14 @@ function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsD
     const product = products.find(p => p.id === prodId);
 
     compList.innerHTML = '<strong style="font-size:0.85rem; color:var(--text-secondary);">Componentes Base:</strong>';
-    
+
     if (product && product.components && product.components.length > 0) {
         product.components.forEach((compId, idx) => {
             const addonObj = addons.find(a => a.id === compId);
             if (addonObj) {
                 const div = document.createElement('div');
                 div.style.cssText = "display: flex; align-items: center; justify-content: space-between; margin-top: 0.4rem; font-size: 0.9rem;";
-                
+
                 let subOptions = `<option value="Mantener (${addonObj.name})">Mantener (${addonObj.name})</option>`;
                 addons.filter(a => a.price === 0).forEach(freeA => {
                     if (freeA.id !== compId) {
@@ -192,7 +181,7 @@ function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsD
     }
 
     addonsBox.innerHTML = '<strong style="font-size:0.85rem; color:var(--text-secondary); display:block; margin-top:0.75rem;">Adicionales con costo extra:</strong>';
-    
+
     let extraAddonsExist = false;
     addons.forEach(ad => {
         if (ad.price > 0) {
@@ -258,7 +247,7 @@ function saveOrderCustomization() {
     } else {
         let prodId = parseInt(val.replace('prod_', ''));
         let product = products.find(p => p.id === prodId);
-        finalPrice = product.price; // Precio base exacto del plato
+        finalPrice = product.price; 
         name = product.name;
         productId = product.id;
 
@@ -274,15 +263,15 @@ function saveOrderCustomization() {
             const id = parseInt(chk.value);
             const dataName = chk.getAttribute('data-name');
             const unitPrice = parseFloat(chk.getAttribute('data-price')) || 0;
-            
+
             const qtySelect = chk.closest('div').querySelector('.addon-qty-select');
             const qty = parseInt(qtySelect.value) || 1;
 
             let totalAddonPrice = unitPrice * qty;
-            finalPrice += totalAddonPrice; // Suma exacta de adicionales
+            finalPrice += totalAddonPrice;
 
             addonsData.push({ id, qty });
-            
+
             if (qty > 1) {
                 modifications.push(`Adicional: ${dataName} x${qty} (+$${totalAddonPrice.toLocaleString()})`);
             } else {
@@ -299,12 +288,14 @@ function saveOrderCustomization() {
         modifications: modifications,
         componentChoices: componentChoices,
         addonsData: addonsData,
-        billed: false
+        billed: false,
+        sentToKitchen: false // Inicializa en falso hasta que se envíe a cocina
     };
 
     if (editingOrderItemIndex !== null) {
         orderItemData.uid = table.items[editingOrderItemIndex].uid || orderItemData.uid;
         orderItemData.billed = table.items[editingOrderItemIndex].billed || false;
+        orderItemData.sentToKitchen = table.items[editingOrderItemIndex].sentToKitchen || false;
         table.items[editingOrderItemIndex] = orderItemData;
     } else {
         table.items.push(orderItemData);
@@ -329,7 +320,7 @@ function editOrderItem(index) {
     editingOrderItemIndex = index;
     let selectVal = products.some(p => p.id === item.productId) ? 'prod_' + item.productId : 'drink_' + item.productId;
     document.getElementById('productSelect').value = selectVal;
-    
+
     loadProductRecipeOptions(item.componentChoices || [], item.addonsData || []);
 
     document.getElementById('customizationBoxTitle').innerText = `Editando: ${item.name}`;
@@ -343,7 +334,7 @@ function cancelOrderEdit() {
     document.getElementById('productSelect').value = '';
     document.getElementById('dishCustomizationBox').style.display = 'none';
     document.getElementById('customizationBoxTitle').innerText = 'Personalización del Plato:';
-    document.getElementById('btnAddOrUpdateOrder').innerText = 'Agregar Plato al Pedido';
+    document.getElementById('btnAddOrUpdateOrder').innerText = 'Agregar al Pedido';
     document.getElementById('btnCancelOrderEdit').classList.add('hidden');
 }
 
@@ -352,7 +343,7 @@ function renderOrderItems() {
     const list = document.getElementById('orderItemsList');
     if (!list) return;
     list.innerHTML = '';
-    
+
     let total = 0;
     if (table.items.length === 0) {
         list.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No hay productos en esta mesa.</p>';
@@ -361,7 +352,7 @@ function renderOrderItems() {
             total += item.finalPrice;
             const row = document.createElement('div');
             row.className = 'order-item';
-            
+
             let modsHtml = '';
             if (item.modifications && item.modifications.length > 0) {
                 item.modifications.forEach(m => {
@@ -370,10 +361,11 @@ function renderOrderItems() {
             }
 
             let billedBadge = item.billed ? `<span style="font-size:0.7rem; background:#fee2e2; color:#dc2626; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">FACTURADO</span>` : '';
+            let kitchenBadge = item.sentToKitchen ? `<span style="font-size:0.7rem; background:#dbeafe; color:#1d4ed8; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">EN COCINA</span>` : '';
 
             row.innerHTML = `
                 <div>
-                    <strong>${item.name}</strong> ${billedBadge}
+                    <strong>${item.name}</strong> ${billedBadge} ${kitchenBadge}
                     ${modsHtml}
                 </div>
                 <div style="text-align: right; display: flex; align-items: center; gap: 0.2rem;">
@@ -414,7 +406,35 @@ function clearTableOrder() {
     openBillSection();
 }
 
-/* --- MÓDULO DE CUENTAS Y RECIBOS (SIN DIVISIÓN DE PLATOS) --- */
+/* --- ENVÍO A COCINA DESDE EL PEDIDO --- */
+
+function sendOrderToKitchen() {
+    const table = tables.find(t => t.id === currentTableId);
+    if (!table || !table.items || table.items.length === 0) {
+        alert('No hay platos o bebidas en esta mesa para enviar a cocina.');
+        return;
+    }
+
+    let unkitchenedItems = table.items.filter(item => !item.sentToKitchen);
+
+    if (unkitchenedItems.length === 0) {
+        alert('Todos los ítems de esta mesa ya fueron enviados a cocina previamente.');
+        return;
+    }
+
+    table.items.forEach(item => {
+        item.sentToKitchen = true;
+    });
+
+    table.status = 'ocupada';
+
+    saveData(); // Guarda localmente y sincroniza con Google Sheets
+    renderOrderItems();
+
+    alert(`👨‍🍳 ¡Pedido de la ${table.name} enviado a cocina exitosamente!`);
+}
+
+/* --- MÓDULO DE CUENTAS Y RECIBOS --- */
 
 function openBillSection() {
     const table = tables.find(t => t.id === currentTableId);
@@ -436,7 +456,7 @@ function openBillSection() {
     saveData();
 
     document.getElementById('bill-title').innerText = `Cuenta - ${table.name}`;
-    
+
     const list = document.getElementById('billItemsList');
     if (!list) return;
     list.innerHTML = '';
@@ -451,7 +471,7 @@ function openBillSection() {
 
         const div = document.createElement('div');
         div.className = 'order-item';
-        
+
         if (item.billed) {
             div.innerHTML = `
                 <div style="flex: 1; opacity: 0.5;">
@@ -510,7 +530,7 @@ function generateReceipt() {
         receiptItemUids.push(item.uid);
         selectedIndexes.push(idx);
 
-        item.billed = true; // Se marca como facturado completo
+        item.billed = true;
     });
 
     if (selectedIndexes.length === 0) {
@@ -579,7 +599,7 @@ function printReceiptDoc(receiptId) {
 function renderReceiptsManager() {
     const table = tables.find(t => t.id === currentTableId);
     let container = document.getElementById('receiptsManagerContainer');
-    
+
     if (!container) {
         container = document.createElement('div');
         container.id = 'receiptsManagerContainer';
@@ -596,7 +616,7 @@ function renderReceiptsManager() {
     }
 
     let html = `<h4 style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text);">Recibos Generados (Seleccione para pagar o anular):</h4>`;
-    
+
     table.receipts.forEach((rc, rIdx) => {
         let itemNames = rc.items.map(i => i.name).join(', ');
         html += `
@@ -739,7 +759,7 @@ function editProduct(id) {
         editingProductId = id;
         document.getElementById('newProdName').value = product.name;
         document.getElementById('newProdPrice').value = product.price;
-        
+
         renderRecipeCheckboxes();
         document.querySelectorAll('.recipe-comp-chk').forEach(chk => {
             if (product.components && product.components.includes(parseInt(chk.value))) {
@@ -932,7 +952,7 @@ function showSection(sectionId) {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
     });
-    
+
     const target = document.getElementById(sectionId);
     if (target) target.classList.remove('hidden');
 
@@ -964,7 +984,7 @@ function renderTablesAdmin() {
     const list = document.getElementById('tablesAdminList');
     if (!list) return;
     list.innerHTML = '';
-    
+
     tables.forEach(t => {
         const item = document.createElement('div');
         item.className = 'product-row';
@@ -1028,15 +1048,14 @@ async function loadDataFromCloud() {
     try {
         let response = await fetch(WEB_APP_URL + "?action=getData");
         let cloudData = await response.json();
-        
+
         if (cloudData.tables && cloudData.tables.length > 0) {
             tables = cloudData.tables;
             addons = cloudData.addons || addons;
             products = cloudData.products || products;
             drinks = cloudData.drinks || drinks;
             inventory = cloudData.inventory || inventory;
-            
-            // Actualizar el almacenamiento local con los datos de la nube
+
             saveData();
             console.log("Datos sincronizados desde Google Sheets exitosamente.");
         }
@@ -1077,6 +1096,5 @@ function saveData() {
     localStorage.setItem('restopos_drinks', JSON.stringify(drinks));
     localStorage.setItem('restopos_inventory', JSON.stringify(inventory));
 
-    // Llamar a la sincronización
     syncDataToCloud();
 }
