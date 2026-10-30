@@ -40,6 +40,10 @@
                     <h3>🪑 Mesas & Pedidos</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Control de salón</p>
                 </div>
+                <div class="menu-card" onclick="showSection('kitchen-section')">
+                    <h3>👨‍🍳 Módulo de Cocina</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Comandas en tiempo real</p>
+                </div>
                 <div class="menu-card" onclick="showSection('tables-admin-section')">
                     <h3>⚙️ Gestionar Mesas</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Crear / Eliminar mesas</p>
@@ -71,6 +75,21 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
+        <!-- SECCIÓN: MÓDULO DE COCINA (KDS) -->
+        <div id="kitchen-section" class="card hidden">
+            <h2>👨‍🍳 Comandas en Cocina</h2>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Pedidos enviados por los meseros ordenados cronológicamente:</p>
+            
+            <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; background: #f1f5f9; padding: 0.75rem; border-radius: 8px;">
+                <label style="font-size: 0.85rem; margin:0; font-weight: bold;">Tiempo límite alerta (min):</label>
+                <input type="number" id="kitchenTimerParam" value="15" min="1" max="60" style="width: 80px; padding: 0.3rem;" onchange="renderKitchenOrders()">
+            </div>
+
+            <div id="kitchenOrdersContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; max-height: 55vh; overflow-y: auto;"></div>
+            
+            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
+        </div>
+
         <!-- SECCIÓN: ADMINISTRACIÓN DE MESAS -->
         <div id="tables-admin-section" class="card hidden">
             <h2>Administración de Mesas</h2>
@@ -86,7 +105,7 @@
             </div>
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
-        
+
         <!-- SECCIÓN: TOMA DE PEDIDOS AVANZADA -->
         <div id="order-section" class="card hidden">
             <h2 id="order-title">Pedido de Mesa</h2>
@@ -113,13 +132,10 @@
                 </div>
             </div>
 
-            <!-- NUEVO BOTÓN DE ENVÍO A COCINA -->
             <button class="btn" style="background: #f59e0b; color: white;" onclick="sendOrderToKitchen()">👨‍🍳 Enviar a Cocina</button>
-            
             <button class="btn" style="background: var(--success); margin-top: 0.5rem;" onclick="openBillSection()">💳 Ver Cuenta / Recibos</button>
             <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="showSection('tables-section')">Volver a Mesas</button>
         </div>
-
 
         <!-- SECCIÓN: GESTIÓN DE CUENTAS Y RECIBOS -->
         <div id="bill-section" class="card hidden">

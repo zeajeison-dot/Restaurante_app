@@ -40,6 +40,7 @@ let editingProductId = null;
 let editingDrinkId = null;
 let editingAddonId = null;
 let editingOrderItemIndex = null;
+let kitchenInterval = null; // Variable para gestionar el temporizador automático del KDS
 
 
 function login() {
@@ -60,13 +61,14 @@ function login() {
 function logout() {
     localStorage.removeItem('restopos_logged');
     document.getElementById('dashboard-view').classList.add('hidden');
+    document.getElementById('login-view').classList.add('hidden');
     document.getElementById('login-view').classList.remove('hidden');
     document.getElementById('userInput').value = '';
     document.getElementById('passInput').value = '';
 }
 
 function showSection(sectionId) {
-    const sections = ['dashboard-view', 'tables-section', 'order-section', 'bill-section', 'catalog-section', 'drinks-section', 'addons-section', 'inventory-section'];
+    const sections = ['dashboard-view', 'tables-section', 'kitchen-section', 'tables-admin-section', 'order-section', 'bill-section', 'catalog-section', 'drinks-section', 'addons-section', 'inventory-section'];
     sections.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
@@ -75,7 +77,25 @@ function showSection(sectionId) {
     const target = document.getElementById(sectionId);
     if (target) target.classList.remove('hidden');
 
+    // Limpiamos cualquier intervalo activo previo de cocina para evitar duplicidad
+    if (kitchenInterval) {
+        clearInterval(kitchenInterval);
+        kitchenInterval = null;
+    }
+
     if(sectionId === 'tables-section') renderTables();
+    if(sectionId === 'kitchen-section') {
+        renderKitchenOrders();
+        // Configuramos la actualización automática de la pantalla de cocina cada 5 segundos para que el cronómetro corra fluidamente
+        kitchenInterval = setInterval(() => {
+            if (!document.getElementById('kitchen-section').classList.contains('hidden')) {
+                renderKitchenOrders();
+            } else {
+                clearInterval(kitchenInterval);
+            }
+        }, 5000);
+    }
+    if(sectionId === 'tables-admin-section') renderTablesAdmin();
     if(sectionId === 'catalog-section') { cancelEditProduct(); renderRecipeCheckboxes(); renderProducts(); }
     if(sectionId === 'drinks-section') { cancelEditDrink(); renderDrinks(); }
     if(sectionId === 'addons-section') { cancelEditAddon(); renderAddons(); }
@@ -111,7 +131,7 @@ function openTableOrder(id) {
     products.forEach(p => {
         const opt = document.createElement('option');
         opt.value = 'prod_' + p.id;
-        opt.innerText = `🍛 ${p.name} - $${p.price.toLocaleString()}`;
+        opt.innerText = `${p.name} - $${p.price.toLocaleString()}`;
         select.appendChild(opt);
     });
 
@@ -253,9 +273,15 @@ function saveOrderCustomization() {
 
         document.querySelectorAll('.component-choice').forEach(select => {
             const choice = select.value;
+            const originalComponent = select.getAttribute('data-original');
             componentChoices.push(choice);
-            if (choice.startsWith('SIN ') || choice.startsWith('Cambiado por ')) {
-                modifications.push(choice);
+
+            if (choice.startsWith('SIN ')) {
+                modifications.push(`SIN ${originalComponent}`);
+            } else if (choice.startsWith('Cambiado por ')) {
+                const replacement = choice.replace('Cambiado por ', '');
+                modifications.push(`SIN ${originalComponent}`);
+                modifications.push(`CAMBIADO POR ${replacement}`);
             }
         });
 
@@ -273,9 +299,9 @@ function saveOrderCustomization() {
             addonsData.push({ id, qty });
 
             if (qty > 1) {
-                modifications.push(`Adicional: ${dataName} x${qty} (+$${totalAddonPrice.toLocaleString()})`);
+                modifications.push(`Adicional: ${dataName} x${qty}`);
             } else {
-                modifications.push(`Adicional: ${dataName} (+$${totalAddonPrice.toLocaleString()})`);
+                modifications.push(`Adicional: ${dataName}`);
             }
         });
     }
@@ -289,13 +315,14 @@ function saveOrderCustomization() {
         componentChoices: componentChoices,
         addonsData: addonsData,
         billed: false,
-        sentToKitchen: false // Inicializa en falso hasta que se envíe a cocina
+        sentToKitchen: false
     };
 
     if (editingOrderItemIndex !== null) {
         orderItemData.uid = table.items[editingOrderItemIndex].uid || orderItemData.uid;
         orderItemData.billed = table.items[editingOrderItemIndex].billed || false;
         orderItemData.sentToKitchen = table.items[editingOrderItemIndex].sentToKitchen || false;
+        orderItemData.sentAt = table.items[editingOrderItemIndex].sentAt || null;
         table.items[editingOrderItemIndex] = orderItemData;
     } else {
         table.items.push(orderItemData);
@@ -406,7 +433,7 @@ function clearTableOrder() {
     openBillSection();
 }
 
-/* --- ENVÍO A COCINA DESDE EL PEDIDO --- */
+/* --- ENVÍO A COCINA Y MÓDULO KDS --- */
 
 function sendOrderToKitchen() {
     const table = tables.find(t => t.id === currentTableId);
@@ -422,16 +449,145 @@ function sendOrderToKitchen() {
         return;
     }
 
+    const now = Date.now();
     table.items.forEach(item => {
-        item.sentToKitchen = true;
+        if (!item.sentToKitchen) {
+            item.sentToKitchen = true;
+            item.sentAt = now;
+        }
     });
 
     table.status = 'ocupada';
 
-    saveData(); // Guarda localmente y sincroniza con Google Sheets
+    saveData();
     renderOrderItems();
 
     alert(`👨‍🍳 ¡Pedido de la ${table.name} enviado a cocina exitosamente!`);
+}
+
+function renderKitchenOrders() {
+    const container = document.getElementById('kitchenOrdersContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const limitMinutes = parseInt(document.getElementById('kitchenTimerParam').value) || 15;
+    const limitSeconds = limitMinutes * 60;
+    const now = Date.now();
+
+    let activeOrders = [];
+
+    tables.forEach(table => {
+        const activeItems = table.items.filter(item => item.sentToKitchen && !item.billed);
+        if (activeItems.length > 0) {
+            let earliestSentAt = Math.min(...activeItems.map(i => i.sentAt || now));
+            activeOrders.push({
+                tableId: table.id,
+                tableName: table.name,
+                items: activeItems,
+                sentAt: earliestSentAt
+            });
+        }
+    });
+
+    activeOrders.sort((a, b) => a.sentAt - b.sentAt);
+
+    if (activeOrders.length === 0) {
+        container.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
+                <h3>No hay comandas pendientes en la cocina</h3>
+                <p>Los pedidos enviados por los meseros aparecerán aquí automáticamente.</p>
+            </div>
+        `;
+        return;
+    }
+
+    activeOrders.forEach(order => {
+        const elapsedSecs = Math.floor((now - order.sentAt) / 1000);
+        const remainingSecs = Math.max(0, limitSeconds - elapsedSecs);
+
+        const remMins = Math.floor(remainingSecs / 60);
+        const remSecs = remainingSecs % 60;
+        const timeFormatted = `${remMins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
+
+        let cardBg = '#dcfce7';
+        let borderColor = '#22c55e';
+        let textColor = '#15803d';
+
+        if (remainingSecs <= 300 && remainingSecs > 0) {
+            cardBg = '#fee2e2';
+            borderColor = '#ef4444';
+            textColor = '#b91c1c';
+        } else if (remainingSecs <= 600 && remainingSecs > 300) {
+            cardBg = '#fef9c3';
+            borderColor = '#eab308';
+            textColor = '#a16207';
+        }
+
+        const card = document.createElement('div');
+        card.style.cssText = `background: ${cardBg}; border: 2px solid ${borderColor}; border-radius: 12px; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between;`;
+
+        let itemsHtml = '';
+        order.items.forEach(item => {
+            let modsHtml = '';
+            if (item.modifications && item.modifications.length > 0) {
+                item.modifications.forEach(m => {
+                    let formattedMod = m;
+                    let modStyle = "font-size: 0.85rem; margin-top: 0.2rem; display: block;";
+
+                    if (m.startsWith('SIN ')) {
+                        formattedMod = `⛔ ${m}`;
+                        modStyle += " color: #dc2626; font-weight: bold;";
+                    } else if (m.startsWith('CAMBIADO POR ')) {
+                        formattedMod = `✅ ${m}`;
+                        modStyle += " color: #16a34a; font-weight: bold;";
+                    } else if (m.startsWith('Adicional:')) {
+                        let addonCleanText = m.replace('Adicional: ', '');
+                        addonCleanText = addonCleanText.replace(/\s*\(.*\)/, '');
+                        formattedMod = `➕ ${addonCleanText}`;
+                        modStyle += " color: #2563eb; font-weight: bold;";
+                    }
+
+                    modsHtml += `<div style="${modStyle}">${formattedMod}</div>`;
+                });
+            }
+
+            itemsHtml += `
+                <div style="border-bottom: 1px dashed rgba(0,0,0,0.15); padding: 0.5rem 0;">
+                    <strong style="font-size: 1rem; color: var(--text);">• ${item.name}</strong>
+                    ${modsHtml}
+                </div>
+            `;
+        });
+
+        card.innerHTML = `
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${borderColor}; padding-bottom: 0.5rem; margin-bottom: 0.75rem;">
+                    <h3 style="font-size: 1.1rem; color: var(--text); margin: 0;">${order.tableName}</h3>
+                    <span style="font-size: 0.85rem; background: #ffffff; color: ${textColor}; padding: 0.2rem 0.6rem; border-radius: 6px; font-weight: bold; border: 1px solid ${borderColor};">⏱️ ${timeFormatted}</span>
+                </div>
+                <div>
+                    ${itemsHtml}
+                </div>
+            </div>
+            <button class="btn btn-secondary" style="margin-top: 1rem; padding: 0.4rem; font-size: 0.85rem; background: ${borderColor}; color: white;" onclick="markOrderServed(${order.tableId})">✅ Marcar Servido</button>
+        `;
+        container.appendChild(card);
+    });
+}
+
+function markOrderServed(tableId) {
+    const table = tables.find(t => t.id === tableId);
+    if (!table) return;
+
+    if (confirm(`¿Marcar todos los ítems de la ${table.name} como servidos/despachados de cocina?`)) {
+        table.items.forEach(item => {
+            if (item.sentToKitchen) {
+                item.billed = true;
+            }
+        });
+        saveData();
+        renderKitchenOrders();
+    }
 }
 
 /* --- MÓDULO DE CUENTAS Y RECIBOS --- */
@@ -947,7 +1103,7 @@ function renderInventory() {
 }
 
 function showSection(sectionId) {
-    const sections = ['dashboard-view', 'tables-section', 'tables-admin-section', 'order-section', 'bill-section', 'catalog-section', 'drinks-section', 'addons-section', 'inventory-section'];
+    const sections = ['dashboard-view', 'tables-section', 'kitchen-section', 'tables-admin-section', 'order-section', 'bill-section', 'catalog-section', 'drinks-section', 'addons-section', 'inventory-section'];
     sections.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
@@ -956,7 +1112,22 @@ function showSection(sectionId) {
     const target = document.getElementById(sectionId);
     if (target) target.classList.remove('hidden');
 
+    if (kitchenInterval) {
+        clearInterval(kitchenInterval);
+        kitchenInterval = null;
+    }
+
     if(sectionId === 'tables-section') renderTables();
+    if(sectionId === 'kitchen-section') {
+        renderKitchenOrders();
+        kitchenInterval = setInterval(() => {
+            if (!document.getElementById('kitchen-section').classList.contains('hidden')) {
+                renderKitchenOrders();
+            } else {
+                clearInterval(kitchenInterval);
+            }
+        }, 1000);
+    }
     if(sectionId === 'tables-admin-section') renderTablesAdmin();
     if(sectionId === 'catalog-section') { cancelEditProduct(); renderRecipeCheckboxes(); renderProducts(); }
     if(sectionId === 'drinks-section') { cancelEditDrink(); renderDrinks(); }
@@ -1098,3 +1269,6 @@ function saveData() {
 
     syncDataToCloud();
 }
+
+
+/*HASTA EL MODULO DE COCINA RECIBIENDO LA COMANDA Y TEMPORIZADOR ACTUALIZANDO CADA MIMUTO*/
