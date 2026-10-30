@@ -1,3 +1,7 @@
+/* ========================================================== */
+/* 1. INICIALIZACIÓN Y ESTADOS GLOBALES                      */
+/* ========================================================== */
+
 window.onload = function() {
     if (localStorage.getItem('restopos_logged') === 'true') {
         document.getElementById('login-view').classList.add('hidden');
@@ -6,7 +10,7 @@ window.onload = function() {
     }
 }
 
-
+// Estructuras de datos principales (con respaldo en localStorage)
 let tables = JSON.parse(localStorage.getItem('restopos_tables')) || [
     { id: 1, name: 'Mesa 1', status: 'libre', items: [], receipts: [] },
     { id: 2, name: 'Mesa 2', status: 'libre', items: [], receipts: [] },
@@ -35,19 +39,25 @@ let drinks = JSON.parse(localStorage.getItem('restopos_drinks')) || [
 ];
 
 let inventory = JSON.parse(localStorage.getItem('restopos_inventory')) || [];
+
+// Variables de control de sesión y edición activa
 let currentTableId = null;
 let editingProductId = null;
 let editingDrinkId = null;
 let editingAddonId = null;
 let editingOrderItemIndex = null;
-let kitchenInterval = null; // Variable para gestionar el temporizador automático del KDS
+let kitchenInterval = null; // Control del temporizador automático del KDS
 
+
+/* ========================================================== */
+/* 2. AUTENTICACIÓN Y CONTROL DE VISTAS                       */
+/* ========================================================== */
 
 function login() {
     const userInput = document.getElementById('userInput').value.trim();
     const passInput = document.getElementById('passInput').value.trim();
 
-    if(userInput === 'admin' && passInput === '123') {
+    if (userInput === 'admin' && passInput === '123') {
         localStorage.setItem('restopos_logged', 'true');
         document.getElementById('login-view').classList.add('hidden');
         document.getElementById('dashboard-view').classList.remove('hidden');
@@ -56,7 +66,6 @@ function login() {
         alert('Credenciales incorrectas (admin / 123)'); 
     }
 }
-
 
 function logout() {
     localStorage.removeItem('restopos_logged');
@@ -68,44 +77,102 @@ function logout() {
 }
 
 function showSection(sectionId) {
-    const sections = ['dashboard-view', 'tables-section', 'kitchen-section', 'tables-admin-section', 'order-section', 'bill-section', 'catalog-section', 'drinks-section', 'addons-section', 'inventory-section'];
+    const sections = [
+        'dashboard-view',
+        'tables-section',
+        'kitchen-section',
+        'tables-admin-section',
+        'order-section',
+        'bill-section',
+        'catalog-section',
+        'drinks-section',
+        'addons-section',
+        'inventory-section'
+    ];
+
     sections.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
     });
 
     const target = document.getElementById(sectionId);
-    if (target) target.classList.remove('hidden');
 
-    // Limpiamos cualquier intervalo activo previo de cocina para evitar duplicidad
+    if (target) {
+        target.classList.remove('hidden');
+    }
+
+    // Detener el intervalo anterior
     if (kitchenInterval) {
         clearInterval(kitchenInterval);
         kitchenInterval = null;
     }
 
-    if(sectionId === 'tables-section') renderTables();
-    if(sectionId === 'kitchen-section') {
+    // Sección de mesas
+    if (sectionId === 'tables-section') {
+        renderTables();
+    }
+
+    // Sección de cocina
+    if (sectionId === 'kitchen-section') {
+        const kitchenSection = document.getElementById('kitchen-section');
+
+        if (!kitchenSection) return;
+
         renderKitchenOrders();
-        // Configuramos la actualización automática de la pantalla de cocina cada 5 segundos para que el cronómetro corra fluidamente
+
         kitchenInterval = setInterval(() => {
-            if (!document.getElementById('kitchen-section').classList.contains('hidden')) {
+            if (
+                kitchenSection &&
+                !kitchenSection.classList.contains('hidden')
+            ) {
                 renderKitchenOrders();
             } else {
                 clearInterval(kitchenInterval);
+                kitchenInterval = null;
             }
-        }, 5000);
+        }, 1000);
     }
-    if(sectionId === 'tables-admin-section') renderTablesAdmin();
-    if(sectionId === 'catalog-section') { cancelEditProduct(); renderRecipeCheckboxes(); renderProducts(); }
-    if(sectionId === 'drinks-section') { cancelEditDrink(); renderDrinks(); }
-    if(sectionId === 'addons-section') { cancelEditAddon(); renderAddons(); }
-    if(sectionId === 'inventory-section') renderInventory();
+
+    // Administración de mesas
+    if (sectionId === 'tables-admin-section') {
+        renderTablesAdmin();
+    }
+
+    // Catálogo de productos
+    if (sectionId === 'catalog-section') {
+        cancelEditProduct();
+        renderRecipeCheckboxes();
+        renderProducts();
+    }
+
+    // Bebidas
+    if (sectionId === 'drinks-section') {
+        cancelEditDrink();
+        renderDrinks();
+    }
+
+    // Adicionales
+    if (sectionId === 'addons-section') {
+        cancelEditAddon();
+        renderAddons();
+    }
+
+    // Inventario
+    if (sectionId === 'inventory-section') {
+        renderInventory();
+    }
 }
+
+
+/* ========================================================== */
+/* 3. GESTIÓN Y ADMINISTRACIÓN DE MESAS                       */
+/* ========================================================== */
 
 function renderTables() {
     const container = document.getElementById('tableGridContainer');
     if (!container) return;
     container.innerHTML = '';
+    
     tables.forEach(t => {
         const div = document.createElement('div');
         div.className = `table-item ${t.status}`;
@@ -114,6 +181,71 @@ function renderTables() {
         container.appendChild(div);
     });
 }
+
+function renderTablesAdmin() {
+    const list = document.getElementById('tablesAdminList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    tables.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'product-row';
+        item.innerHTML = `
+            <div class="product-info">
+                <span><strong>${t.name}</strong></span>
+                <span style="font-size:0.75rem; color: var(--text-secondary); display:block; text-transform:uppercase;">Estado: ${t.status}</span>
+            </div>
+            <div class="product-actions">
+                <button onclick="deleteTable(${t.id})" class="action-btn" title="Eliminar Mesa">🗑️</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+function saveNewTable() {
+    const nameInput = document.getElementById('newTableName');
+    const name = nameInput.value.trim();
+    if (!name) {
+        alert('Por favor ingrese el nombre de la mesa.');
+        return;
+    }
+
+    const newId = tables.length > 0 ? Math.max(...tables.map(t => t.id)) + 1 : 1;
+    tables.push({
+        id: newId,
+        name: name,
+        status: 'libre',
+        items: [],
+        receipts: []
+    });
+
+    saveData();
+    nameInput.value = '';
+    renderTablesAdmin();
+    alert(`Mesa "${name}" creada exitosamente.`);
+}
+
+function deleteTable(id) {
+    const table = tables.find(t => t.id === id);
+    if (!table) return;
+
+    if (table.status === 'ocupada' || (table.items && table.items.length > 0)) {
+        alert('No se puede eliminar una mesa que se encuentra ocupada o tiene pedidos activos.');
+        return;
+    }
+
+    if (confirm(`¿Desea eliminar la ${table.name}?`)) {
+        tables = tables.filter(t => t.id !== id);
+        saveData();
+        renderTablesAdmin();
+    }
+}
+
+
+/* ========================================================== */
+/* 4. MÓDULO DE PEDIDOS Y PERSONALIZACIÓN                     */
+/* ========================================================== */
 
 function openTableOrder(id) {
     currentTableId = id;
@@ -128,6 +260,7 @@ function openTableOrder(id) {
 
     const select = document.getElementById('productSelect');
     select.innerHTML = '<option value="">-- Seleccione un plato o bebida --</option>';
+    
     products.forEach(p => {
         const opt = document.createElement('option');
         opt.value = 'prod_' + p.id;
@@ -315,7 +448,8 @@ function saveOrderCustomization() {
         componentChoices: componentChoices,
         addonsData: addonsData,
         billed: false,
-        sentToKitchen: false
+        sentToKitchen: false,
+        served: false
     };
 
     if (editingOrderItemIndex !== null) {
@@ -323,6 +457,7 @@ function saveOrderCustomization() {
         orderItemData.billed = table.items[editingOrderItemIndex].billed || false;
         orderItemData.sentToKitchen = table.items[editingOrderItemIndex].sentToKitchen || false;
         orderItemData.sentAt = table.items[editingOrderItemIndex].sentAt || null;
+        orderItemData.served = table.items[editingOrderItemIndex].served || false;
         table.items[editingOrderItemIndex] = orderItemData;
     } else {
         table.items.push(orderItemData);
@@ -388,11 +523,12 @@ function renderOrderItems() {
             }
 
             let billedBadge = item.billed ? `<span style="font-size:0.7rem; background:#fee2e2; color:#dc2626; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">FACTURADO</span>` : '';
-            let kitchenBadge = item.sentToKitchen ? `<span style="font-size:0.7rem; background:#dbeafe; color:#1d4ed8; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">EN COCINA</span>` : '';
+            let servedBadge = item.served ? `<span style="font-size:0.7rem; background:#dcfce7; color:#15803d; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">SERVIDO</span>` : '';
+            let kitchenBadge = (item.sentToKitchen && !item.served) ? `<span style="font-size:0.7rem; background:#dbeafe; color:#1d4ed8; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">EN COCINA</span>` : '';
 
             row.innerHTML = `
                 <div>
-                    <strong>${item.name}</strong> ${billedBadge} ${kitchenBadge}
+                    <strong>${item.name}</strong> ${billedBadge} ${servedBadge} ${kitchenBadge}
                     ${modsHtml}
                 </div>
                 <div style="text-align: right; display: flex; align-items: center; gap: 0.2rem;">
@@ -422,18 +558,10 @@ function removeOrderItem(index) {
     renderOrderItems();
 }
 
-function clearTableOrder() {
-    const table = tables.find(t => t.id === currentTableId);
-    if (table.items.length === 0) {
-        table.status = 'libre';
-        saveData();
-        showSection('tables-section');
-        return;
-    }
-    openBillSection();
-}
 
-/* --- ENVÍO A COCINA Y MÓDULO KDS --- */
+/* ========================================================== */
+/* 5. MÓDULO DE COCINA (KDS) Y CRONÓMETRO                     */
+/* ========================================================== */
 
 function sendOrderToKitchen() {
     const table = tables.find(t => t.id === currentTableId);
@@ -453,6 +581,7 @@ function sendOrderToKitchen() {
     table.items.forEach(item => {
         if (!item.sentToKitchen) {
             item.sentToKitchen = true;
+            item.served = false;
             item.sentAt = now;
         }
     });
@@ -477,7 +606,8 @@ function renderKitchenOrders() {
     let activeOrders = [];
 
     tables.forEach(table => {
-        const activeItems = table.items.filter(item => item.sentToKitchen && !item.billed);
+        // Solo mostrar ítems enviados a cocina y que aún no hayan sido marcados como servidos
+        const activeItems = table.items.filter(item => item.sentToKitchen && !item.served);
         if (activeItems.length > 0) {
             let earliestSentAt = Math.min(...activeItems.map(i => i.sentAt || now));
             activeOrders.push({
@@ -503,27 +633,36 @@ function renderKitchenOrders() {
 
     activeOrders.forEach(order => {
         const elapsedSecs = Math.floor((now - order.sentAt) / 1000);
-        const remainingSecs = Math.max(0, limitSeconds - elapsedSecs);
+        const remainingSecs = limitSeconds - elapsedSecs;
 
-        const remMins = Math.floor(remainingSecs / 60);
-        const remSecs = remainingSecs % 60;
-        const timeFormatted = `${remMins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
+        const isExpired = remainingSecs <= 0;
+        const absRemaining = Math.abs(remainingSecs);
+        const remMins = Math.floor(absRemaining / 60);
+        const remSecs = absRemaining % 60;
+        const timeFormatted = `${isExpired ? '-' : ''}${remMins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
 
         let cardBg = '#dcfce7';
         let borderColor = '#22c55e';
         let textColor = '#15803d';
+        let cardExtraClass = '';
 
-        if (remainingSecs <= 300 && remainingSecs > 0) {
+        if (isExpired || remainingSecs <= 60) { // Menos de 1 min o tiempo agotado -> Rojo con parpadeo
             cardBg = '#fee2e2';
             borderColor = '#ef4444';
             textColor = '#b91c1c';
-        } else if (remainingSecs <= 600 && remainingSecs > 300) {
+            cardExtraClass = 'kitchen-card-alert';
+        } else if (remainingSecs <= 300) { // Menos de 5 minutos -> Rojo fijo
+            cardBg = '#fee2e2';
+            borderColor = '#ef4444';
+            textColor = '#b91c1c';
+        } else if (remainingSecs <= 600) { // Entre 10 y 5 minutos -> Amarillo
             cardBg = '#fef9c3';
             borderColor = '#eab308';
             textColor = '#a16207';
         }
 
         const card = document.createElement('div');
+        card.className = cardExtraClass;
         card.style.cssText = `background: ${cardBg}; border: 2px solid ${borderColor}; border-radius: 12px; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between;`;
 
         let itemsHtml = '';
@@ -582,7 +721,7 @@ function markOrderServed(tableId) {
     if (confirm(`¿Marcar todos los ítems de la ${table.name} como servidos/despachados de cocina?`)) {
         table.items.forEach(item => {
             if (item.sentToKitchen) {
-                item.billed = true;
+                item.served = true; // Marcar como servido/despachado sin afectar la facturación
             }
         });
         saveData();
@@ -590,7 +729,10 @@ function markOrderServed(tableId) {
     }
 }
 
-/* --- MÓDULO DE CUENTAS Y RECIBOS --- */
+
+/* ========================================================== */
+/* 6. MÓDULO DE CUENTAS, FACTURACIÓN Y RECIBOS               */
+/* ========================================================== */
 
 function openBillSection() {
     const table = tables.find(t => t.id === currentTableId);
@@ -836,7 +978,10 @@ function backToOrderSection() {
     document.getElementById('order-section').classList.remove('hidden');
 }
 
-/* --- GESTIÓN DE CATÁLOGO Y RECETAS --- */
+
+/* ========================================================== */
+/* 7. GESTIÓN DE CATÁLOGO (PLATOS, BEBIDAS, ADICIONALES)      */
+/* ========================================================== */
 
 function renderRecipeCheckboxes() {
     const container = document.getElementById('recipeComponentsSelector');
@@ -948,8 +1093,7 @@ function deleteProduct(id) {
     }
 }
 
-/* --- GESTIÓN DE BEBIDAS --- */
-
+// Gestión de Bebidas
 function renderDrinks() {
     const list = document.getElementById('drinksList');
     if (!list) return;
@@ -1020,8 +1164,7 @@ function deleteDrink(id) {
     }
 }
 
-/* --- GESTIÓN DE ADICIONALES --- */
-
+// Gestión de Adicionales
 function renderAddons() {
     const list = document.getElementById('addonsList');
     if (!list) return;
@@ -1092,7 +1235,11 @@ function deleteAddon(id) {
     }
 }
 
-/* --- INVENTARIO --- */
+
+/* ========================================================== */
+/* 8. GESTIÓN DE INVENTARIO                                   */
+/* ========================================================== */
+
 function renderInventory() {
     const list = document.getElementById('inventoryList');
     if (!list) return;
@@ -1101,40 +1248,6 @@ function renderInventory() {
         list.innerHTML += `<div class="order-item"><span>${i.name}</span><strong>${i.stock} ${i.unit}</strong></div>`;
     });
 }
-
-function showSection(sectionId) {
-    const sections = ['dashboard-view', 'tables-section', 'kitchen-section', 'tables-admin-section', 'order-section', 'bill-section', 'catalog-section', 'drinks-section', 'addons-section', 'inventory-section'];
-    sections.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
-    });
-
-    const target = document.getElementById(sectionId);
-    if (target) target.classList.remove('hidden');
-
-    if (kitchenInterval) {
-        clearInterval(kitchenInterval);
-        kitchenInterval = null;
-    }
-
-    if(sectionId === 'tables-section') renderTables();
-    if(sectionId === 'kitchen-section') {
-        renderKitchenOrders();
-        kitchenInterval = setInterval(() => {
-            if (!document.getElementById('kitchen-section').classList.contains('hidden')) {
-                renderKitchenOrders();
-            } else {
-                clearInterval(kitchenInterval);
-            }
-        }, 1000);
-    }
-    if(sectionId === 'tables-admin-section') renderTablesAdmin();
-    if(sectionId === 'catalog-section') { cancelEditProduct(); renderRecipeCheckboxes(); renderProducts(); }
-    if(sectionId === 'drinks-section') { cancelEditDrink(); renderDrinks(); }
-    if(sectionId === 'addons-section') { cancelEditAddon(); renderAddons(); }
-    if(sectionId === 'inventory-section') renderInventory();
-}
-
 
 function saveInventoryItem() {
     const nameVal = document.getElementById('invName').value;
@@ -1149,72 +1262,14 @@ function saveInventoryItem() {
         document.getElementById('invUnit').value = '';
     }
 }
-/* --- GESTIÓN Y ADMINISTRACIÓN DE MESAS --- */
 
-function renderTablesAdmin() {
-    const list = document.getElementById('tablesAdminList');
-    if (!list) return;
-    list.innerHTML = '';
 
-    tables.forEach(t => {
-        const item = document.createElement('div');
-        item.className = 'product-row';
-        item.innerHTML = `
-            <div class="product-info">
-                <span><strong>${t.name}</strong></span>
-                <span style="font-size:0.75rem; color: var(--text-secondary); display:block; text-transform:uppercase;">Estado: ${t.status}</span>
-            </div>
-            <div class="product-actions">
-                <button onclick="deleteTable(${t.id})" class="action-btn" title="Eliminar Mesa">🗑️</button>
-            </div>
-        `;
-        list.appendChild(item);
-    });
-}
-
-function saveNewTable() {
-    const nameInput = document.getElementById('newTableName');
-    const name = nameInput.value.trim();
-    if (!name) {
-        alert('Por favor ingrese el nombre de la mesa.');
-        return;
-    }
-
-    const newId = tables.length > 0 ? Math.max(...tables.map(t => t.id)) + 1 : 1;
-    tables.push({
-        id: newId,
-        name: name,
-        status: 'libre',
-        items: [],
-        receipts: []
-    });
-
-    saveData();
-    nameInput.value = '';
-    renderTablesAdmin();
-    alert(`Mesa "${name}" creada exitosamente.`);
-}
-
-function deleteTable(id) {
-    const table = tables.find(t => t.id === id);
-    if (!table) return;
-
-    if (table.status === 'ocupada' || (table.items && table.items.length > 0)) {
-        alert('No se puede eliminar una mesa que se encuentra ocupada o tiene pedidos activos.');
-        return;
-    }
-
-    if (confirm(`¿Desea eliminar la ${table.name}?`)) {
-        tables = tables.filter(t => t.id !== id);
-        saveData();
-        renderTablesAdmin();
-    }
-}
-
+/* ========================================================== */
+/* 9. SINCRONIZACIÓN CON GOOGLE SHEETS Y LOCALSTORAGE         */
+/* ========================================================== */
 
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxjUwp_InItsq8J-tSl7a2e96zxWX_29H_YgN5b-Ujmx7IuHp4JDJPyM5gaoVFScSr_rQ/exec";
 
-// Cargar datos desde Google Sheets al iniciar
 async function loadDataFromCloud() {
     try {
         let response = await fetch(WEB_APP_URL + "?action=getData");
@@ -1234,6 +1289,7 @@ async function loadDataFromCloud() {
         console.warn("No se pudo conectar a la nube, cargando desde localStorage local.", error);
     }
 }
+
 async function syncDataToCloud() {
     try {
         const payload = {
@@ -1271,4 +1327,4 @@ function saveData() {
 }
 
 
-/*HASTA EL MODULO DE COCINA RECIBIENDO LA COMANDA Y TEMPORIZADOR ACTUALIZANDO CADA MIMUTO*/
+/*TEMPORIZADOR MENOR A 1 MINUTO PARPADEA ROJO*/

@@ -7,10 +7,24 @@
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#1e293b">
     <link rel="stylesheet" href="./styles.css">
+    <style>
+        /* Estilo para el efecto de parpadeo (alerta en rojo) en comandas vencidas */
+        @keyframes blink-animation {
+            0% { opacity: 1; border-color: #ef4444; }
+            50% { opacity: 0.4; border-color: #b91c1c; }
+            100% { opacity: 1; border-color: #ef4444; }
+        }
+        .kitchen-card-alert {
+            animation: blink-animation 1s infinite;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <!-- VISTA DE LOGIN -->
+
+        <!-- ========================================== -->
+        <!-- VISTA DE LOGIN                             -->
+        <!-- ========================================== -->
         <div id="login-view" class="card">
             <div style="text-align: center; margin-bottom: 1.5rem;">
                 <h2>RestoPOS</h2>
@@ -28,7 +42,9 @@
             <p style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">Usuario admin / PIN 123</p>
         </div>
 
-        <!-- PANEL PRINCIPAL -->
+        <!-- ========================================== -->
+        <!-- PANEL PRINCIPAL (DASHBOARD)                -->
+        <!-- ========================================== -->
         <div id="dashboard-view" class="hidden">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h2 id="welcome-msg" style="margin: 0; font-size: 1.2rem;">Panel</h2>
@@ -67,7 +83,9 @@
             </div>
         </div>
 
-        <!-- SECCIÓN: GESTIÓN DE MESAS -->
+        <!-- ========================================== -->
+        <!-- SECCIÓN: GESTIÓN DE MESAS                  -->
+        <!-- ========================================== -->
         <div id="tables-section" class="card hidden">
             <h2>Gestión de Mesas</h2>
             <p style="color: var(--text-secondary); font-size: 0.9rem;">Toca una mesa para ver o tomar su pedido:</p>
@@ -75,7 +93,9 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- SECCIÓN: MÓDULO DE COCINA (KDS) -->
+        <!-- ========================================== -->
+        <!-- SECCIÓN: MÓDULO DE COCINA (KDS)            -->
+        <!-- ========================================== -->
         <div id="kitchen-section" class="card hidden">
             <h2>👨‍🍳 Comandas en Cocina</h2>
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Pedidos enviados por los meseros ordenados cronológicamente:</p>
@@ -90,7 +110,9 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- SECCIÓN: ADMINISTRACIÓN DE MESAS -->
+        <!-- ========================================== -->
+        <!-- SECCIÓN: ADMINISTRACIÓN DE MESAS           -->
+        <!-- ========================================== -->
         <div id="tables-admin-section" class="card hidden">
             <h2>Administración de Mesas</h2>
             <div class="input-group">
@@ -106,7 +128,9 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- SECCIÓN: TOMA DE PEDIDOS AVANZADA -->
+        <!-- ========================================== -->
+        <!-- SECCIÓN: TOMA DE PEDIDOS AVANZADA          -->
+        <!-- ========================================== -->
         <div id="order-section" class="card hidden">
             <h2 id="order-title">Pedido de Mesa</h2>
             <div class="input-group">
@@ -137,7 +161,9 @@
             <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="showSection('tables-section')">Volver a Mesas</button>
         </div>
 
-        <!-- SECCIÓN: GESTIÓN DE CUENTAS Y RECIBOS -->
+        <!-- ========================================== -->
+        <!-- SECCIÓN: GESTIÓN DE CUENTAS Y RECIBOS      -->
+        <!-- ========================================== -->
         <div id="bill-section" class="card hidden">
             <h2 id="bill-title">Resumen de Cuenta</h2>
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem;">Selecciona los platos para emitir el recibo parcial de cada comensal:</p>
@@ -153,7 +179,9 @@
             <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="backToOrderSection()">Volver al Pedido</button>
         </div>
 
-        <!-- SECCIÓN: CATÁLOGO DE PLATOS -->
+        <!-- ========================================== -->
+        <!-- SECCIÓN: CATÁLOGO DE PLATOS                -->
+        <!-- ========================================== -->
         <div id="catalog-section" class="card hidden">
             <h2>Catálogo de Platos & Recetas</h2>
             <div class="input-group">
@@ -180,7 +208,9 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- SECCIÓN: GESTIÓN DE BEBIDAS -->
+        <!-- ========================================== -->
+        <!-- SECCIÓN: GESTIÓN DE BEBIDAS                -->
+        <!-- ========================================== -->
         <div id="drinks-section" class="card hidden">
             <h2>Gestión de Bebidas</h2>
             <div class="input-group">
@@ -201,7 +231,9 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- SECCIÓN: ADICIONALES -->
+        <!-- ========================================== -->
+        <!-- SECCIÓN: ADICIONALES                       -->
+        <!-- ========================================== -->
         <div id="addons-section" class="card hidden">
             <h2>Gestión de Adicionales y Acompañamientos</h2>
             <div class="input-group">
@@ -222,7 +254,9 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- SECCIÓN: INVENTARIO -->
+        <!-- ========================================== -->
+        <!-- SECCIÓN: INVENTARIO                        -->
+        <!-- ========================================== -->
         <div id="inventory-section" class="card hidden">
             <h2>Control de Inventario e Insumos</h2>
             <div class="input-group">
@@ -244,6 +278,7 @@
             </div>
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
+
     </div>
 
     <script src="./app.js"></script>
