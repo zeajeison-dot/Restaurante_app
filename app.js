@@ -8,6 +8,7 @@ window.onload = function() {
         const role = localStorage.getItem('restopos_current_role') || 'admin';
         setupUserSession(username, role, false);
     }
+    loadDataFromCloud();
 }
 
 // Estructuras de datos principales (con respaldo en localStorage)
@@ -198,7 +199,6 @@ function showSection(sectionId) {
         kitchenInterval = null;
     }
 
-    // Ocultar botones de volver al menú para mesero y cocinero
     const backBtns = document.querySelectorAll('.admin-back-btn');
     backBtns.forEach(btn => {
         if (role === 'admin') {
@@ -214,7 +214,6 @@ function showSection(sectionId) {
         const roleBadge = document.getElementById('tablesRoleBadge');
 
         if (role === 'mesero') {
-            // Ocultar por completo nombre y rol en la vista del mesero, dejando limpio el encabezado con el botón Salir
             userTitle.innerText = "Gestión de Mesas";
             if (roleBadge) roleBadge.style.display = 'none';
             headerBar.style.display = 'flex';
@@ -263,7 +262,7 @@ function showSection(sectionId) {
 
 
 /* ========================================================== */
-/* 3. MÓDULO DE GESTIÓN DE USUARIOS Y PERMISOS                */
+/* 3. MÓDULO DE GESTIÓN DE USUARIOS Y PERMISOS (ONLINE ONLY)  */
 /* ========================================================== */
 
 function renderUsersAdmin() {
@@ -288,7 +287,12 @@ function renderUsersAdmin() {
     });
 }
 
-function saveUser() {
+async function saveUser() {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se puede crear o modificar usuarios sin conexión a internet asegurada.');
+        return;
+    }
+
     const username = document.getElementById('newUsername').value.trim();
     const pass = document.getElementById('newUserPass').value.trim();
     const role = document.getElementById('newUserRole').value;
@@ -304,22 +308,24 @@ function saveUser() {
             user.username = username;
             user.pass = pass;
             user.role = role;
-            alert(`Usuario "${username}" actualizado exitosamente.`);
         }
         cancelEditUser();
     } else {
         const newId = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
         users.push({ id: newId, username, pass, role });
-        alert(`Usuario "${username}" creado exitosamente.`);
     }
 
-    saveData();
+    await saveDataAndSyncCloudSync('Usuario guardado y registrado en Google Sheets exitosamente.');
     document.getElementById('newUsername').value = '';
     document.getElementById('newUserPass').value = '';
     renderUsersAdmin();
 }
 
 function editUser(id) {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se puede editar usuarios sin conexión a internet.');
+        return;
+    }
     const user = users.find(u => u.id === id);
     if (user) {
         editingUserId = id;
@@ -328,7 +334,7 @@ function editUser(id) {
         document.getElementById('newUserRole').value = user.role;
 
         document.getElementById('formUserTitle').innerText = 'Editar Usuario';
-        document.getElementById('btnSaveUser').innerText = 'Guardar Cambios de Usuario';
+        document.getElementById('btnSaveUser').innerText = 'Guardar Cambios de Usuario (Online)';
         document.getElementById('btnCancelUserEdit').classList.remove('hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -340,11 +346,16 @@ function cancelEditUser() {
     document.getElementById('newUserPass').value = '';
     document.getElementById('newUserRole').value = 'mesero';
     document.getElementById('formUserTitle').innerText = 'Nombre de Usuario';
-    document.getElementById('btnSaveUser').innerText = 'Crear / Guardar Usuario';
+    document.getElementById('btnSaveUser').innerText = 'Crear / Guardar Usuario (Online)';
     document.getElementById('btnCancelUserEdit').classList.add('hidden');
 }
 
-function deleteUser(id) {
+async function deleteUser(id) {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se puede eliminar usuarios sin conexión a internet.');
+        return;
+    }
+
     const user = users.find(u => u.id === id);
     if (!user) return;
 
@@ -353,10 +364,10 @@ function deleteUser(id) {
         return;
     }
 
-    if (confirm(`¿Desea eliminar permanentemente al usuario "${user.username}"?`)) {
+    if (confirm(`¿Desea eliminar permanentemente al usuario "${user.username}" de la aplicación y de Google Sheets?`)) {
         users = users.filter(u => u.id !== id);
         if (editingUserId === id) cancelEditUser();
-        saveData();
+        await saveDataAndSyncCloudSync('Usuario eliminado y actualizado en Google Sheets.');
         renderUsersAdmin();
     }
 }
@@ -1502,7 +1513,7 @@ function saveInventoryItem() {
 /* 10. SINCRONIZACIÓN CON GOOGLE SHEETS Y LOCALSTORAGE        */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxjUwp_InItsq8J-tSl7a2e96zxWX_29H_YgN5b-Ujmx7IuHp4JDJPyM5gaoVFScSr_rQ/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz0N-d8b23A9LrNOLNHtGUygCCxCFkg7pW8Sj07kriMbrOkgB6s62lQsMzOccqvsSd3rg/exec";
 
 async function loadDataFromCloud() {
     try {
@@ -1515,13 +1526,44 @@ async function loadDataFromCloud() {
             products = cloudData.products || products;
             drinks = cloudData.drinks || drinks;
             inventory = cloudData.inventory || inventory;
-            users = cloudData.users || users;
+            if (cloudData.users && cloudData.users.length > 0) {
+                users = cloudData.users;
+            }
 
             saveData();
             console.log("Datos sincronizados desde Google Sheets exitosamente.");
         }
     } catch (error) {
         console.warn("No se pudo conectar a la nube, cargando desde localStorage local.", error);
+    }
+}
+
+async function saveDataAndSyncCloudSync(successMessage) {
+    saveData(); 
+    try {
+        const payload = {
+            tables: tables,
+            products: products,
+            drinks: drinks,
+            addons: addons,
+            inventory: inventory,
+            users: users
+        };
+
+        let response = await fetch(WEB_APP_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        let result = await response.json();
+        if (result.status === 'success') {
+            alert(`✅ ${successMessage}`);
+        } else {
+            alert(`⚠️ Los usuarios se guardaron localmente, pero hubo un error al registrar en Sheets: ${result.message}`);
+        }
+    } catch (error) {
+        console.error("Error sincronizando con Google Sheets:", error);
+        alert('❌ Error de red: No se pudo verificar la conexión con Google Sheets. La operación requiere conexión online activa.');
     }
 }
 
@@ -1559,10 +1601,8 @@ function saveData() {
     localStorage.setItem('restopos_drinks', JSON.stringify(drinks));
     localStorage.setItem('restopos_inventory', JSON.stringify(inventory));
     localStorage.setItem('restopos_users', JSON.stringify(users));
-
-    syncDataToCloud();
 }
 
 
 
-/* CREACION MODULO ADMINISTRACION DE USUARIOS Y PERMISOS*/
+/* VERIFICACION DE ESTADO ONLINE AL GESTIONAR USUARIOS*/

@@ -60,7 +60,6 @@
         <!-- SECCIÓN: GESTIÓN DE MESAS                  -->
         <!-- ========================================== -->
         <div id="tables-section" class="card hidden">
-            <!-- Cabecera dinámica (Oculta datos de usuario para meseros, visible con botón Salir) -->
             <div id="tablesHeaderBar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
                 <div>
                     <h2 style="margin: 0; font-size: 1.1rem;" id="tablesUserTitle">Gestión de Mesas</h2>
@@ -79,7 +78,6 @@
         <!-- SECCIÓN: MÓDULO DE COCINA (KDS)            -->
         <!-- ========================================== -->
         <div id="kitchen-section" class="card hidden">
-            <!-- Cabecera limpia sin texto de rol redundante -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
                 <h2 style="margin: 0; font-size: 1.1rem;">👨‍🍳 Comandas en Cocina</h2>
                 <button class="btn btn-secondary" style="width: auto; padding: 0.4rem 0.8rem; margin: 0; font-size: 0.85rem;" onclick="logout()">Salir</button>
@@ -102,6 +100,9 @@
         <!-- ========================================== -->
         <div id="users-admin-section" class="card hidden">
             <h2>👥 Gestión de Usuarios y Permisos</h2>
+            <div style="background: #e2e8f0; padding: 0.5rem; border-radius: 6px; font-size: 0.8rem; margin-bottom: 1rem; text-align: center; color: #334155;">
+                🔒 Requisito estricto: Las acciones requieren conexión en línea obligatoria para registrarse en Google Sheets.
+            </div>
             <div class="input-group">
                 <label id="formUserTitle">Nombre de Usuario</label>
                 <input type="text" id="newUsername" placeholder="Ej: mesero_carlos">
@@ -118,7 +119,7 @@
                     <option value="admin">Administrador (Acceso Total)</option>
                 </select>
             </div>
-            <button class="btn" id="btnSaveUser" onclick="saveUser()">Crear / Guardar Usuario</button>
+            <button class="btn" id="btnSaveUser" onclick="saveUser()">Crear / Guardar Usuario (Online)</button>
             <button class="btn btn-secondary hidden" id="btnCancelUserEdit" onclick="cancelEditUser()">Cancelar Edición</button>
 
             <div style="margin-top: 1.5rem;">
