@@ -2,14 +2,18 @@
 /* 1. INICIALIZACIÓN Y ESTADOS GLOBALES                      */
 /* ========================================================== */
 
-window.onload = function() {
+window.onload = async function() {
+    // Primero cargar los datos de Google Sheets
+    await loadDataFromCloud();
+
+    // Después comprobar si existe una sesión anterior
     if (localStorage.getItem('restopos_logged') === 'true') {
         const username = localStorage.getItem('restopos_current_user') || 'admin';
         const role = localStorage.getItem('restopos_current_role') || 'admin';
+
         setupUserSession(username, role, false);
     }
-    loadDataFromCloud();
-}
+};
 
 // Estructuras de datos principales (con respaldo en localStorage)
 let tables = JSON.parse(localStorage.getItem('restopos_tables')) || [
@@ -62,19 +66,40 @@ let kitchenInterval = null;
 /* 2. AUTENTICACIÓN Y CONTROL DE VISTAS                       */
 /* ========================================================== */
 
-function login() {
+async function login() {
     const userInput = document.getElementById('userInput').value.trim();
     const passInput = document.getElementById('passInput').value.trim();
 
-    const foundUser = users.find(u => u.username === userInput && u.pass === passInput);
+    if (!userInput || !passInput) {
+        alert('Ingrese usuario y contraseña.');
+        return;
+    }
 
+    // Intentar actualizar los usuarios desde Google Sheets
+    // antes de validar las credenciales.
+    const cloudLoaded = await loadDataFromCloud();
+
+    // Buscar usuario convirtiendo ambos campos a texto.
+    // Esto permite comparar contraseñas que Sheets entrega como números.
+    let foundUser = users.find(u =>
+        String(u.username).trim().toLowerCase() === userInput.toLowerCase() &&
+        String(u.pass).trim() === passInput
+    );
+
+    // Si no se pudo conectar a la nube, se permite validar
+    // con los usuarios que estén guardados localmente.
     if (foundUser) {
         localStorage.setItem('restopos_logged', 'true');
         localStorage.setItem('restopos_current_user', foundUser.username);
         localStorage.setItem('restopos_current_role', foundUser.role);
+
         setupUserSession(foundUser.username, foundUser.role, true);
     } else {
-        alert('Usuario o contraseña incorrectos.');
+        if (!cloudLoaded && !navigator.onLine) {
+            alert('No hay conexión a internet. No fue posible consultar los usuarios de Google Sheets.');
+        } else {
+            alert('Usuario o contraseña incorrectos.');
+        }
     }
 }
 
@@ -106,6 +131,7 @@ function setupUserSession(username, role, isNewLogin = false) {
 function renderDashboardMenu(role) {
     const grid = document.getElementById('dashboardMenuGrid');
     if (!grid) return;
+
     grid.innerHTML = '';
 
     let menuCards = [
@@ -123,10 +149,12 @@ function renderDashboardMenu(role) {
         const div = document.createElement('div');
         div.className = 'menu-card';
         div.setAttribute('onclick', card.action);
+
         div.innerHTML = `
             <h3>${card.title}</h3>
             <p style="font-size: 0.85rem; color: var(--text-secondary);">${card.desc}</p>
         `;
+
         grid.appendChild(div);
     });
 }
@@ -135,7 +163,7 @@ function logout() {
     localStorage.removeItem('restopos_logged');
     localStorage.removeItem('restopos_current_user');
     localStorage.removeItem('restopos_current_role');
-    
+
     const sections = [
         'dashboard-view',
         'tables-section',
@@ -149,6 +177,7 @@ function logout() {
         'addons-section',
         'inventory-section'
     ];
+
     sections.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
@@ -167,6 +196,7 @@ function showSection(sectionId) {
         alert('Acceso no autorizado para el rol de mesero.');
         return;
     }
+
     if (role === 'cocinero' && sectionId !== 'kitchen-section') {
         alert('Acceso no autorizado para el rol de cocinero.');
         return;
@@ -200,6 +230,7 @@ function showSection(sectionId) {
     }
 
     const backBtns = document.querySelectorAll('.admin-back-btn');
+
     backBtns.forEach(btn => {
         if (role === 'admin') {
             btn.style.display = 'block';
@@ -220,17 +251,21 @@ function showSection(sectionId) {
         } else if (role === 'admin') {
             headerBar.style.display = 'none';
         }
+
         renderTables();
+
     } else if (sectionId === 'kitchen-section') {
         const kitchenSection = document.getElementById('kitchen-section');
         if (!kitchenSection) return;
 
         const timerConfigBox = document.getElementById('kitchenTimerConfigBox');
+
         if (timerConfigBox) {
             timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
         }
 
         renderKitchenOrders();
+
         kitchenInterval = setInterval(() => {
             if (kitchenSection && !kitchenSection.classList.contains('hidden')) {
                 renderKitchenOrders();
@@ -239,22 +274,28 @@ function showSection(sectionId) {
                 kitchenInterval = null;
             }
         }, 1000);
+
     } else if (sectionId === 'users-admin-section') {
         cancelEditUser();
         renderUsersAdmin();
+
     } else if (sectionId === 'tables-admin-section') {
         cancelEditTable();
         renderTablesAdmin();
+
     } else if (sectionId === 'catalog-section') {
         cancelEditProduct();
         renderRecipeCheckboxes();
         renderProducts();
+
     } else if (sectionId === 'drinks-section') {
         cancelEditDrink();
         renderDrinks();
+
     } else if (sectionId === 'addons-section') {
         cancelEditAddon();
         renderAddons();
+
     } else if (sectionId === 'inventory-section') {
         renderInventory();
     }
@@ -268,11 +309,13 @@ function showSection(sectionId) {
 function renderUsersAdmin() {
     const list = document.getElementById('usersList');
     if (!list) return;
+
     list.innerHTML = '';
 
     users.forEach(u => {
         const item = document.createElement('div');
         item.className = 'product-row';
+
         item.innerHTML = `
             <div class="product-info">
                 <span><strong>${u.username}</strong></span>
@@ -283,6 +326,7 @@ function renderUsersAdmin() {
                 <button onclick="deleteUser(${u.id})" class="action-btn" title="Eliminar Usuario">🗑️</button>
             </div>
         `;
+
         list.appendChild(item);
     });
 }
@@ -303,21 +347,26 @@ async function saveUser() {
     }
 
     if (editingUserId !== null) {
-        const user = users.find(u => u.id === editingUserId);
+        const user = users.find(u => u.id == editingUserId);
+
         if (user) {
             user.username = username;
             user.pass = pass;
             user.role = role;
         }
+
         cancelEditUser();
+
     } else {
-        const newId = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
+        const newId = users.length > 0 ? Math.max(...users.map(u => Number(u.id))) + 1 : 1;
         users.push({ id: newId, username, pass, role });
     }
 
     await saveDataAndSyncCloudSync('Usuario guardado y registrado en Google Sheets exitosamente.');
+
     document.getElementById('newUsername').value = '';
     document.getElementById('newUserPass').value = '';
+
     renderUsersAdmin();
 }
 
@@ -326,9 +375,12 @@ function editUser(id) {
         alert('❌ Acción bloqueada: No se puede editar usuarios sin conexión a internet.');
         return;
     }
-    const user = users.find(u => u.id === id);
+
+    const user = users.find(u => u.id == id);
+
     if (user) {
         editingUserId = id;
+
         document.getElementById('newUsername').value = user.username;
         document.getElementById('newUserPass').value = user.pass;
         document.getElementById('newUserRole').value = user.role;
@@ -336,15 +388,18 @@ function editUser(id) {
         document.getElementById('formUserTitle').innerText = 'Editar Usuario';
         document.getElementById('btnSaveUser').innerText = 'Guardar Cambios de Usuario (Online)';
         document.getElementById('btnCancelUserEdit').classList.remove('hidden');
+
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 }
 
 function cancelEditUser() {
     editingUserId = null;
+
     document.getElementById('newUsername').value = '';
     document.getElementById('newUserPass').value = '';
     document.getElementById('newUserRole').value = 'mesero';
+
     document.getElementById('formUserTitle').innerText = 'Nombre de Usuario';
     document.getElementById('btnSaveUser').innerText = 'Crear / Guardar Usuario (Online)';
     document.getElementById('btnCancelUserEdit').classList.add('hidden');
@@ -356,7 +411,7 @@ async function deleteUser(id) {
         return;
     }
 
-    const user = users.find(u => u.id === id);
+    const user = users.find(u => u.id == id);
     if (!user) return;
 
     if (user.username === 'admin') {
@@ -365,9 +420,12 @@ async function deleteUser(id) {
     }
 
     if (confirm(`¿Desea eliminar permanentemente al usuario "${user.username}" de la aplicación y de Google Sheets?`)) {
-        users = users.filter(u => u.id !== id);
-        if (editingUserId === id) cancelEditUser();
+        users = users.filter(u => u.id != id);
+
+        if (editingUserId == id) cancelEditUser();
+
         await saveDataAndSyncCloudSync('Usuario eliminado y actualizado en Google Sheets.');
+
         renderUsersAdmin();
     }
 }
@@ -380,13 +438,15 @@ async function deleteUser(id) {
 function renderTables() {
     const container = document.getElementById('tableGridContainer');
     if (!container) return;
+
     container.innerHTML = '';
-    
+
     tables.forEach(t => {
         const div = document.createElement('div');
         div.className = `table-item ${t.status}`;
         div.innerHTML = `${t.name}<br><span style="font-size:0.65rem; text-transform:uppercase;">${t.status}</span>`;
         div.onclick = () => openTableOrder(t.id);
+
         container.appendChild(div);
     });
 }
@@ -394,11 +454,13 @@ function renderTables() {
 function renderTablesAdmin() {
     const list = document.getElementById('tablesAdminList');
     if (!list) return;
+
     list.innerHTML = '';
 
     tables.forEach(t => {
         const item = document.createElement('div');
         item.className = 'product-row';
+
         item.innerHTML = `
             <div class="product-info">
                 <span><strong>${t.name}</strong></span>
@@ -409,6 +471,7 @@ function renderTablesAdmin() {
                 <button onclick="deleteTable(${t.id})" class="action-btn" title="Eliminar Mesa">🗑️</button>
             </div>
         `;
+
         list.appendChild(item);
     });
 }
@@ -416,6 +479,7 @@ function renderTablesAdmin() {
 function saveNewTable() {
     const nameInput = document.getElementById('newTableName');
     const name = nameInput.value.trim();
+
     if (!name) {
         alert('Por favor ingrese el nombre de la mesa.');
         return;
@@ -423,13 +487,17 @@ function saveNewTable() {
 
     if (editingTableId !== null) {
         const table = tables.find(t => t.id === editingTableId);
+
         if (table) {
             table.name = name;
             alert(`Mesa actualizada a "${name}" exitosamente.`);
         }
+
         cancelEditTable();
+
     } else {
         const newId = tables.length > 0 ? Math.max(...tables.map(t => t.id)) + 1 : 1;
+
         tables.push({
             id: newId,
             name: name,
@@ -437,6 +505,7 @@ function saveNewTable() {
             items: [],
             receipts: []
         });
+
         alert(`Mesa "${name}" creada exitosamente.`);
     }
 
@@ -447,23 +516,27 @@ function saveNewTable() {
 
 function editTable(id) {
     const table = tables.find(t => t.id === id);
+
     if (table) {
         editingTableId = id;
         document.getElementById('newTableName').value = table.name;
-        
+
         const container = document.getElementById('newTableName').closest('.input-group').parentNode;
         const cancelBtn = document.getElementById('btnCancelTableEdit');
+
         if (cancelBtn) cancelBtn.classList.remove('hidden');
 
         container.querySelector('button').innerText = 'Guardar Cambios de Mesa';
+
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 }
 
 function cancelEditTable() {
     editingTableId = null;
+
     document.getElementById('newTableName').value = '';
-    
+
     const saveBtn = document.querySelector('#tables-admin-section button');
     if (saveBtn) saveBtn.innerText = 'Guardar Mesa';
 
@@ -482,7 +555,9 @@ function deleteTable(id) {
 
     if (confirm(`¿Desea eliminar la ${table.name}?`)) {
         tables = tables.filter(t => t.id !== id);
+
         if (editingTableId === id) cancelEditTable();
+
         saveData();
         renderTablesAdmin();
     }
@@ -495,6 +570,7 @@ function deleteTable(id) {
 
 function openTableOrder(id) {
     currentTableId = id;
+
     const table = tables.find(t => t.id === id);
     if (!table.receipts) table.receipts = [];
 
@@ -506,7 +582,7 @@ function openTableOrder(id) {
 
     const select = document.getElementById('productSelect');
     select.innerHTML = '<option value="">-- Seleccione un plato o bebida --</option>';
-    
+
     products.forEach(p => {
         const opt = document.createElement('option');
         opt.value = 'prod_' + p.id;
@@ -523,6 +599,7 @@ function openTableOrder(id) {
 
     cancelOrderEdit();
     renderOrderItems();
+
     document.getElementById('tables-section').classList.add('hidden');
     document.getElementById('order-section').classList.remove('hidden');
 }
@@ -533,7 +610,10 @@ function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsD
     const compList = document.getElementById('recipeComponentsList');
     const addonsBox = document.getElementById('addonsSelectionList');
 
-    if (!val) { box.style.display = 'none'; return; }
+    if (!val) {
+        box.style.display = 'none';
+        return;
+    }
 
     if (val.startsWith('drink_')) {
         box.style.display = 'none';
@@ -541,6 +621,7 @@ function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsD
     }
 
     box.style.display = 'block';
+
     const prodId = parseInt(val.replace('prod_', ''));
     const product = products.find(p => p.id === prodId);
 
@@ -549,16 +630,20 @@ function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsD
     if (product && product.components && product.components.length > 0) {
         product.components.forEach((compId, idx) => {
             const addonObj = addons.find(a => a.id === compId);
+
             if (addonObj) {
                 const div = document.createElement('div');
+
                 div.style.cssText = "display: flex; align-items: center; justify-content: space-between; margin-top: 0.4rem; font-size: 0.9rem;";
 
                 let subOptions = `<option value="Mantener (${addonObj.name})">Mantener (${addonObj.name})</option>`;
+
                 addons.filter(a => a.price === 0).forEach(freeA => {
                     if (freeA.id !== compId) {
                         subOptions += `<option value="Cambiado por ${freeA.name}">Cambiar por ${freeA.name} (Sin costo)</option>`;
                     }
                 });
+
                 subOptions += `<option value="SIN ${addonObj.name}">[Retirar sin sustituto]</option>`;
 
                 div.innerHTML = `
@@ -567,6 +652,7 @@ function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsD
                         ${subOptions}
                     </select>
                 `;
+
                 compList.appendChild(div);
 
                 if (selectedComponentChoices.length > 0 && selectedComponentChoices[idx]) {
@@ -575,6 +661,7 @@ function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsD
                 }
             }
         });
+
     } else {
         compList.innerHTML += '<p style="font-size:0.85rem; color:var(--text-secondary);">Este plato no tiene componentes base.</p>';
     }
@@ -582,9 +669,11 @@ function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsD
     addonsBox.innerHTML = '<strong style="font-size:0.85rem; color:var(--text-secondary); display:block; margin-top:0.75rem;">Adicionales con costo extra:</strong>';
 
     let extraAddonsExist = false;
+
     addons.forEach(ad => {
         if (ad.price > 0) {
             extraAddonsExist = true;
+
             let matched = selectedAddonsData.find(item => item.id === ad.id);
             let isChecked = matched ? 'checked' : '';
             let qty = matched ? matched.qty : 1;
@@ -592,22 +681,25 @@ function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsD
 
             const div = document.createElement('div');
             div.style.cssText = "display: flex; align-items: center; justify-content: space-between; margin-top: 0.4rem;";
+
             div.innerHTML = `
                 <label class="checkbox-label" style="flex: 1;">
                     <input type="checkbox" class="addon-checkbox" value="${ad.id}" data-price="${ad.price}" data-name="${ad.name}" ${isChecked} onchange="toggleAddonQuantity(this)">
                     <span>${ad.name} (+$${ad.price.toLocaleString()})</span>
                 </label>
                 <select class="addon-qty-select" data-id="${ad.id}" style="width: 70px; padding: 0.2rem; font-size: 0.85rem; ${displayStyle}">
-                    <option value="1" ${qty==1?'selected':''}>1</option>
-                    <option value="2" ${qty==2?'selected':''}>2</option>
-                    <option value="3" ${qty==3?'selected':''}>3</option>
-                    <option value="4" ${qty==4?'selected':''}>4</option>
-                    <option value="5" ${qty==5?'selected':''}>5</option>
+                    <option value="1" ${qty == 1 ? 'selected' : ''}>1</option>
+                    <option value="2" ${qty == 2 ? 'selected' : ''}>2</option>
+                    <option value="3" ${qty == 3 ? 'selected' : ''}>3</option>
+                    <option value="4" ${qty == 4 ? 'selected' : ''}>4</option>
+                    <option value="5" ${qty == 5 ? 'selected' : ''}>5</option>
                 </select>
             `;
+
             addonsBox.appendChild(div);
         }
     });
+
     if (!extraAddonsExist) {
         addonsBox.innerHTML += '<p style="font-size:0.85rem; color:var(--text-secondary);">No hay adicionales con costo registrados.</p>';
     }
@@ -616,6 +708,7 @@ function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsD
 function toggleAddonQuantity(checkbox) {
     const parentRow = checkbox.closest('div');
     const selectQty = parentRow.querySelector('.addon-qty-select');
+
     if (checkbox.checked) {
         selectQty.style.display = 'inline-block';
     } else {
@@ -628,7 +721,10 @@ function saveOrderCustomization() {
     const val = document.getElementById('productSelect').value;
     const table = tables.find(t => t.id === currentTableId);
 
-    if (!val || !table) { alert('Seleccione un producto o bebida válido.'); return; }
+    if (!val || !table) {
+        alert('Seleccione un producto o bebida válido.');
+        return;
+    }
 
     let finalPrice = 0;
     let name = '';
@@ -640,25 +736,41 @@ function saveOrderCustomization() {
     if (val.startsWith('drink_')) {
         let drinkId = parseInt(val.replace('drink_', ''));
         let drink = drinks.find(d => d.id === drinkId);
+
+        if (!drink) {
+            alert('No se encontró la bebida seleccionada.');
+            return;
+        }
+
         finalPrice = drink.price;
         name = drink.name;
         productId = drink.id;
+
     } else {
         let prodId = parseInt(val.replace('prod_', ''));
         let product = products.find(p => p.id === prodId);
-        finalPrice = product.price; 
+
+        if (!product) {
+            alert('No se encontró el plato seleccionado.');
+            return;
+        }
+
+        finalPrice = product.price;
         name = product.name;
         productId = product.id;
 
         document.querySelectorAll('.component-choice').forEach(select => {
             const choice = select.value;
             const originalComponent = select.getAttribute('data-original');
+
             componentChoices.push(choice);
 
             if (choice.startsWith('SIN ')) {
                 modifications.push(`SIN ${originalComponent}`);
+
             } else if (choice.startsWith('Cambiado por ')) {
                 const replacement = choice.replace('Cambiado por ', '');
+
                 modifications.push(`SIN ${originalComponent}`);
                 modifications.push(`CAMBIADO POR ${replacement}`);
             }
@@ -704,12 +816,15 @@ function saveOrderCustomization() {
         orderItemData.sentToKitchen = table.items[editingOrderItemIndex].sentToKitchen || false;
         orderItemData.sentAt = table.items[editingOrderItemIndex].sentAt || null;
         orderItemData.served = table.items[editingOrderItemIndex].served || false;
+
         table.items[editingOrderItemIndex] = orderItemData;
+
     } else {
         table.items.push(orderItemData);
     }
 
     table.status = 'ocupada';
+
     saveData();
     cancelOrderEdit();
     renderOrderItems();
@@ -718,6 +833,7 @@ function saveOrderCustomization() {
 function editOrderItem(index) {
     const table = tables.find(t => t.id === currentTableId);
     const item = table.items[index];
+
     if (!item) return;
 
     if (item.billed) {
@@ -726,7 +842,11 @@ function editOrderItem(index) {
     }
 
     editingOrderItemIndex = index;
-    let selectVal = products.some(p => p.id === item.productId) ? 'prod_' + item.productId : 'drink_' + item.productId;
+
+    let selectVal = products.some(p => p.id === item.productId)
+        ? 'prod_' + item.productId
+        : 'drink_' + item.productId;
+
     document.getElementById('productSelect').value = selectVal;
 
     loadProductRecipeOptions(item.componentChoices || [], item.addonsData || []);
@@ -734,11 +854,13 @@ function editOrderItem(index) {
     document.getElementById('customizationBoxTitle').innerText = `Editando: ${item.name}`;
     document.getElementById('btnAddOrUpdateOrder').innerText = 'Guardar Cambios del Plato';
     document.getElementById('btnCancelOrderEdit').classList.remove('hidden');
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function cancelOrderEdit() {
     editingOrderItemIndex = null;
+
     document.getElementById('productSelect').value = '';
     document.getElementById('dishCustomizationBox').style.display = 'none';
     document.getElementById('customizationBoxTitle').innerText = 'Personalización del Plato:';
@@ -749,28 +871,42 @@ function cancelOrderEdit() {
 function renderOrderItems() {
     const table = tables.find(t => t.id === currentTableId);
     const list = document.getElementById('orderItemsList');
-    if (!list) return;
+
+    if (!list || !table) return;
+
     list.innerHTML = '';
 
     let total = 0;
+
     if (table.items.length === 0) {
         list.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No hay productos en esta mesa.</p>';
+
     } else {
         table.items.forEach((item, index) => {
             total += item.finalPrice;
+
             const row = document.createElement('div');
             row.className = 'order-item';
 
             let modsHtml = '';
+
             if (item.modifications && item.modifications.length > 0) {
                 item.modifications.forEach(m => {
                     modsHtml += `<span class="mod-tag">↳ ${m}</span>`;
                 });
             }
 
-            let billedBadge = item.billed ? `<span style="font-size:0.7rem; background:#fee2e2; color:#dc2626; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">FACTURADO</span>` : '';
-            let servedBadge = item.served ? `<span style="font-size:0.7rem; background:#dcfce7; color:#15803d; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">SERVIDO</span>` : '';
-            let kitchenBadge = (item.sentToKitchen && !item.served) ? `<span style="font-size:0.7rem; background:#dbeafe; color:#1d4ed8; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">EN COCINA</span>` : '';
+            let billedBadge = item.billed
+                ? `<span style="font-size:0.7rem; background:#fee2e2; color:#dc2626; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">FACTURADO</span>`
+                : '';
+
+            let servedBadge = item.served
+                ? `<span style="font-size:0.7rem; background:#dcfce7; color:#15803d; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">SERVIDO</span>`
+                : '';
+
+            let kitchenBadge = (item.sentToKitchen && !item.served)
+                ? `<span style="font-size:0.7rem; background:#dbeafe; color:#1d4ed8; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">EN COCINA</span>`
+                : '';
 
             row.innerHTML = `
                 <div>
@@ -783,23 +919,35 @@ function renderOrderItems() {
                     <button onclick="removeOrderItem(${index})" class="action-btn" title="Eliminar Plato" ${item.billed ? 'style="opacity:0.4;"' : ''}>❌</button>
                 </div>
             `;
+
             list.appendChild(row);
         });
     }
+
     const orderTotalEl = document.getElementById('orderTotal');
-    if (orderTotalEl) orderTotalEl.innerText = `$ ${total.toLocaleString()}`;
+
+    if (orderTotalEl) {
+        orderTotalEl.innerText = `$ ${total.toLocaleString()}`;
+    }
 }
 
 function removeOrderItem(index) {
     const table = tables.find(t => t.id === currentTableId);
     const item = table.items[index];
+
     if (item && item.billed) {
         alert('Este plato ya fue facturado. Anule el recibo asociado para poder eliminarlo.');
         return;
     }
+
     if (editingOrderItemIndex === index) cancelOrderEdit();
+
     table.items.splice(index, 1);
-    if (table.items.length === 0) table.status = 'libre';
+
+    if (table.items.length === 0) {
+        table.status = 'libre';
+    }
+
     saveData();
     renderOrderItems();
 }
@@ -811,6 +959,7 @@ function removeOrderItem(index) {
 
 function sendOrderToKitchen() {
     const table = tables.find(t => t.id === currentTableId);
+
     if (!table || !table.items || table.items.length === 0) {
         alert('No hay platos o bebidas en esta mesa para enviar a cocina.');
         return;
@@ -824,6 +973,7 @@ function sendOrderToKitchen() {
     }
 
     const now = Date.now();
+
     table.items.forEach(item => {
         if (!item.sentToKitchen) {
             item.sentToKitchen = true;
@@ -843,6 +993,7 @@ function sendOrderToKitchen() {
 function renderKitchenOrders() {
     const container = document.getElementById('kitchenOrdersContainer');
     if (!container) return;
+
     container.innerHTML = '';
 
     const limitMinutes = parseInt(document.getElementById('kitchenTimerParam').value) || 15;
@@ -853,8 +1004,10 @@ function renderKitchenOrders() {
 
     tables.forEach(table => {
         const activeItems = table.items.filter(item => item.sentToKitchen && !item.served);
+
         if (activeItems.length > 0) {
             let earliestSentAt = Math.min(...activeItems.map(i => i.sentAt || now));
+
             activeOrders.push({
                 tableId: table.id,
                 tableName: table.name,
@@ -873,6 +1026,7 @@ function renderKitchenOrders() {
                 <p>Los pedidos enviados por los meseros aparecerán aquí automáticamente.</p>
             </div>
         `;
+
         return;
     }
 
@@ -884,6 +1038,7 @@ function renderKitchenOrders() {
         const absRemaining = Math.abs(remainingSecs);
         const remMins = Math.floor(absRemaining / 60);
         const remSecs = absRemaining % 60;
+
         const timeFormatted = `${isExpired ? '-' : ''}${remMins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
 
         let cardBg = '#dcfce7';
@@ -896,10 +1051,12 @@ function renderKitchenOrders() {
             borderColor = '#ef4444';
             textColor = '#b91c1c';
             cardExtraClass = 'kitchen-card-alert';
+
         } else if (remainingSecs <= 300) {
             cardBg = '#fee2e2';
             borderColor = '#ef4444';
             textColor = '#b91c1c';
+
         } else if (remainingSecs <= 600) {
             cardBg = '#fef9c3';
             borderColor = '#eab308';
@@ -907,12 +1064,16 @@ function renderKitchenOrders() {
         }
 
         const card = document.createElement('div');
+
         card.className = cardExtraClass;
+
         card.style.cssText = `background: ${cardBg}; border: 2px solid ${borderColor}; border-radius: 12px; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between;`;
 
         let itemsHtml = '';
+
         order.items.forEach(item => {
             let modsHtml = '';
+
             if (item.modifications && item.modifications.length > 0) {
                 item.modifications.forEach(m => {
                     let formattedMod = m;
@@ -921,9 +1082,11 @@ function renderKitchenOrders() {
                     if (m.startsWith('SIN ')) {
                         formattedMod = `⛔ ${m}`;
                         modStyle += " color: #dc2626; font-weight: bold;";
+
                     } else if (m.startsWith('CAMBIADO POR ')) {
                         formattedMod = `✅ ${m}`;
                         modStyle += " color: #16a34a; font-weight: bold;";
+
                     } else if (m.startsWith('Adicional:')) {
                         let addonCleanText = m.replace('Adicional: ', '');
                         addonCleanText = addonCleanText.replace(/\s*\(.*\)/, '');
@@ -955,6 +1118,7 @@ function renderKitchenOrders() {
             </div>
             <button class="btn btn-secondary" style="margin-top: 1rem; padding: 0.4rem; font-size: 0.85rem; background: ${borderColor}; color: white;" onclick="markOrderServed(${order.tableId})">✅ Marcar Servido</button>
         `;
+
         container.appendChild(card);
     });
 }
@@ -969,6 +1133,7 @@ function markOrderServed(tableId) {
                 item.served = true;
             }
         });
+
         saveData();
         renderKitchenOrders();
     }
@@ -981,31 +1146,38 @@ function markOrderServed(tableId) {
 
 function openBillSection() {
     const table = tables.find(t => t.id === currentTableId);
+
     if (!table || table.items.length === 0) {
         alert('Esta mesa no tiene pedidos activos.');
         return;
     }
+
     if (!table.receipts) table.receipts = [];
 
     let activeBilledUids = [];
+
     table.receipts.forEach(r => {
         if (r.itemUids) activeBilledUids.push(...r.itemUids);
     });
+
     table.items.forEach(item => {
         if (item.billed && !activeBilledUids.includes(item.uid)) {
             item.billed = false;
         }
     });
+
     saveData();
 
     document.getElementById('bill-title').innerText = `Cuenta - ${table.name}`;
 
     const list = document.getElementById('billItemsList');
     if (!list) return;
+
     list.innerHTML = '';
 
     table.items.forEach((item, index) => {
         let modsHtml = '';
+
         if (item.modifications && item.modifications.length > 0) {
             item.modifications.forEach(m => {
                 modsHtml += `<span class="mod-tag">↳ ${m}</span>`;
@@ -1024,6 +1196,7 @@ function openBillSection() {
                 </div>
                 <strong style="text-decoration: line-through;">$${item.finalPrice.toLocaleString()}</strong>
             `;
+
         } else {
             div.innerHTML = `
                 <label class="checkbox-label" style="flex: 1; align-items: flex-start;">
@@ -1036,6 +1209,7 @@ function openBillSection() {
                 <strong style="margin-left: 1rem;">$${item.finalPrice.toLocaleString()}</strong>
             `;
         }
+
         list.appendChild(div);
     });
 
@@ -1048,17 +1222,22 @@ function openBillSection() {
 
 function calculatePartialTotal() {
     let partialTotal = 0;
+
     document.querySelectorAll('.bill-item-chk:checked').forEach(chk => {
         let price = parseFloat(chk.getAttribute('data-price')) || 0;
         partialTotal += price;
     });
 
     const selectedTotalEl = document.getElementById('selectedPartialTotal');
-    if (selectedTotalEl) selectedTotalEl.innerText = `$ ${Math.round(partialTotal).toLocaleString()}`;
+
+    if (selectedTotalEl) {
+        selectedTotalEl.innerText = `$ ${Math.round(partialTotal).toLocaleString()}`;
+    }
 }
 
 function generateReceipt() {
     const table = tables.find(t => t.id === currentTableId);
+
     let selectedIndexes = [];
     let partialTotal = 0;
     let receiptItems = [];
@@ -1090,6 +1269,7 @@ function generateReceipt() {
     };
 
     table.receipts.push(newReceipt);
+
     saveData();
     openBillSection();
 }
@@ -1097,11 +1277,14 @@ function generateReceipt() {
 function printReceiptDoc(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
     const receipt = table.receipts.find(r => r.id === receiptId);
+
     if (!receipt) return;
 
     let selectedItemsHtml = '';
+
     receipt.items.forEach(item => {
         let itemModsHtml = '';
+
         if (item.modifications && item.modifications.length > 0) {
             item.modifications.forEach(m => {
                 if (m.includes('(+$') || m.includes('($')) {
@@ -1119,6 +1302,7 @@ function printReceiptDoc(receiptId) {
     });
 
     let receiptWindow = window.open('', '_blank', 'width=400,height=600');
+
     receiptWindow.document.write(`
         <html>
         <head><title>Recibo - ${table.name}</title></head>
@@ -1135,6 +1319,7 @@ function printReceiptDoc(receiptId) {
         </body>
         </html>
     `);
+
     receiptWindow.document.close();
     receiptWindow.print();
 }
@@ -1147,14 +1332,19 @@ function renderReceiptsManager() {
         container = document.createElement('div');
         container.id = 'receiptsManagerContainer';
         container.style.cssText = "margin-top: 1rem; border-top: 2px dashed var(--border); padding-top: 0.75rem;";
+
         const billItemsList = document.getElementById('billItemsList');
+
         if (billItemsList && billItemsList.nextSibling) {
             document.getElementById('bill-section').insertBefore(container, billItemsList.nextSibling);
         }
     }
 
     if (!table.receipts || table.receipts.length === 0) {
-        if (container) container.innerHTML = '<p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">No hay recibos generados aún.</p>';
+        if (container) {
+            container.innerHTML = '<p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">No hay recibos generados aún.</p>';
+        }
+
         return;
     }
 
@@ -1162,6 +1352,7 @@ function renderReceiptsManager() {
 
     table.receipts.forEach((rc, rIdx) => {
         let itemNames = rc.items.map(i => i.name).join(', ');
+
         html += `
             <div style="background: #f1f5f9; padding: 0.6rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
                 <div>
@@ -1184,19 +1375,23 @@ function renderReceiptsManager() {
 function confirmPayReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
     const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
+
     if (receiptIndex === -1) return;
 
     let receipt = table.receipts[receiptIndex];
 
     if (confirm(`¿Confirmar pago del Recibo por valor de $${receipt.total.toLocaleString()}?`)) {
         table.receipts.splice(receiptIndex, 1);
+
         table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
 
         if (table.items.length === 0 && table.receipts.length === 0) {
             table.status = 'libre';
             table.receipts = [];
+
             saveData();
             showSection('tables-section');
+
         } else {
             saveData();
             openBillSection();
@@ -1207,12 +1402,14 @@ function confirmPayReceipt(receiptId) {
 function cancelReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
     const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
+
     if (receiptIndex === -1) return;
 
     let receipt = table.receipts[receiptIndex];
 
     if (confirm(`¿Anular este recibo? Los ítems volverán a estar disponibles en la cuenta.`)) {
         table.receipts.splice(receiptIndex, 1);
+
         saveData();
         openBillSection();
     }
@@ -1231,15 +1428,19 @@ function backToOrderSection() {
 function renderRecipeCheckboxes() {
     const container = document.getElementById('recipeComponentsSelector');
     if (!container) return;
+
     container.innerHTML = '';
+
     addons.forEach(ad => {
         const div = document.createElement('div');
+
         div.innerHTML = `
             <label class="checkbox-label">
                 <input type="checkbox" class="recipe-comp-chk" value="${ad.id}">
                 <span>${ad.name} ${ad.price > 0 ? '($' + ad.price + ')' : '(Base)'}</span>
             </label>
         `;
+
         container.appendChild(div);
     });
 }
@@ -1247,7 +1448,9 @@ function renderRecipeCheckboxes() {
 function renderProducts() {
     const list = document.getElementById('productList');
     if (!list) return;
+
     list.innerHTML = '';
+
     products.forEach(p => {
         let compNames = (p.components || []).map(cid => {
             let a = addons.find(x => x.id === cid);
@@ -1256,6 +1459,7 @@ function renderProducts() {
 
         const item = document.createElement('div');
         item.className = 'product-row';
+
         item.innerHTML = `
             <div class="product-info">
                 <span><strong>${p.name}</strong></span>
@@ -1267,6 +1471,7 @@ function renderProducts() {
                 <button onclick="deleteProduct(${p.id})" class="action-btn" title="Eliminar">🗑️</button>
             </div>
         `;
+
         list.appendChild(item);
     });
 }
@@ -1275,20 +1480,26 @@ function saveProduct() {
     const name = document.getElementById('newProdName').value.trim();
     const price = parseFloat(document.getElementById('newProdPrice').value);
 
-    if (!name || isNaN(price)) { alert('Complete nombre y precio del plato.'); return; }
+    if (!name || isNaN(price)) {
+        alert('Complete nombre y precio del plato.');
+        return;
+    }
 
     let selectedComponents = [];
+
     document.querySelectorAll('.recipe-comp-chk:checked').forEach(chk => {
         selectedComponents.push(parseInt(chk.value));
     });
 
     if (editingProductId !== null) {
         const product = products.find(p => p.id === editingProductId);
+
         if (product) {
             product.name = name;
             product.price = price;
             product.components = selectedComponents;
         }
+
     } else {
         const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
         products.push({ id: newId, name, price, components: selectedComponents });
@@ -1301,12 +1512,15 @@ function saveProduct() {
 
 function editProduct(id) {
     const product = products.find(p => p.id === id);
+
     if (product) {
         editingProductId = id;
+
         document.getElementById('newProdName').value = product.name;
         document.getElementById('newProdPrice').value = product.price;
 
         renderRecipeCheckboxes();
+
         document.querySelectorAll('.recipe-comp-chk').forEach(chk => {
             if (product.components && product.components.includes(parseInt(chk.value))) {
                 chk.checked = true;
@@ -1321,9 +1535,12 @@ function editProduct(id) {
 
 function cancelEditProduct() {
     editingProductId = null;
+
     document.getElementById('newProdName').value = '';
     document.getElementById('newProdPrice').value = '';
+
     renderRecipeCheckboxes();
+
     document.getElementById('formProductTitle').innerText = 'Nombre del Plato Principal';
     document.getElementById('btnSaveProduct').innerText = 'Guardar Plato';
     document.getElementById('btnCancelEdit').classList.add('hidden');
@@ -1332,20 +1549,27 @@ function cancelEditProduct() {
 function deleteProduct(id) {
     if (confirm('¿Desea eliminar este plato?')) {
         products = products.filter(p => p.id !== id);
+
         if (editingProductId === id) cancelEditProduct();
+
         saveData();
         renderProducts();
     }
 }
 
+
 // Gestión de Bebidas
+
 function renderDrinks() {
     const list = document.getElementById('drinksList');
     if (!list) return;
+
     list.innerHTML = '';
+
     drinks.forEach(d => {
         const item = document.createElement('div');
         item.className = 'product-row';
+
         item.innerHTML = `
             <div class="product-info">
                 <span><strong>${d.name}</strong></span>
@@ -1356,6 +1580,7 @@ function renderDrinks() {
                 <button onclick="deleteDrink(${d.id})" class="action-btn" title="Eliminar">🗑️</button>
             </div>
         `;
+
         list.appendChild(item);
     });
 }
@@ -1364,11 +1589,19 @@ function saveDrink() {
     const name = document.getElementById('drinkName').value.trim();
     const price = parseFloat(document.getElementById('drinkPrice').value);
 
-    if (!name || isNaN(price)) { alert('Complete nombre y precio de la bebida.'); return; }
+    if (!name || isNaN(price)) {
+        alert('Complete nombre y precio de la bebida.');
+        return;
+    }
 
     if (editingDrinkId !== null) {
         const drink = drinks.find(d => d.id === editingDrinkId);
-        if (drink) { drink.name = name; drink.price = price; }
+
+        if (drink) {
+            drink.name = name;
+            drink.price = price;
+        }
+
     } else {
         const newId = drinks.length > 0 ? Math.max(...drinks.map(d => d.id)) + 1 : 1;
         drinks.push({ id: newId, name, price });
@@ -1381,10 +1614,13 @@ function saveDrink() {
 
 function editDrink(id) {
     const drink = drinks.find(d => d.id === id);
+
     if (drink) {
         editingDrinkId = id;
+
         document.getElementById('drinkName').value = drink.name;
         document.getElementById('drinkPrice').value = drink.price;
+
         document.getElementById('formDrinkTitle').innerText = 'Editar Bebida';
         document.getElementById('btnSaveDrink').innerText = 'Guardar Cambios';
         document.getElementById('btnCancelDrinkEdit').classList.remove('hidden');
@@ -1393,8 +1629,10 @@ function editDrink(id) {
 
 function cancelEditDrink() {
     editingDrinkId = null;
+
     document.getElementById('drinkName').value = '';
     document.getElementById('drinkPrice').value = '';
+
     document.getElementById('formDrinkTitle').innerText = 'Nombre de la Bebida';
     document.getElementById('btnSaveDrink').innerText = 'Guardar Bebida';
     document.getElementById('btnCancelDrinkEdit').classList.add('hidden');
@@ -1403,20 +1641,27 @@ function cancelEditDrink() {
 function deleteDrink(id) {
     if (confirm('¿Desea eliminar esta bebida?')) {
         drinks = drinks.filter(d => d.id !== id);
+
         if (editingDrinkId === id) cancelEditDrink();
+
         saveData();
         renderDrinks();
     }
 }
 
+
 // Gestión de Adicionales
+
 function renderAddons() {
     const list = document.getElementById('addonsList');
     if (!list) return;
+
     list.innerHTML = '';
+
     addons.forEach(ad => {
         const item = document.createElement('div');
         item.className = 'product-row';
+
         item.innerHTML = `
             <div class="product-info">
                 <span>${ad.name} ${ad.price === 0 ? '<span style="color:var(--success); font-size:0.75rem; display:block;">(Base / Sustitución gratuita)</span>' : ''}</span>
@@ -1427,6 +1672,7 @@ function renderAddons() {
                 <button onclick="deleteAddon(${ad.id})" class="action-btn" title="Eliminar">🗑️</button>
             </div>
         `;
+
         list.appendChild(item);
     });
 }
@@ -1435,11 +1681,19 @@ function saveAddon() {
     const name = document.getElementById('addonName').value.trim();
     const price = parseFloat(document.getElementById('addonPrice').value);
 
-    if (!name || isNaN(price)) { alert('Complete nombre y precio del adicional.'); return; }
+    if (!name || isNaN(price)) {
+        alert('Complete nombre y precio del adicional.');
+        return;
+    }
 
     if (editingAddonId !== null) {
         const addon = addons.find(a => a.id === editingAddonId);
-        if (addon) { addon.name = name; addon.price = price; }
+
+        if (addon) {
+            addon.name = name;
+            addon.price = price;
+        }
+
     } else {
         const newId = addons.length > 0 ? Math.max(...addons.map(a => a.id)) + 1 : 1;
         addons.push({ id: newId, name, price });
@@ -1452,10 +1706,13 @@ function saveAddon() {
 
 function editAddon(id) {
     const addon = addons.find(a => a.id === id);
+
     if (addon) {
         editingAddonId = id;
+
         document.getElementById('addonName').value = addon.name;
         document.getElementById('addonPrice').value = addon.price;
+
         document.getElementById('formAddonTitle').innerText = 'Editar Adicional';
         document.getElementById('btnSaveAddon').innerText = 'Guardar Cambios';
         document.getElementById('btnCancelAddonEdit').classList.remove('hidden');
@@ -1464,8 +1721,10 @@ function editAddon(id) {
 
 function cancelEditAddon() {
     editingAddonId = null;
+
     document.getElementById('addonName').value = '';
     document.getElementById('addonPrice').value = '';
+
     document.getElementById('formAddonTitle').innerText = 'Nombre del Adicional / Componente';
     document.getElementById('btnSaveAddon').innerText = 'Guardar Adicional';
     document.getElementById('btnCancelAddonEdit').classList.add('hidden');
@@ -1474,7 +1733,9 @@ function cancelEditAddon() {
 function deleteAddon(id) {
     if (confirm('¿Desea eliminar este adicional?')) {
         addons = addons.filter(a => a.id !== id);
+
         if (editingAddonId === id) cancelEditAddon();
+
         saveData();
         renderAddons();
     }
@@ -1488,7 +1749,9 @@ function deleteAddon(id) {
 function renderInventory() {
     const list = document.getElementById('inventoryList');
     if (!list) return;
+
     list.innerHTML = '<h3>Insumos Registrados</h3>';
+
     inventory.forEach(i => {
         list.innerHTML += `<div class="order-item"><span>${i.name}</span><strong>${i.stock} ${i.unit}</strong></div>`;
     });
@@ -1498,10 +1761,18 @@ function saveInventoryItem() {
     const nameVal = document.getElementById('invName').value;
     const stock = parseFloat(document.getElementById('invStock').value);
     const unit = document.getElementById('invUnit').value;
-    if(nameVal && !isNaN(stock) && unit) {
-        inventory.push({ id: inventory.length + 1, name: nameVal, stock, unit });
+
+    if (nameVal && !isNaN(stock) && unit) {
+        inventory.push({
+            id: inventory.length + 1,
+            name: nameVal,
+            stock,
+            unit
+        });
+
         saveData();
         renderInventory();
+
         document.getElementById('invName').value = '';
         document.getElementById('invStock').value = '';
         document.getElementById('invUnit').value = '';
@@ -1513,33 +1784,93 @@ function saveInventoryItem() {
 /* 10. SINCRONIZACIÓN CON GOOGLE SHEETS Y LOCALSTORAGE        */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz0N-d8b23A9LrNOLNHtGUygCCxCFkg7pW8Sj07kriMbrOkgB6s62lQsMzOccqvsSd3rg/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzYEWa6iM0KEj2stpMe0f-nhCBatB1cJAkZ5P9790NQOM6JA0ltCgY3wpCtcUXM0hI9Bw/exec";
+
+
+/* ---------------------------------------------------------- */
+/* CARGAR DATOS DESDE GOOGLE SHEETS                           */
+/* ---------------------------------------------------------- */
 
 async function loadDataFromCloud() {
     try {
-        let response = await fetch(WEB_APP_URL + "?action=getData");
-        let cloudData = await response.json();
+        const response = await fetch(WEB_APP_URL + "?action=getData");
 
-        if (cloudData.tables && cloudData.tables.length > 0) {
-            tables = cloudData.tables;
-            addons = cloudData.addons || addons;
-            products = cloudData.products || products;
-            drinks = cloudData.drinks || drinks;
-            inventory = cloudData.inventory || inventory;
-            if (cloudData.users && cloudData.users.length > 0) {
-                users = cloudData.users;
-            }
-
-            saveData();
-            console.log("Datos sincronizados desde Google Sheets exitosamente.");
+        if (!response.ok) {
+            throw new Error("Error HTTP: " + response.status);
         }
+
+        const cloudData = await response.json();
+
+        if (!cloudData || cloudData.status === 'error') {
+            throw new Error(cloudData.message || 'Respuesta inválida de Google Sheets.');
+        }
+
+        // IMPORTANTE:
+        // Cada grupo de datos se carga de forma independiente.
+        // Los usuarios ya no dependen de que existan mesas.
+
+        if (Array.isArray(cloudData.tables)) {
+            tables = cloudData.tables;
+        }
+
+        if (Array.isArray(cloudData.products)) {
+            products = cloudData.products;
+        }
+
+        if (Array.isArray(cloudData.drinks)) {
+            drinks = cloudData.drinks;
+        }
+
+        if (Array.isArray(cloudData.addons)) {
+            addons = cloudData.addons;
+        }
+
+        if (Array.isArray(cloudData.inventory)) {
+            inventory = cloudData.inventory;
+        }
+
+        if (Array.isArray(cloudData.users)) {
+            // Normalizar usuarios para evitar problemas
+            // cuando Google Sheets entrega números en vez de texto.
+            users = cloudData.users.map(user => ({
+                ...user,
+                id: user.id,
+                username: String(user.username ?? '').trim(),
+                pass: String(user.pass ?? '').trim(),
+                role: String(user.role ?? '').trim().toLowerCase()
+            }));
+        }
+
+        // Guardar los datos descargados en localStorage.
+        saveData();
+
+        console.log("Datos sincronizados desde Google Sheets exitosamente.");
+        console.log("Mesas recibidas:", tables.length);
+        console.log("Productos recibidos:", products.length);
+        console.log("Bebidas recibidas:", drinks.length);
+        console.log("Adicionales recibidos:", addons.length);
+        console.log("Usuarios recibidos:", users.length);
+
+        return true;
+
     } catch (error) {
-        console.warn("No se pudo conectar a la nube, cargando desde localStorage local.", error);
+        console.warn(
+            "No se pudo conectar a Google Sheets. Se utilizarán los datos locales.",
+            error
+        );
+
+        return false;
     }
 }
 
+
+/* ---------------------------------------------------------- */
+/* GUARDAR DATOS Y SINCRONIZAR CON GOOGLE SHEETS              */
+/* ---------------------------------------------------------- */
+
 async function saveDataAndSyncCloudSync(successMessage) {
-    saveData(); 
+    saveData();
+
     try {
         const payload = {
             tables: tables,
@@ -1550,22 +1881,34 @@ async function saveDataAndSyncCloudSync(successMessage) {
             users: users
         };
 
-        let response = await fetch(WEB_APP_URL, {
+        const response = await fetch(WEB_APP_URL, {
             method: 'POST',
             body: JSON.stringify(payload)
         });
 
-        let result = await response.json();
+        if (!response.ok) {
+            throw new Error("Error HTTP: " + response.status);
+        }
+
+        const result = await response.json();
+
         if (result.status === 'success') {
             alert(`✅ ${successMessage}`);
         } else {
             alert(`⚠️ Los usuarios se guardaron localmente, pero hubo un error al registrar en Sheets: ${result.message}`);
         }
+
     } catch (error) {
         console.error("Error sincronizando con Google Sheets:", error);
+
         alert('❌ Error de red: No se pudo verificar la conexión con Google Sheets. La operación requiere conexión online activa.');
     }
 }
+
+
+/* ---------------------------------------------------------- */
+/* SINCRONIZAR DATOS CON GOOGLE SHEETS                        */
+/* ---------------------------------------------------------- */
 
 async function syncDataToCloud() {
     try {
@@ -1578,21 +1921,32 @@ async function syncDataToCloud() {
             users: users
         };
 
-        let response = await fetch(WEB_APP_URL, {
+        const response = await fetch(WEB_APP_URL, {
             method: 'POST',
             body: JSON.stringify(payload)
         });
 
-        let result = await response.json();
+        if (!response.ok) {
+            throw new Error("Error HTTP: " + response.status);
+        }
+
+        const result = await response.json();
+
         if (result.status === 'success') {
             console.log("Datos sincronizados con Google Sheets correctamente.");
         } else {
             console.error("Error en el servidor de Sheets:", result.message);
         }
+
     } catch (error) {
         console.error("No se pudo conectar con la nube para sincronizar:", error);
     }
 }
+
+
+/* ---------------------------------------------------------- */
+/* GUARDAR DATOS LOCALMENTE                                   */
+/* ---------------------------------------------------------- */
 
 function saveData() {
     localStorage.setItem('restopos_tables', JSON.stringify(tables));
@@ -1604,5 +1958,6 @@ function saveData() {
 }
 
 
-
-/* VERIFICACION DE ESTADO ONLINE AL GESTIONAR USUARIOS*/
+/* APSS SCRIPT V3 VERIFICACION DE ESTADO ONLINE AL GESTIONAR USUARIOS 
+VERIFICA CREDENCIALES ONLINE PRIMERO
+CORREGIDO DESDE CHSTGPT*/

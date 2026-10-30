@@ -41,7 +41,7 @@ function getAllData() {
     drinks: getSheetData("Bebidas"),
     addons: getSheetData("Adicionales"),
     inventory: getSheetData("Inventario"),
-    users: getSheetData("Usuarios") // <-- Incluido para sincronizar los usuarios desde Sheets al cargar la app
+    users: getSheetData("Usuarios")
   };
 }
 
@@ -54,7 +54,7 @@ function getSheetData(sheetName) {
 
   if (rows.length <= 1) return [];
 
-  var headers = rows[0];
+  var headers = rows[0].map(function(h) { return h.toString().trim().toLowerCase(); });
   var result = [];
 
   for (var i = 1; i < rows.length; i++) {
@@ -63,7 +63,6 @@ function getSheetData(sheetName) {
     for (var j = 0; j < headers.length; j++) {
       var val = rows[i][j];
 
-      // Intentar parsear JSON si los campos guardan arrays/objetos complejos
       try {
         val = JSON.parse(val);
       } catch (e) {}
@@ -84,12 +83,11 @@ function saveAllData(data) {
   if (data.addons) saveSheetData("Adicionales", data.addons);
   if (data.inventory) saveSheetData("Inventario", data.inventory);
   
-  // <-- Incluido para guardar/actualizar los usuarios en la pestaña "Usuarios" al hacer modificaciones online
   if (data.users) {
     var sheetUsers = SS.getSheetByName("Usuarios");
     if (!sheetUsers) {
       sheetUsers = SS.insertSheet("Usuarios");
-      sheetUsers.appendRow(["id", "username", "pass", "role"]); // Crear cabeceras si no existe la hoja
+      sheetUsers.appendRow(["id", "username", "pass", "role"]);
     }
     saveSheetData("Usuarios", data.users);
   }
@@ -100,7 +98,6 @@ function saveSheetData(sheetName, dataArray) {
 
   if (!sheet) return;
 
-  // Limpiar datos existentes manteniendo encabezados
   var lastRow = sheet.getLastRow();
   var lastCol = sheet.getLastColumn();
 
@@ -110,7 +107,7 @@ function saveSheetData(sheetName, dataArray) {
 
   if (dataArray.length === 0) return;
 
-  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(h) { return h.toString().trim().toLowerCase(); });
   var rowsToInsert = [];
 
   dataArray.forEach(function(item) {
@@ -133,3 +130,6 @@ function saveSheetData(sheetName, dataArray) {
     sheet.getRange(2, 1, rowsToInsert.length, headers.length).setValues(rowsToInsert);
   }
 }
+
+
+// V3
