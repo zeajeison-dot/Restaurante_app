@@ -85,9 +85,15 @@
 
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Pedidos enviados por los meseros ordenados cronológicamente:</p>
             
-            <div id="kitchenTimerConfigBox" style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; background: #f1f5f9; padding: 0.75rem; border-radius: 8px;">
-                <label style="font-size: 0.85rem; margin:0; font-weight: bold;">Tiempo límite alerta (min):</label>
-                <input type="number" id="kitchenTimerParam" value="15" min="1" max="60" style="width: 80px; padding: 0.3rem;" onchange="renderKitchenOrders()">
+            <div id="kitchenTimerConfigBox" style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; background: #f1f5f9; padding: 0.75rem; border-radius: 8px;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <label style="font-size: 0.85rem; margin:0; font-weight: bold;">Tiempo límite (min):</label>
+                    <input type="number" id="kitchenTimerParam" value="15" min="1" max="60" style="width: 70px; padding: 0.3rem;" onchange="renderKitchenOrders()">
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <label style="font-size: 0.85rem; margin:0; font-weight: bold;">Alarma umbral (min):</label>
+                    <input type="number" id="kitchenAlarmParam" value="5" min="1" max="30" style="width: 70px; padding: 0.3rem;">
+                </div>
             </div>
 
             <div id="kitchenOrdersContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; max-height: 55vh; overflow-y: auto;"></div>

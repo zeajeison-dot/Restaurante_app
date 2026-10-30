@@ -60,6 +60,7 @@ let editingTableId = null;
 let editingUserId = null;
 let editingOrderItemIndex = null;
 let kitchenInterval = null;
+let lastKitchenAlarmTime = 0; // Control de frecuencia para la alarma sonora
 
 
 /* ========================================================== */
@@ -75,19 +76,14 @@ async function login() {
         return;
     }
 
-    // Intentar actualizar los usuarios desde Google Sheets
-    // antes de validar las credenciales.
+    // Intentar actualizar los usuarios desde Google Sheets antes de validar
     const cloudLoaded = await loadDataFromCloud();
 
-    // Buscar usuario convirtiendo ambos campos a texto.
-    // Esto permite comparar contraseñas que Sheets entrega como números.
     let foundUser = users.find(u =>
         String(u.username).trim().toLowerCase() === userInput.toLowerCase() &&
         String(u.pass).trim() === passInput
     );
 
-    // Si no se pudo conectar a la nube, se permite validar
-    // con los usuarios que estén guardados localmente.
     if (foundUser) {
         localStorage.setItem('restopos_logged', 'true');
         localStorage.setItem('restopos_current_user', foundUser.username);
@@ -957,7 +953,24 @@ function removeOrderItem(index) {
 /* 6. MÓDULO DE COCINA (KDS) Y CRONÓMETRO                     */
 /* ========================================================== */
 
-function sendOrderToKitchen() {
+function playAlarmBeep() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime); // Nota E5
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.4);
+    } catch (e) {
+        console.log("Audio no soportado o bloqueado por el navegador", e);
+    }
+}
+
+async function sendOrderToKitchen() {
     const table = tables.find(t => t.id === currentTableId);
 
     if (!table || !table.items || table.items.length === 0) {
@@ -984,8 +997,12 @@ function sendOrderToKitchen() {
 
     table.status = 'ocupada';
 
+    // Guardar localmente y actualizar vista
     saveData();
     renderOrderItems();
+
+    // Sincronizar inmediatamente con Google Sheets para que la cocina lo visualice en tiempo real
+    await syncDataToCloud();
 
     alert(`👨‍🍳 ¡Pedido de la ${table.name} enviado a cocina exitosamente!`);
 }
@@ -998,9 +1015,13 @@ function renderKitchenOrders() {
 
     const limitMinutes = parseInt(document.getElementById('kitchenTimerParam').value) || 15;
     const limitSeconds = limitMinutes * 60;
-    const now = Date.now();
 
+    const alarmMinutes = parseInt(document.getElementById('kitchenAlarmParam')?.value) || 5;
+    const alarmSeconds = alarmMinutes * 60;
+
+    const now = Date.now();
     let activeOrders = [];
+    let triggerAlarm = false;
 
     tables.forEach(table => {
         const activeItems = table.items.filter(item => item.sentToKitchen && !item.served);
@@ -1019,6 +1040,23 @@ function renderKitchenOrders() {
 
     activeOrders.sort((a, b) => a.sentAt - b.sentAt);
 
+    // Comprobar alarma sonora basada en el umbral parametrizado
+    activeOrders.forEach(order => {
+        const elapsedSecs = Math.floor((now - order.sentAt) / 1000);
+        const remainingSecs = limitSeconds - elapsedSecs;
+        if (remainingSecs <= alarmSeconds) {
+            triggerAlarm = true;
+        }
+    });
+
+    // Activar beep cada 30 segundos si hay comandas críticas
+    if (triggerAlarm) {
+        if (now - lastKitchenAlarmTime >= 30000) {
+            playAlarmBeep();
+            lastKitchenAlarmTime = now;
+        }
+    }
+
     if (activeOrders.length === 0) {
         container.innerHTML = `
             <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
@@ -1034,6 +1072,9 @@ function renderKitchenOrders() {
         const elapsedSecs = Math.floor((now - order.sentAt) / 1000);
         const remainingSecs = limitSeconds - elapsedSecs;
 
+        // Porcentaje equitativo para los colores dinámicos
+        const percentRemaining = limitSeconds > 0 ? (remainingSecs / limitSeconds) * 100 : 0;
+
         const isExpired = remainingSecs <= 0;
         const absRemaining = Math.abs(remainingSecs);
         const remMins = Math.floor(absRemaining / 60);
@@ -1046,21 +1087,25 @@ function renderKitchenOrders() {
         let textColor = '#15803d';
         let cardExtraClass = '';
 
-        if (isExpired || remainingSecs <= 60) {
+        // Reglas basadas en porcentajes:
+        // Rojo: < 25% del tiempo o expirado
+        // Amarillo: Entre 25% y 50% del tiempo
+        // Verde: > 50% del tiempo
+        if (isExpired || percentRemaining <= 25) {
             cardBg = '#fee2e2';
             borderColor = '#ef4444';
             textColor = '#b91c1c';
             cardExtraClass = 'kitchen-card-alert';
 
-        } else if (remainingSecs <= 300) {
-            cardBg = '#fee2e2';
-            borderColor = '#ef4444';
-            textColor = '#b91c1c';
-
-        } else if (remainingSecs <= 600) {
+        } else if (percentRemaining <= 50) {
             cardBg = '#fef9c3';
             borderColor = '#eab308';
             textColor = '#a16207';
+
+        } else {
+            cardBg = '#dcfce7';
+            borderColor = '#22c55e';
+            textColor = '#15803d';
         }
 
         const card = document.createElement('div');
@@ -1123,7 +1168,7 @@ function renderKitchenOrders() {
     });
 }
 
-function markOrderServed(tableId) {
+async function markOrderServed(tableId) {
     const table = tables.find(t => t.id === tableId);
     if (!table) return;
 
@@ -1136,6 +1181,7 @@ function markOrderServed(tableId) {
 
         saveData();
         renderKitchenOrders();
+        await syncDataToCloud();
     }
 }
 
@@ -1372,7 +1418,7 @@ function renderReceiptsManager() {
     if (container) container.innerHTML = html;
 }
 
-function confirmPayReceipt(receiptId) {
+async function confirmPayReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
     const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
 
@@ -1396,6 +1442,7 @@ function confirmPayReceipt(receiptId) {
             saveData();
             openBillSection();
         }
+        await syncDataToCloud();
     }
 }
 
@@ -1805,10 +1852,6 @@ async function loadDataFromCloud() {
             throw new Error(cloudData.message || 'Respuesta inválida de Google Sheets.');
         }
 
-        // IMPORTANTE:
-        // Cada grupo de datos se carga de forma independiente.
-        // Los usuarios ya no dependen de que existan mesas.
-
         if (Array.isArray(cloudData.tables)) {
             tables = cloudData.tables;
         }
@@ -1830,8 +1873,6 @@ async function loadDataFromCloud() {
         }
 
         if (Array.isArray(cloudData.users)) {
-            // Normalizar usuarios para evitar problemas
-            // cuando Google Sheets entrega números en vez de texto.
             users = cloudData.users.map(user => ({
                 ...user,
                 id: user.id,
@@ -1841,24 +1882,13 @@ async function loadDataFromCloud() {
             }));
         }
 
-        // Guardar los datos descargados en localStorage.
         saveData();
 
         console.log("Datos sincronizados desde Google Sheets exitosamente.");
-        console.log("Mesas recibidas:", tables.length);
-        console.log("Productos recibidos:", products.length);
-        console.log("Bebidas recibidas:", drinks.length);
-        console.log("Adicionales recibidos:", addons.length);
-        console.log("Usuarios recibidos:", users.length);
-
         return true;
 
     } catch (error) {
-        console.warn(
-            "No se pudo conectar a Google Sheets. Se utilizarán los datos locales.",
-            error
-        );
-
+        console.warn("No se pudo conectar a Google Sheets. Se utilizarán los datos locales.", error);
         return false;
     }
 }
@@ -1900,7 +1930,6 @@ async function saveDataAndSyncCloudSync(successMessage) {
 
     } catch (error) {
         console.error("Error sincronizando con Google Sheets:", error);
-
         alert('❌ Error de red: No se pudo verificar la conexión con Google Sheets. La operación requiere conexión online activa.');
     }
 }
@@ -1958,6 +1987,8 @@ function saveData() {
 }
 
 
-/* APSS SCRIPT V3 VERIFICACION DE ESTADO ONLINE AL GESTIONAR USUARIOS 
-VERIFICA CREDENCIALES ONLINE PRIMERO
-CORREGIDO DESDE CHSTGPT*/
+
+
+/* MODIFICACION DE TIEMPOS Y PORCENTAJE EN LAS COMANDAS
+AGREGA SONIDO ALERTA PARA MENOR TIEMPO
+EL USUSRIO CON ROL MESERO ENVIA COMANDAS */
