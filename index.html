@@ -81,6 +81,16 @@
             <p style="color: var(--text-secondary); font-size: 0.9rem;">Toca una mesa para ver o tomar su pedido (Las mesas en <span style="color:#ca8a04; font-weight:bold;">amarillo parpadeante</span> tienen platos listos en cocina para recoger):</p>
             <div class="table-grid" id="tableGridContainer"></div>
             
+            <!-- Configuración de alarma de meseros (visible solo para admin dentro del módulo de mesas) -->
+            <div id="waiterAlarmConfigCard" style="margin-top: 1.5rem; background: #f1f5f9; padding: 1rem; border-radius: 8px; display: none;">
+                <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">⚙️ Configuración de Alarma de Meseros</h3>
+                <div class="input-group" style="margin-bottom: 0.5rem;">
+                    <label style="font-size: 0.85rem;">Intervalo de sonido (segundos) para platos listos:</label>
+                    <input type="number" id="waiterAlarmIntervalParam" value="20" min="5" max="120" style="padding: 0.4rem;">
+                </div>
+                <button class="btn" style="padding: 0.5rem; font-size: 0.85rem;" onclick="saveWaiterAlarmConfig()">Guardar Configuración de Alarma</button>
+            </div>
+
             <button class="btn btn-secondary admin-back-btn" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
