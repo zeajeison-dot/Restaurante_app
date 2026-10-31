@@ -16,6 +16,16 @@
         .kitchen-card-alert {
             animation: blink-animation 1s infinite;
         }
+
+        @keyframes table-blink-yellow {
+            0% { background-color: #fef08a; border-color: #eab308; transform: scale(1); }
+            50% { background-color: #fef9c3; border-color: #ca8a04; transform: scale(1.02); }
+            100% { background-color: #fef08a; border-color: #eab308; transform: scale(1); }
+        }
+        .table-item-alert {
+            animation: table-blink-yellow 0.8s infinite ease-in-out;
+            box-shadow: 0 0 15px rgba(234, 179, 8, 0.6);
+        }
     </style>
 </head>
 <body>
@@ -68,7 +78,7 @@
                 <button class="btn btn-secondary" style="width: auto; padding: 0.4rem 0.8rem; margin: 0; font-size: 0.85rem;" onclick="logout()">Salir</button>
             </div>
 
-            <p style="color: var(--text-secondary); font-size: 0.9rem;">Toca una mesa para ver o tomar su pedido:</p>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">Toca una mesa para ver o tomar su pedido (Las mesas en <span style="color:#ca8a04; font-weight:bold;">amarillo parpadeante</span> tienen platos listos en cocina para recoger):</p>
             <div class="table-grid" id="tableGridContainer"></div>
             
             <button class="btn btn-secondary admin-back-btn" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
@@ -159,6 +169,11 @@
         <!-- ========================================== -->
         <div id="order-section" class="card hidden">
             <h2 id="order-title">Pedido de Mesa</h2>
+            <div id="readyForPickupBanner" style="display: none; background: #fef08a; border: 2px solid #eab308; padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; text-align: center;">
+                <strong style="color: #854d0e; display: block; font-size: 0.95rem;">🔔 ¡Platos listos para recoger en cocina!</strong>
+                <button class="btn" style="background: #eab308; color: #713f12; margin-top: 0.5rem; font-weight: bold; width: auto; padding: 0.4rem 1rem;" onclick="markTablePickedUp()">✅ Marcar como Recogido y Entregado</button>
+            </div>
+
             <div class="input-group">
                 <label>Seleccionar Plato o Bebida</label>
                 <select id="productSelect" onchange="loadProductRecipeOptions()"></select>

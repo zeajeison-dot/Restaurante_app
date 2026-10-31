@@ -60,6 +60,7 @@ let editingTableId = null;
 let editingUserId = null;
 let editingOrderItemIndex = null;
 let kitchenInterval = null;
+let tablesRefreshInterval = null; // Intervalo para actualizar el parpadeo en mesas en vivo
 let lastKitchenAlarmTime = 0; // Control de frecuencia para la alarma sonora
 
 
@@ -225,6 +226,11 @@ function showSection(sectionId) {
         kitchenInterval = null;
     }
 
+    if (tablesRefreshInterval) {
+        clearInterval(tablesRefreshInterval);
+        tablesRefreshInterval = null;
+    }
+
     const backBtns = document.querySelectorAll('.admin-back-btn');
 
     backBtns.forEach(btn => {
@@ -249,6 +255,18 @@ function showSection(sectionId) {
         }
 
         renderTables();
+
+        // Actualizar automáticamente el estado de las mesas cada 3 segundos en segundo plano para verificar si cocina marcó algo
+        tablesRefreshInterval = setInterval(async () => {
+            const tablesSec = document.getElementById('tables-section');
+            if (tablesSec && !tablesSec.classList.contains('hidden')) {
+                await loadDataFromCloud();
+                renderTables();
+            } else {
+                clearInterval(tablesRefreshInterval);
+                tablesRefreshInterval = null;
+            }
+        }, 3000);
 
     } else if (sectionId === 'kitchen-section') {
         const kitchenSection = document.getElementById('kitchen-section');
@@ -439,8 +457,23 @@ function renderTables() {
 
     tables.forEach(t => {
         const div = document.createElement('div');
-        div.className = `table-item ${t.status}`;
-        div.innerHTML = `${t.name}<br><span style="font-size:0.65rem; text-transform:uppercase;">${t.status}</span>`;
+        
+        // Verificar si la mesa tiene ítems marcados como servidos en cocina pero pendientes de recoger por el mesero
+        let hasReadyItems = t.items && t.items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
+        
+        let classNames = `table-item ${t.status}`;
+        if (hasReadyItems) {
+            classNames += ` table-item-alert`;
+        }
+
+        div.className = classNames;
+        
+        let statusText = t.status;
+        if (hasReadyItems) {
+            statusText = '¡Listos en cocina!';
+        }
+
+        div.innerHTML = `${t.name}<br><span style="font-size:0.65rem; text-transform:uppercase;">${statusText}</span>`;
         div.onclick = () => openTableOrder(t.id);
 
         container.appendChild(div);
@@ -564,8 +597,11 @@ function deleteTable(id) {
 /* 5. MÓDULO DE PEDIDOS Y PERSONALIZACIÓN                     */
 /* ========================================================== */
 
-function openTableOrder(id) {
+async function openTableOrder(id) {
     currentTableId = id;
+
+    // Sincronizar antes de abrir para asegurar ver estado actualizado de cocina
+    await loadDataFromCloud();
 
     const table = tables.find(t => t.id === id);
     if (!table.receipts) table.receipts = [];
@@ -575,6 +611,13 @@ function openTableOrder(id) {
     });
 
     document.getElementById('order-title').innerText = `Pedido - ${table.name}`;
+
+    // Mostrar u ocultar banner de aviso si hay platos listos para recoger en cocina
+    const readyBanner = document.getElementById('readyForPickupBanner');
+    const hasReadyItems = table.items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
+    if (readyBanner) {
+        readyBanner.style.display = hasReadyItems ? 'block' : 'none';
+    }
 
     const select = document.getElementById('productSelect');
     select.innerHTML = '<option value="">-- Seleccione un plato o bebida --</option>';
@@ -598,6 +641,27 @@ function openTableOrder(id) {
 
     document.getElementById('tables-section').classList.add('hidden');
     document.getElementById('order-section').classList.remove('hidden');
+}
+
+// Función para marcar como recogido y entregado (detiene el parpadeo de amarillo)
+async function markTablePickedUp() {
+    const table = tables.find(t => t.id === currentTableId);
+    if (!table) return;
+
+    table.items.forEach(item => {
+        if (item.sentToKitchen && item.served) {
+            item.pickedUp = true;
+        }
+    });
+
+    saveData();
+    await syncDataToCloud();
+
+    const readyBanner = document.getElementById('readyForPickupBanner');
+    if (readyBanner) readyBanner.style.display = 'none';
+
+    alert('✅ Pedido marcado como recogido de cocina y entregado en mesa con éxito.');
+    renderOrderItems();
 }
 
 function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsData = []) {
@@ -803,7 +867,8 @@ function saveOrderCustomization() {
         addonsData: addonsData,
         billed: false,
         sentToKitchen: false,
-        served: false
+        served: false,
+        pickedUp: false
     };
 
     if (editingOrderItemIndex !== null) {
@@ -812,6 +877,7 @@ function saveOrderCustomization() {
         orderItemData.sentToKitchen = table.items[editingOrderItemIndex].sentToKitchen || false;
         orderItemData.sentAt = table.items[editingOrderItemIndex].sentAt || null;
         orderItemData.served = table.items[editingOrderItemIndex].served || false;
+        orderItemData.pickedUp = table.items[editingOrderItemIndex].pickedUp || false;
 
         table.items[editingOrderItemIndex] = orderItemData;
 
@@ -897,7 +963,7 @@ function renderOrderItems() {
                 : '';
 
             let servedBadge = item.served
-                ? `<span style="font-size:0.7rem; background:#dcfce7; color:#15803d; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">SERVIDO</span>`
+                ? `<span style="font-size:0.7rem; background:#dcfce7; color:#15803d; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">SERVIDO COCINA</span>`
                 : '';
 
             let kitchenBadge = (item.sentToKitchen && !item.served)
@@ -991,6 +1057,7 @@ async function sendOrderToKitchen() {
         if (!item.sentToKitchen) {
             item.sentToKitchen = true;
             item.served = false;
+            item.pickedUp = false;
             item.sentAt = now;
         }
     });
@@ -1087,10 +1154,6 @@ function renderKitchenOrders() {
         let textColor = '#15803d';
         let cardExtraClass = '';
 
-        // Reglas basadas en porcentajes:
-        // Rojo: < 25% del tiempo o expirado
-        // Amarillo: Entre 25% y 50% del tiempo
-        // Verde: > 50% del tiempo
         if (isExpired || percentRemaining <= 25) {
             cardBg = '#fee2e2';
             borderColor = '#ef4444';
@@ -1176,6 +1239,7 @@ async function markOrderServed(tableId) {
         table.items.forEach(item => {
             if (item.sentToKitchen) {
                 item.served = true;
+                item.pickedUp = false; // Activa la alerta de parpadeo en las mesas para que el mesero recoja
             }
         });
 
@@ -1989,6 +2053,6 @@ function saveData() {
 
 
 
-/* MODIFICACION DE TIEMPOS Y PORCENTAJE EN LAS COMANDAS
-AGREGA SONIDO ALERTA PARA MENOR TIEMPO
-EL USUSRIO CON ROL MESERO ENVIA COMANDAS */
+
+/* GESTION DE MESAS CON CAMBIO DE COLOR AMARILLO
+ SI YA FUE DESPCHADO EN COCINA */
