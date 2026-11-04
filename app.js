@@ -72,7 +72,7 @@ async function login() {
     const passInput = document.getElementById('passInput').value.trim();
 
     if (!userInput || !passInput) {
-        alert('Ingrese usuario y contraseña.');
+        showCustomAlert('Ingrese usuario y contraseña.');
         return;
     }
 
@@ -91,9 +91,9 @@ async function login() {
         setupUserSession(foundUser.username, foundUser.role, true);
     } else {
         if (!cloudLoaded && !navigator.onLine) {
-            alert('No hay conexión a internet. No fue posible consultar los usuarios de Google Sheets.');
+            showCustomAlert('No hay conexión a internet. No fue posible consultar los usuarios de Google Sheets.');
         } else {
-            alert('Usuario o contraseña incorrectos.');
+            showCustomAlert('Usuario o contraseña incorrectos.');
         }
     }
 }
@@ -138,7 +138,7 @@ async function saveWaiterAlarmConfig() {
     const canGen = document.getElementById('waiterCanGenerateReceiptParam')?.checked ?? true;
 
     if (isNaN(val) || val < 5) {
-        alert('Ingrese un valor válido en segundos (mínimo 5).');
+        showCustomAlert('Ingrese un valor válido en segundos (mínimo 5).');
         return;
     }
 
@@ -212,12 +212,12 @@ async function showSection(sectionId) {
     const role = localStorage.getItem('restopos_current_role') || 'admin';
 
     if (role === 'mesero' && sectionId !== 'tables-section' && sectionId !== 'order-section' && sectionId !== 'bill-section') {
-        alert('Acceso no autorizado para el rol de mesero.');
+        showCustomAlert('Acceso no autorizado para el rol de mesero.');
         return;
     }
 
     if (role === 'cocinero' && sectionId !== 'kitchen-section') {
-        alert('Acceso no autorizado para el rol de cocinero.');
+        showCustomAlert('Acceso no autorizado para el rol de cocinero.');
         return;
     }
 
@@ -395,7 +395,7 @@ function renderUsersAdmin() {
 
 async function saveUser() {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede crear o modificar usuarios sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se puede crear o modificar usuarios sin conexión a internet.');
         return;
     }
 
@@ -404,7 +404,7 @@ async function saveUser() {
     const role = document.getElementById('newUserRole').value;
 
     if (!username || !pass) {
-        alert('Por favor ingrese el nombre de usuario y la contraseña.');
+        showCustomAlert('Por favor ingrese el nombre de usuario y la contraseña.');
         return;
     }
 
@@ -430,7 +430,7 @@ async function saveUser() {
 
 function editUser(id) {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede editar usuarios sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se puede editar usuarios sin conexión a internet.');
         return;
     }
 
@@ -462,7 +462,7 @@ function cancelEditUser() {
 
 async function deleteUser(id) {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede eliminar usuarios sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se puede eliminar usuarios sin conexión a internet.');
         return;
     }
 
@@ -470,7 +470,7 @@ async function deleteUser(id) {
     if (!user) return;
 
     if (user.username === 'admin') {
-        alert('No se puede eliminar el usuario administrador principal.');
+        showCustomAlert('No se puede eliminar el usuario administrador principal.');
         return;
     }
 
@@ -548,7 +548,7 @@ async function saveNewTable() {
     const name = nameInput.value.trim();
 
     if (!name) {
-        alert('Por favor ingrese el nombre de la mesa.');
+        showCustomAlert('Por favor ingrese el nombre de la mesa.');
         return;
     }
 
@@ -605,7 +605,7 @@ async function deleteTable(id) {
     if (!table) return;
 
     if (table.status === 'ocupada' || (table.items && table.items.length > 0)) {
-        alert('No se puede eliminar una mesa que se encuentra ocupada o tiene pedidos activos.');
+        showCustomAlert('No se puede eliminar una mesa que se encuentra ocupada o tiene pedidos activos.');
         return;
     }
 
@@ -801,7 +801,7 @@ async function saveOrderCustomization() {
     const table = tables.find(t => t.id === currentTableId);
 
     if (!val || !table) {
-        alert('Seleccione un producto o bebida válido.');
+        showCustomAlert('Seleccione un producto o bebida válido.');
         return;
     }
 
@@ -817,7 +817,7 @@ async function saveOrderCustomization() {
         let drink = drinks.find(d => d.id === drinkId);
 
         if (!drink) {
-            alert('No se encontró la bebida seleccionada.');
+            showCustomAlert('No se encontró la bebida seleccionada.');
             return;
         }
 
@@ -830,7 +830,7 @@ async function saveOrderCustomization() {
         let product = products.find(p => p.id === prodId);
 
         if (!product) {
-            alert('No se encontró el plato seleccionado.');
+            showCustomAlert('No se encontró el plato seleccionado.');
             return;
         }
 
@@ -915,7 +915,7 @@ function editOrderItem(index) {
     if (!item) return;
 
     if (item.billed) {
-        alert('Este plato ya fue facturado. Anule el recibo asociado para poder editarlo.');
+        showCustomAlert('Este plato ya fue facturado. Anule el recibo asociado para poder editarlo.');
         return;
     }
 
@@ -1008,7 +1008,7 @@ async function removeOrderItem(index) {
     const item = table.items[index];
 
     if (item && item.billed) {
-        alert('Este plato ya fue facturado. Anule el recibo asociado para poder eliminarlo.');
+        showCustomAlert('Este plato ya fue facturado. Anule el recibo asociado para poder eliminarlo.');
         return;
     }
 
@@ -1050,14 +1050,14 @@ async function sendOrderToKitchen() {
     const table = tables.find(t => t.id === currentTableId);
 
     if (!table || !table.items || table.items.length === 0) {
-        alert('No hay platos o bebidas en esta mesa para enviar a cocina.');
+        showCustomAlert('No hay platos o bebidas en esta mesa para enviar a cocina.');
         return;
     }
 
     let unkitchenedItems = table.items.filter(item => !item.sentToKitchen);
 
     if (unkitchenedItems.length === 0) {
-        alert('Todos los ítems de esta mesa ya fueron enviados a cocina previamente.');
+        showCustomAlert('Todos los ítems de esta mesa ya fueron enviados a cocina previamente.');
         return;
     }
 
@@ -1072,14 +1072,24 @@ async function sendOrderToKitchen() {
         }
     });
 
+    // 1. Marcar la mesa como ocupada inmediatamente en la interfaz y memoria local
     table.status = 'ocupada';
-
     renderOrderItems();
     saveData();
-    await syncDataToCloud();
 
-    alert(`👨‍🍳 ¡Pedido de la ${table.name} enviado a cocina y sincronizado con Google Sheets exitosamente!`);
+    // 2. Intentar sincronizar con la nube de forma segura (si hay un fallo de red, no afecta el estado local)
+    try {
+        await syncDataToCloud();
+        showCustomAlert(`👨‍🍳 ¡Pedido de la ${table.name} enviado a cocina y sincronizado con Google Sheets exitosamente!`);
+    } catch (error) {
+        console.warn("Advertencia: No se pudo sincronizar de inmediato con la nube, pero el pedido quedó guardado localmente.", error);
+        showCustomAlert(`⚠️ Pedido guardado localmente para la ${table.name}. Se sincronizará en cuanto se restablezca la red.`);
+    }
+
+    // Regresar al panel de mesas para reflejar el estado "ocupada"
+    showSection('tables-section');
 }
+
 
 function renderKitchenOrders() {
     const container = document.getElementById('kitchenOrdersContainer');
@@ -1249,7 +1259,7 @@ function openBillSection() {
     const role = localStorage.getItem('restopos_current_role') || 'admin';
 
     if (!table || table.items.length === 0) {
-        alert('Esta mesa no tiene pedidos activos.');
+        showCustomAlert('Esta mesa no tiene pedidos activos.');
         return;
     }
 
@@ -1272,7 +1282,6 @@ function openBillSection() {
     const list = document.getElementById('billItemsList');
     if (!list) return;
 
-    // Contenedor ampliado a 350px para evitar scroll innecesario
     list.style.maxHeight = "350px";
     list.style.overflowY = "auto";
     list.innerHTML = '';
@@ -1348,7 +1357,7 @@ async function generateReceipt() {
     const role = localStorage.getItem('restopos_current_role') || 'admin';
 
     if (role === 'mesero' && appConfig.waiterCanGenerateReceipt === false) {
-        alert('❌ Acción no autorizada: El administrador ha desactivado la generación de facturas para meseros.');
+        showCustomAlert('❌ Acción no autorizada: El administrador ha desactivado la generación de facturas para meseros.');
         return;
     }
 
@@ -1370,7 +1379,7 @@ async function generateReceipt() {
     });
 
     if (selectedIndexes.length === 0) {
-        alert('Seleccione al menos un plato o bebida para generar el recibo.');
+        showCustomAlert('Seleccione al menos un plato o bebida para generar el recibo.');
         return;
     }
 
@@ -1477,6 +1486,38 @@ function renderReceiptsManager() {
     if (container) container.innerHTML = html;
 }
 
+/* ========================================================== */
+/* MODALES PERSONALIZADOS (REEMPLAZO DE ALERT / CONFIRM)      */
+/* ========================================================== */
+
+function showCustomAlert(message, callback) {
+    let alertOverlay = document.getElementById('customAlertModal');
+    if (!alertOverlay) {
+        alertOverlay = document.createElement('div');
+        alertOverlay.id = 'customAlertModal';
+        alertOverlay.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 10001; padding: 1rem;";
+        
+        alertOverlay.innerHTML = `
+            <div style="background: var(--card-bg, #ffffff); padding: 1.5rem; border-radius: 12px; width: 100%; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center;">
+                <h3 style="margin-top: 0; font-size: 1.1rem; color: var(--text);">Aviso</h3>
+                <p id="customAlertMessage" style="font-size: 0.9rem; color: var(--text); margin-bottom: 1.2rem; line-height: 1.4; white-space: pre-line;"></p>
+                <button type="button" id="customAlertOkBtn" class="btn btn-success" style="padding: 0.5rem 1.5rem; font-size: 0.9rem; width: auto; margin: 0; background: var(--success); color: white; border: none; border-radius: 6px; cursor: pointer;">Aceptar</button>
+            </div>
+        `;
+        document.body.appendChild(alertOverlay);
+    }
+
+    document.getElementById('customAlertMessage').innerText = message;
+    alertOverlay.style.display = 'flex';
+
+    const okBtn = document.getElementById('customAlertOkBtn');
+    okBtn.onclick = () => {
+        alertOverlay.style.display = 'none';
+        okBtn.onclick = null;
+        if (typeof callback === 'function') callback();
+    };
+}
+
 async function confirmPayReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
     const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
@@ -1506,6 +1547,25 @@ async function confirmPayReceipt(receiptId) {
         document.body.appendChild(modalOverlay);
     }
 
+    let changeModalOverlay = document.getElementById('customChangeModal');
+    if (!changeModalOverlay) {
+        changeModalOverlay = document.createElement('div');
+        changeModalOverlay.id = 'customChangeModal';
+        changeModalOverlay.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 10000; padding: 1rem;";
+        
+        changeModalOverlay.innerHTML = `
+            <div style="background: var(--card-bg, #ffffff); padding: 1.5rem; border-radius: 12px; width: 100%; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                <h3 style="margin-top: 0; font-size: 1.1rem; color: var(--text);">Confirmar Pago</h3>
+                <div id="changeModalDetails" style="font-size: 0.9rem; color: var(--text); margin-bottom: 1rem; line-height: 1.5;"></div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" id="changeModalCancelBtn" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem; width: auto; margin: 0;">Cancelar</button>
+                    <button type="button" id="changeModalConfirmBtn" class="btn btn-success" style="padding: 0.5rem 1rem; font-size: 0.9rem; width: auto; margin: 0; background: var(--success);">Aceptar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(changeModalOverlay);
+    }
+
     document.getElementById('modalTotalLabel').innerText = `Total a pagar: $${receipt.total.toLocaleString()}`;
     const inputEl = document.getElementById('modalAmountInput');
     inputEl.value = '';
@@ -1516,90 +1576,117 @@ async function confirmPayReceipt(receiptId) {
         const confirmBtn = document.getElementById('modalConfirmBtn');
         const cancelBtn = document.getElementById('modalCancelBtn');
 
-        const cleanup = () => {
+        const cleanupFirst = () => {
             confirmBtn.onclick = null;
             cancelBtn.onclick = null;
             modalOverlay.style.display = 'none';
         };
 
         cancelBtn.onclick = () => {
-            cleanup();
+            cleanupFirst();
             resolve(false);
         };
 
-        confirmBtn.onclick = async () => {
+        confirmBtn.onclick = () => {
             let amountPaid = parseFloat(inputEl.value);
             if (isNaN(amountPaid) || amountPaid < receipt.total) {
-                alert('❌ Monto inválido o insuficiente para cubrir el total de la cuenta.');
+                showCustomAlert('❌ Monto inválido o insuficiente para cubrir el total de la cuenta.');
                 return;
             }
 
             let change = amountPaid - receipt.total;
-            let confirmed = confirm(`💵 Total cuenta: $${receipt.total.toLocaleString()}\n💰 Pagó con: $${amountPaid.toLocaleString()}\n\n👉 CAMBIO A ENTREGAR: $${change.toLocaleString()}\n\n¿Confirmar pago y registrar en Sheets?`);
+            cleanupFirst();
 
-            if (!confirmed) return;
+            const detailsEl = document.getElementById('changeModalDetails');
+            detailsEl.innerHTML = `
+                💵 Total cuenta: $${receipt.total.toLocaleString()}<br>
+                💰 Pagó con: $${amountPaid.toLocaleString()}<br><br>
+                👉 <strong>CAMBIO A ENTREGAR: $${change.toLocaleString()}</strong><br><br>
+                ¿Confirmar pago y registrar en Sheets?
+            `;
+            changeModalOverlay.style.display = 'flex';
 
-            cleanup();
+            const changeConfirmBtn = document.getElementById('changeModalConfirmBtn');
+            const changeCancelBtn = document.getElementById('changeModalCancelBtn');
 
-            let nowFull = new Date();
-            let yyyy = nowFull.getFullYear();
-            let mm = String(nowFull.getMonth() + 1).padStart(2, '0');
-            let dd = String(nowFull.getDate()).padStart(2, '0');
-            let hh = String(nowFull.getHours()).padStart(2, '0');
-            let min = String(nowFull.getMinutes()).padStart(2, '0');
-            let sec = String(nowFull.getSeconds()).padStart(2, '0');
-            
-            let facNumero = `FAC-${yyyy}${mm}${dd}${hh}${min}${sec}`;
+            const cleanupSecond = () => {
+                changeConfirmBtn.onclick = null;
+                changeCancelBtn.onclick = null;
+                changeModalOverlay.style.display = 'none';
+            };
 
-            let dateStr = `${dd}/${mm}/${yyyy}`;
-            let timeStr = nowFull.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+            changeCancelBtn.onclick = () => {
+                cleanupSecond();
+                resolve(false);
+            };
 
-            let newSalesBatch = [];
+            changeConfirmBtn.onclick = async () => {
+                cleanupSecond();
 
-            receipt.items.forEach(item => {
-                let filteredModifications = (item.modifications || []).filter(m => {
-                    let upperM = m.toUpperCase();
-                    if (upperM.startsWith('MANTENER') || (upperM.startsWith('SIN ') && !upperM.includes('ADICIONAL'))) {
-                        return false;
-                    }
-                    return true;
+                let nowFull = new Date();
+                let yyyy = nowFull.getFullYear();
+                let mm = String(nowFull.getMonth() + 1).padStart(2, '0');
+                let dd = String(nowFull.getDate()).padStart(2, '0');
+                let hh = String(nowFull.getHours()).padStart(2, '0');
+                let min = String(nowFull.getMinutes()).padStart(2, '0');
+                let sec = String(nowFull.getSeconds()).padStart(2, '0');
+                
+                let facNumero = `FAC-${yyyy}${mm}${dd}${hh}${min}${sec}`;
+
+                let dateStr = `${dd}/${mm}/${yyyy}`;
+                let timeStr = nowFull.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+                let newSalesBatch = [];
+
+                receipt.items.forEach(item => {
+                    let filteredModifications = (item.modifications || []).filter(m => {
+                        let upperM = m.toUpperCase();
+                        if (upperM.startsWith('MANTENER') || (upperM.startsWith('SIN ') && !upperM.includes('ADICIONAL'))) {
+                            return false;
+                        }
+                        return true;
+                    });
+
+                    let saleRecord = {
+                        facnumero: facNumero,
+                        mesa: table.name,
+                        plato: item.name,
+                        detallesmodificaciones: filteredModifications.length > 0 ? filteredModifications.join(' | ') : 'Ninguna',
+                        valorpagado: item.finalPrice,
+                        fecha: dateStr,
+                        hora: timeStr,
+                        usuario: localStorage.getItem('restopos_current_user') || 'admin'
+                    };
+
+                    salesHistory.push(saleRecord);
+                    newSalesBatch.push(saleRecord);
                 });
 
-                let saleRecord = {
-                    facnumero: facNumero,
-                    mesa: table.name,
-                    plato: item.name,
-                    detallesmodificaciones: filteredModifications.length > 0 ? filteredModifications.join(' | ') : 'Ninguna',
-                    valorpagado: item.finalPrice,
-                    fecha: dateStr,
-                    hora: timeStr,
-                    usuario: localStorage.getItem('restopos_current_user') || 'admin'
-                };
+                table.receipts.splice(receiptIndex, 1);
+                table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
 
-                salesHistory.push(saleRecord);
-                newSalesBatch.push(saleRecord);
-            });
+                await sendNewSalesToCloud(newSalesBatch);
 
-            table.receipts.splice(receiptIndex, 1);
-            table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
+                if (table.items.length === 0 && table.receipts.length === 0) {
+                    table.status = 'libre';
+                    table.receipts = [];
+                    saveData();
+                    await syncDataToCloud();
+                    
+                    showCustomAlert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`, () => {
+                        showSection('tables-section');
+                    });
+                } else {
+                    saveData();
+                    await syncDataToCloud();
+                    
+                    showCustomAlert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`, () => {
+                        openBillSection();
+                    });
+                }
 
-            await sendNewSalesToCloud(newSalesBatch);
-
-            if (table.items.length === 0 && table.receipts.length === 0) {
-                table.status = 'libre';
-                table.receipts = [];
-                saveData();
-                await syncDataToCloud();
-                alert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`);
-                showSection('tables-section');
-            } else {
-                saveData();
-                await syncDataToCloud();
-                alert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`);
-                openBillSection();
-            }
-
-            resolve(true);
+                resolve(true);
+            };
         };
     });
 }
@@ -1688,7 +1775,7 @@ function renderProducts() {
 
 async function saveProduct() {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede modificar el catálogo sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se puede modificar el catálogo sin conexión a internet.');
         return;
     }
 
@@ -1696,7 +1783,7 @@ async function saveProduct() {
     const price = parseFloat(document.getElementById('newProdPrice').value);
 
     if (!name || isNaN(price)) {
-        alert('Complete nombre y precio del plato.');
+        showCustomAlert('Complete nombre y precio del plato.');
         return;
     }
 
@@ -1724,7 +1811,7 @@ async function saveProduct() {
 
 function editProduct(id) {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede editar platos sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se puede editar platos sin conexión a internet.');
         return;
     }
 
@@ -1760,7 +1847,7 @@ function cancelEditProduct() {
 
 async function deleteProduct(id) {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede eliminar platos sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se puede eliminar platos sin conexión a internet.');
         return;
     }
 
@@ -1801,7 +1888,7 @@ function renderDrinks() {
 
 async function saveDrink() {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se pueden crear o modificar bebidas sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se pueden crear o modificar bebidas sin conexión a internet.');
         return;
     }
 
@@ -1809,7 +1896,7 @@ async function saveDrink() {
     const price = parseFloat(document.getElementById('drinkPrice').value);
 
     if (!name || isNaN(price)) {
-        alert('Complete nombre y precio de la bebida.');
+        showCustomAlert('Complete nombre y precio de la bebida.');
         return;
     }
 
@@ -1834,7 +1921,7 @@ async function saveDrink() {
 
 function editDrink(id) {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede editar bebidas sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se puede editar bebidas sin conexión a internet.');
         return;
     }
 
@@ -1862,7 +1949,7 @@ function cancelEditDrink() {
 
 async function deleteDrink(id) {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se pueden eliminar bebidas sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se pueden eliminar bebidas sin conexión a internet.');
         return;
     }
 
@@ -1903,7 +1990,7 @@ function renderAddons() {
 
 async function saveAddon() {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede modificar adicionales sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se puede modificar adicionales sin conexión a internet.');
         return;
     }
 
@@ -1911,7 +1998,7 @@ async function saveAddon() {
     const price = parseFloat(document.getElementById('addonPrice').value);
 
     if (!name || isNaN(price)) {
-        alert('Complete nombre y precio del adicional.');
+        showCustomAlert('Complete nombre y precio del adicional.');
         return;
     }
 
@@ -1937,7 +2024,7 @@ async function saveAddon() {
 
 function editAddon(id) {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede editar adicionales sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se puede editar adicionales sin conexión a internet.');
         return;
     }
 
@@ -1965,7 +2052,7 @@ function cancelEditAddon() {
 
 async function deleteAddon(id) {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede eliminar adicionales sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se puede eliminar adicionales sin conexión a internet.');
         return;
     }
 
@@ -1994,7 +2081,7 @@ function renderInventory() {
 
 async function saveInventoryItem() {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede modificar el inventario sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: No se puede modificar el inventario sin conexión a internet.');
         return;
     }
 
@@ -2116,14 +2203,14 @@ async function saveDataAndSyncCloudSync(successMessage) {
         const result = await response.json();
 
         if (result.status === 'success') {
-            alert(`✅ ${successMessage}`);
+            showCustomAlert(`✅ ${successMessage}`);
         } else {
-            alert(`⚠️ Los cambios se guardaron localmente, pero hubo un error al registrar en Sheets: ${result.message}`);
+            showCustomAlert(`⚠️ Los cambios se guardaron localmente, pero hubo un error al registrar en Sheets: ${result.message}`);
         }
 
     } catch (error) {
         console.error("Error sincronizando con Google Sheets:", error);
-        alert('❌ Error de red: No se pudo verificar la conexión con Google Sheets.');
+        showCustomAlert('❌ Error de red: No se pudo verificar la conexión con Google Sheets.');
     }
 }
 
@@ -2199,14 +2286,5 @@ function saveData() {
 
 
 /* 
-​Teclado numérico nativo en el modal de pago.
-​Consecutivo de factura inmutable con segundos (FAC-AAAAMMDDHHMMSS).
-​Optimización de red: Sincronización masiva y guardado en Google 
-Sheets únicamente al enviar a cocina o al registrar un pago, 
-evitando peticiones innecesarias.
-​Sondeo inteligente de mesas con control de peticiones en vuelo 
-(cada 10 segundos) para evitar saturar la pestaña de red (Network).
-​Interfaz de cuenta ampliada (maxHeight: 350px) para visualizar 
-múltiples productos sin scroll innecesario tanto para meseros 
-como administradores.
+​ventanas emergenyes blancas
 */
