@@ -3,7 +3,7 @@
 /* ========================================================== */
 
 window.onload = async function() {
-    // Primero cargar los datos de Google Sheets
+    // Primero cargar los datos de Google Sheets para asegurar recuperación automática ante borrado de cookies
     await loadDataFromCloud();
 
     // Después comprobar si existe una sesión anterior
@@ -106,7 +106,6 @@ function setupUserSession(username, role, isNewLogin = false) {
     document.getElementById('welcome-msg').innerText = `Usuario: ${username}`;
     document.getElementById('userRoleBadge').innerText = `Rol: ${role}`;
 
-    // Cargar parámetro de alarma en el input del módulo de mesas si es admin
     const alarmParamInput = document.getElementById('waiterAlarmIntervalParam');
     if (alarmParamInput) {
         alarmParamInput.value = appConfig.waiterAlarmInterval || 20;
@@ -123,7 +122,7 @@ function setupUserSession(username, role, isNewLogin = false) {
     }
 
     if (role === 'admin') {
-        document.getElementById('dashboard-view').classList.remove('hidden');
+        showSection('dashboard-view');
         renderDashboardMenu(role);
     } else if (role === 'cocinero') {
         showSection('kitchen-section');
@@ -132,16 +131,14 @@ function setupUserSession(username, role, isNewLogin = false) {
     }
 }
 
-function saveWaiterAlarmConfig() {
+async function saveWaiterAlarmConfig() {
     const val = parseInt(document.getElementById('waiterAlarmIntervalParam').value);
     if (isNaN(val) || val < 5) {
         alert('Ingrese un valor válido en segundos (mínimo 5).');
         return;
     }
     appConfig.waiterAlarmInterval = val;
-    saveData();
-    syncDataToCloud();
-    alert('✅ Configuración de alarma de meseros guardada y sincronizada correctamente.');
+    await saveDataAndSyncCloudSync('Configuración de alarma guardada y sincronizada correctamente.');
 }
 
 function renderDashboardMenu(role) {
@@ -204,7 +201,7 @@ function logout() {
     document.getElementById('passInput').value = '';
 }
 
-function showSection(sectionId) {
+async function showSection(sectionId) {
     const role = localStorage.getItem('restopos_current_role') || 'admin';
 
     if (role === 'mesero' && sectionId !== 'tables-section' && sectionId !== 'order-section' && sectionId !== 'bill-section') {
@@ -216,6 +213,8 @@ function showSection(sectionId) {
         alert('Acceso no autorizado para el rol de cocinero.');
         return;
     }
+
+    await loadDataFromCloud();
 
     const sections = [
         'dashboard-view',
@@ -233,11 +232,15 @@ function showSection(sectionId) {
 
     sections.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
+        if (el) {
+            el.classList.add('hidden');
+        }
     });
 
     const target = document.getElementById(sectionId);
-    if (target) target.classList.remove('hidden');
+    if (target) {
+        target.classList.remove('hidden');
+    }
 
     if (kitchenInterval) {
         clearInterval(kitchenInterval);
@@ -271,7 +274,7 @@ function showSection(sectionId) {
             if (alarmCard) alarmCard.style.display = 'none';
         } else if (role === 'admin') {
             headerBar.style.display = 'none';
-            if (alarmCard) alarmCard.style.display = 'block'; // Visible para admin en mesas
+            if (alarmCard) alarmCard.style.display = 'block';
         }
 
         renderTables();
@@ -374,7 +377,7 @@ function renderUsersAdmin() {
 
 async function saveUser() {
     if (!navigator.onLine) {
-        alert('❌ Acción bloqueada: No se puede crear o modificar usuarios sin conexión a internet asegurada.');
+        alert('❌ Acción bloqueada: No se puede crear o modificar usuarios sin conexión a internet.');
         return;
     }
 
@@ -522,7 +525,7 @@ function renderTablesAdmin() {
     });
 }
 
-function saveNewTable() {
+async function saveNewTable() {
     const nameInput = document.getElementById('newTableName');
     const name = nameInput.value.trim();
 
@@ -535,7 +538,6 @@ function saveNewTable() {
         const table = tables.find(t => t.id === editingTableId);
         if (table) {
             table.name = name;
-            alert(`Mesa actualizada a "${name}" exitosamente.`);
         }
         cancelEditTable();
     } else {
@@ -547,10 +549,9 @@ function saveNewTable() {
             items: [],
             receipts: []
         });
-        alert(`Mesa "${name}" creada exitosamente.`);
     }
 
-    saveData();
+    await saveDataAndSyncCloudSync('Mesa guardada y actualizada en Google Sheets exitosamente.');
     nameInput.value = '';
     renderTablesAdmin();
 }
@@ -581,7 +582,7 @@ function cancelEditTable() {
     if (cancelBtn) cancelBtn.classList.add('hidden');
 }
 
-function deleteTable(id) {
+async function deleteTable(id) {
     const table = tables.find(t => t.id === id);
     if (!table) return;
 
@@ -593,7 +594,7 @@ function deleteTable(id) {
     if (confirm(`¿Desea eliminar la ${table.name}?`)) {
         tables = tables.filter(t => t.id !== id);
         if (editingTableId === id) cancelEditTable();
-        saveData();
+        await saveDataAndSyncCloudSync('Mesa eliminada y actualizada en Google Sheets.');
         renderTablesAdmin();
     }
 }
@@ -657,13 +658,11 @@ async function markTablePickedUp() {
         }
     });
 
-    saveData();
-    await syncDataToCloud();
+    await saveDataAndSyncCloudSync('Pedido marcado como recogido y actualizado en Google Sheets.');
 
     const readyBanner = document.getElementById('readyForPickupBanner');
     if (readyBanner) readyBanner.style.display = 'none';
 
-    alert('✅ Pedido marcado como recogido de cocina y entregado en mesa con éxito.');
     renderOrderItems();
 }
 
@@ -779,7 +778,7 @@ function toggleAddonQuantity(checkbox) {
     }
 }
 
-function saveOrderCustomization() {
+async function saveOrderCustomization() {
     const val = document.getElementById('productSelect').value;
     const table = tables.find(t => t.id === currentTableId);
 
@@ -886,9 +885,9 @@ function saveOrderCustomization() {
 
     table.status = 'ocupada';
 
-    saveData();
     cancelOrderEdit();
     renderOrderItems();
+    await saveDataAndSyncCloudSync('Pedido actualizado y sincronizado en Google Sheets.');
 }
 
 function editOrderItem(index) {
@@ -986,7 +985,7 @@ function renderOrderItems() {
     }
 }
 
-function removeOrderItem(index) {
+async function removeOrderItem(index) {
     const table = tables.find(t => t.id === currentTableId);
     const item = table.items[index];
 
@@ -1003,8 +1002,8 @@ function removeOrderItem(index) {
         table.status = 'libre';
     }
 
-    saveData();
     renderOrderItems();
+    await saveDataAndSyncCloudSync('Ítem eliminado y actualizado en Google Sheets.');
 }
 
 
@@ -1018,7 +1017,7 @@ function playAlarmBeep() {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'square';
-        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime); // Nota E5
+        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime);
         gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
@@ -1057,7 +1056,6 @@ async function sendOrderToKitchen() {
 
     table.status = 'ocupada';
 
-    saveData();
     renderOrderItems();
     await syncDataToCloud();
 
@@ -1217,7 +1215,6 @@ async function markOrderServed(tableId) {
             }
         });
 
-        saveData();
         renderKitchenOrders();
         await syncDataToCloud();
     }
@@ -1313,7 +1310,7 @@ function calculatePartialTotal() {
     }
 }
 
-function generateReceipt() {
+async function generateReceipt() {
     const table = tables.find(t => t.id === currentTableId);
 
     let selectedIndexes = [];
@@ -1347,7 +1344,7 @@ function generateReceipt() {
     };
 
     table.receipts.push(newReceipt);
-    saveData();
+    await syncDataToCloud();
     openBillSection();
 }
 
@@ -1456,28 +1453,25 @@ async function confirmPayReceipt(receiptId) {
         if (table.items.length === 0 && table.receipts.length === 0) {
             table.status = 'libre';
             table.receipts = [];
-            saveData();
             showSection('tables-section');
         } else {
-            saveData();
             openBillSection();
         }
         await syncDataToCloud();
     }
 }
 
-function cancelReceipt(receiptId) {
+async function cancelReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
     const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
 
     if (receiptIndex === -1) return;
 
-    let receipt = table.receipts[receiptIndex];
-
     if (confirm(`¿Anular este recibo? Los ítems volverán a estar disponibles en la cuenta.`)) {
         table.receipts.splice(receiptIndex, 1);
         saveData();
         openBillSection();
+        await syncDataToCloud();
     }
 }
 
@@ -1495,15 +1489,16 @@ function renderRecipeCheckboxes() {
     const container = document.getElementById('recipeComponentsSelector');
     if (!container) return;
 
+    container.style.maxHeight = "130px";
+    container.style.overflowY = "auto";
     container.innerHTML = '';
 
     addons.forEach(ad => {
         const div = document.createElement('div');
+        div.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0.5rem; border-bottom: 1px solid rgba(0,0,0,0.05);";
         div.innerHTML = `
-            <label class="checkbox-label">
-                <input type="checkbox" class="recipe-comp-chk" value="${ad.id}">
-                <span>${ad.name} ${ad.price > 0 ? '($' + ad.price + ')' : '(Base)'}</span>
-            </label>
+            <span style="font-size: 0.85rem; color: var(--text);">${ad.name} ${ad.price > 0 ? '($' + ad.price + ')' : '(Base)'}</span>
+            <input type="checkbox" class="recipe-comp-chk" value="${ad.id}" style="width: 18px; height: 18px; cursor: pointer;">
         `;
         container.appendChild(div);
     });
@@ -1513,7 +1508,14 @@ function renderProducts() {
     const list = document.getElementById('productList');
     if (!list) return;
 
+    list.style.maxHeight = "160px";
+    list.style.overflowY = "auto";
     list.innerHTML = '';
+
+    if (products.length === 0) {
+        list.innerHTML = '<p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center; padding: 0.5rem;">No hay platos registrados.</p>';
+        return;
+    }
 
     products.forEach(p => {
         let compNames = (p.components || []).map(cid => {
@@ -1523,16 +1525,17 @@ function renderProducts() {
 
         const item = document.createElement('div');
         item.className = 'product-row';
+        item.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; margin-bottom: 0.3rem;";
 
         item.innerHTML = `
-            <div class="product-info">
-                <span><strong>${p.name}</strong></span>
-                <span style="font-size:0.75rem; color: var(--text-secondary); display:block;">Incluye: ${compNames || 'Sin componentes base'}</span>
+            <div class="product-info" style="overflow: hidden; flex: 1; margin-right: 0.5rem;">
+                <span style="font-size: 0.9rem; font-weight: bold;">${p.name}</span>
+                <span style="font-size: 0.72rem; color: var(--text-secondary); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Incluye: ${compNames || 'Sin componentes base'}</span>
             </div>
-            <div class="product-actions">
-                <strong>$${p.price.toLocaleString()}</strong>
-                <button onclick="editProduct(${p.id})" class="action-btn" title="Editar">✏️</button>
-                <button onclick="deleteProduct(${p.id})" class="action-btn" title="Eliminar">🗑️</button>
+            <div class="product-actions" style="display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0;">
+                <strong style="font-size: 0.9rem;">$${p.price.toLocaleString()}</strong>
+                <button onclick="editProduct(${p.id})" class="action-btn" title="Editar" style="padding: 0.2rem 0.4rem; font-size: 0.8rem;">✏️</button>
+                <button onclick="deleteProduct(${p.id})" class="action-btn" title="Eliminar" style="padding: 0.2rem 0.4rem; font-size: 0.8rem;">🗑️</button>
             </div>
         `;
 
@@ -1540,7 +1543,12 @@ function renderProducts() {
     });
 }
 
-function saveProduct() {
+async function saveProduct() {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se puede modificar el catálogo sin conexión a internet.');
+        return;
+    }
+
     const name = document.getElementById('newProdName').value.trim();
     const price = parseFloat(document.getElementById('newProdPrice').value);
 
@@ -1561,17 +1569,22 @@ function saveProduct() {
             product.price = price;
             product.components = selectedComponents;
         }
+        cancelEditProduct();
     } else {
         const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
         products.push({ id: newId, name, price, components: selectedComponents });
     }
 
-    saveData();
-    cancelEditProduct();
+    await saveDataAndSyncCloudSync('Plato guardado y sincronizado en Google Sheets exitosamente.');
     renderProducts();
 }
 
 function editProduct(id) {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se puede editar platos sin conexión a internet.');
+        return;
+    }
+
     const product = products.find(p => p.id === id);
     if (product) {
         editingProductId = id;
@@ -1586,7 +1599,7 @@ function editProduct(id) {
         });
 
         document.getElementById('formProductTitle').innerText = 'Editar Plato Principal';
-        document.getElementById('btnSaveProduct').innerText = 'Guardar Cambios';
+        document.getElementById('btnSaveProduct').innerText = 'Guardar Cambios (Online)';
         document.getElementById('btnCancelEdit').classList.remove('hidden');
     }
 }
@@ -1598,15 +1611,20 @@ function cancelEditProduct() {
 
     renderRecipeCheckboxes();
     document.getElementById('formProductTitle').innerText = 'Nombre del Plato Principal';
-    document.getElementById('btnSaveProduct').innerText = 'Guardar Plato';
+    document.getElementById('btnSaveProduct').innerText = 'Guardar Plato (Online)';
     document.getElementById('btnCancelEdit').classList.add('hidden');
 }
 
-function deleteProduct(id) {
-    if (confirm('¿Desea eliminar este plato?')) {
+async function deleteProduct(id) {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se puede eliminar platos sin conexión a internet.');
+        return;
+    }
+
+    if (confirm('¿Desea eliminar permanentemente este plato de la aplicación y de Google Sheets?')) {
         products = products.filter(p => p.id !== id);
         if (editingProductId === id) cancelEditProduct();
-        saveData();
+        await saveDataAndSyncCloudSync('Plato eliminado y actualizado en Google Sheets.');
         renderProducts();
     }
 }
@@ -1638,7 +1656,12 @@ function renderDrinks() {
     });
 }
 
-function saveDrink() {
+async function saveDrink() {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se pueden crear o modificar bebidas sin conexión a internet.');
+        return;
+    }
+
     const name = document.getElementById('drinkName').value.trim();
     const price = parseFloat(document.getElementById('drinkPrice').value);
 
@@ -1653,17 +1676,25 @@ function saveDrink() {
             drink.name = name;
             drink.price = price;
         }
+        cancelEditDrink();
     } else {
         const newId = drinks.length > 0 ? Math.max(...drinks.map(d => d.id)) + 1 : 1;
         drinks.push({ id: newId, name, price });
     }
 
-    saveData();
-    cancelEditDrink();
+    await saveDataAndSyncCloudSync('Bebida guardada y registrada en Google Sheets exitosamente.');
+
+    document.getElementById('drinkName').value = '';
+    document.getElementById('drinkPrice').value = '';
     renderDrinks();
 }
 
 function editDrink(id) {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se puede editar bebidas sin conexión a internet.');
+        return;
+    }
+
     const drink = drinks.find(d => d.id === id);
     if (drink) {
         editingDrinkId = id;
@@ -1671,7 +1702,7 @@ function editDrink(id) {
         document.getElementById('drinkPrice').value = drink.price;
 
         document.getElementById('formDrinkTitle').innerText = 'Editar Bebida';
-        document.getElementById('btnSaveDrink').innerText = 'Guardar Cambios';
+        document.getElementById('btnSaveDrink').innerText = 'Guardar Cambios (Online)';
         document.getElementById('btnCancelDrinkEdit').classList.remove('hidden');
     }
 }
@@ -1682,15 +1713,20 @@ function cancelEditDrink() {
     document.getElementById('drinkPrice').value = '';
 
     document.getElementById('formDrinkTitle').innerText = 'Nombre de la Bebida';
-    document.getElementById('btnSaveDrink').innerText = 'Guardar Bebida';
+    document.getElementById('btnSaveDrink').innerText = 'Guardar Bebida (Online)';
     document.getElementById('btnCancelDrinkEdit').classList.add('hidden');
 }
 
-function deleteDrink(id) {
-    if (confirm('¿Desea eliminar esta bebida?')) {
+async function deleteDrink(id) {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se pueden eliminar bebidas sin conexión a internet.');
+        return;
+    }
+
+    if (confirm('¿Desea eliminar permanentemente esta bebida de la aplicación y de Google Sheets?')) {
         drinks = drinks.filter(d => d.id !== id);
         if (editingDrinkId === id) cancelEditDrink();
-        saveData();
+        await saveDataAndSyncCloudSync('Bebida eliminada y actualizada en Google Sheets.');
         renderDrinks();
     }
 }
@@ -1722,7 +1758,12 @@ function renderAddons() {
     });
 }
 
-function saveAddon() {
+async function saveAddon() {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se puede modificar adicionales sin conexión a internet.');
+        return;
+    }
+
     const name = document.getElementById('addonName').value.trim();
     const price = parseFloat(document.getElementById('addonPrice').value);
 
@@ -1737,17 +1778,27 @@ function saveAddon() {
             addon.name = name;
             addon.price = price;
         }
+        cancelEditAddon();
     } else {
         const newId = addons.length > 0 ? Math.max(...addons.map(a => a.id)) + 1 : 1;
         addons.push({ id: newId, name, price });
     }
 
-    saveData();
-    cancelEditAddon();
+    await saveDataAndSyncCloudSync('Adicional guardado y sincronizado en Google Sheets exitosamente.');
+    
+    // Limpieza automática de los campos de texto tras guardar con éxito
+    document.getElementById('addonName').value = '';
+    document.getElementById('addonPrice').value = '';
+    
     renderAddons();
 }
 
 function editAddon(id) {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se puede editar adicionales sin conexión a internet.');
+        return;
+    }
+
     const addon = addons.find(a => a.id === id);
     if (addon) {
         editingAddonId = id;
@@ -1755,7 +1806,7 @@ function editAddon(id) {
         document.getElementById('addonPrice').value = addon.price;
 
         document.getElementById('formAddonTitle').innerText = 'Editar Adicional';
-        document.getElementById('btnSaveAddon').innerText = 'Guardar Cambios';
+        document.getElementById('btnSaveAddon').innerText = 'Guardar Cambios (Online)';
         document.getElementById('btnCancelAddonEdit').classList.remove('hidden');
     }
 }
@@ -1766,15 +1817,20 @@ function cancelEditAddon() {
     document.getElementById('addonPrice').value = '';
 
     document.getElementById('formAddonTitle').innerText = 'Nombre del Adicional / Componente';
-    document.getElementById('btnSaveAddon').innerText = 'Guardar Adicional';
+    document.getElementById('btnSaveAddon').innerText = 'Guardar Adicional (Online)';
     document.getElementById('btnCancelAddonEdit').classList.add('hidden');
 }
 
-function deleteAddon(id) {
-    if (confirm('¿Desea eliminar este adicional?')) {
+async function deleteAddon(id) {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se puede eliminar adicionales sin conexión a internet.');
+        return;
+    }
+
+    if (confirm('¿Desea eliminar permanentemente este adicional de la aplicación y de Google Sheets?')) {
         addons = addons.filter(a => a.id !== id);
         if (editingAddonId === id) cancelEditAddon();
-        saveData();
+        await saveDataAndSyncCloudSync('Adicional eliminado y actualizado en Google Sheets.');
         renderAddons();
     }
 }
@@ -1794,7 +1850,12 @@ function renderInventory() {
     });
 }
 
-function saveInventoryItem() {
+async function saveInventoryItem() {
+    if (!navigator.onLine) {
+        alert('❌ Acción bloqueada: No se puede modificar el inventario sin conexión a internet.');
+        return;
+    }
+
     const nameVal = document.getElementById('invName').value;
     const stock = parseFloat(document.getElementById('invStock').value);
     const unit = document.getElementById('invUnit').value;
@@ -1807,12 +1868,13 @@ function saveInventoryItem() {
             unit
         });
 
-        saveData();
         renderInventory();
 
         document.getElementById('invName').value = '';
         document.getElementById('invStock').value = '';
         document.getElementById('invUnit').value = '';
+
+        await saveDataAndSyncCloudSync('Insumo de inventario guardado y sincronizado en Google Sheets.');
     }
 }
 
@@ -1982,6 +2044,25 @@ function saveData() {
 }
 
 
-
-/* ALARMA DE LISTO EN COCINA PARA EL MESERO
-BOTON PARAMETRIZABLE DE TIEMPO DE ACTIVACIONNDE LA ALARMA */
+/* Sincronización online obligatoria para Bebidas:
+ saveDrink y deleteDrink ahora verifican la conexión a internet
+  (navigator.onLine) y llaman a saveDataAndSyncCloudSync(), 
+  garantizando que la adición, modificación o eliminación de 
+  cualquier bebida impacte inmediatamente en Google Sheets.
+​Protección contra borrado de cookies/LocalStorage: Se modificó 
+la inicialización en window.onload y el flujo de
+ loadDataFromCloud() para que, si el navegador del usuario
+  limpia el almacenamiento local, los datos de las bebidas 
+  (y de todo el sistema) se descarguen y reescriban en 
+  localStorage desde Google Sheets de forma automática y 
+  transparente antes de permitir operaciones. 
+  
+ aplicado la corrección solicitada en la función saveAddon()
+  (correspondiente al módulo de Gestión de Adicionales y
+       Acompañamientos). Ahora, una vez que el usuario guarda
+        o registra con éxito un adicional, los campos de texto 
+        (addonName y addonPrice) se limpian automáticamente 
+        de manera inmediata, facilitando el ingreso fluido 
+        de nuevos registros sin necesidad de borrarlos manualmente.
+  
+  */
