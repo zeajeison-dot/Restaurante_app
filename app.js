@@ -286,17 +286,28 @@ async function showSection(sectionId) {
 
         renderTables();
 
+        let isRefreshingTables = false;
+
         tablesRefreshInterval = setInterval(async () => {
             const tablesSec = document.getElementById('tables-section');
             if (tablesSec && !tablesSec.classList.contains('hidden')) {
-                await loadDataFromCloud();
-                renderTables();
-                checkWaiterReadyAlarm();
+                if (isRefreshingTables) return;
+                isRefreshingTables = true;
+
+                try {
+                    await loadDataFromCloud();
+                    renderTables();
+                    checkWaiterReadyAlarm();
+                } catch (e) {
+                    console.error("Error en sondeo automático de mesas:", e);
+                } finally {
+                    isRefreshingTables = false;
+                }
             } else {
                 clearInterval(tablesRefreshInterval);
                 tablesRefreshInterval = null;
             }
-        }, 3000);
+        }, 10000);
 
     } else if (sectionId === 'kitchen-section') {
         const kitchenSection = document.getElementById('kitchen-section');
@@ -894,7 +905,7 @@ async function saveOrderCustomization() {
 
     cancelOrderEdit();
     renderOrderItems();
-    await saveDataAndSyncCloudSync('Pedido actualizado y sincronizado en Google Sheets.');
+    saveData();
 }
 
 function editOrderItem(index) {
@@ -1010,7 +1021,7 @@ async function removeOrderItem(index) {
     }
 
     renderOrderItems();
-    await saveDataAndSyncCloudSync('Ítem eliminado y actualizado en Google Sheets.');
+    saveData();
 }
 
 
@@ -1064,9 +1075,10 @@ async function sendOrderToKitchen() {
     table.status = 'ocupada';
 
     renderOrderItems();
+    saveData();
     await syncDataToCloud();
 
-    alert(`👨‍🍳 ¡Pedido de la ${table.name} enviado a cocina exitosamente!`);
+    alert(`👨‍🍳 ¡Pedido de la ${table.name} enviado a cocina y sincronizado con Google Sheets exitosamente!`);
 }
 
 function renderKitchenOrders() {
@@ -1260,6 +1272,9 @@ function openBillSection() {
     const list = document.getElementById('billItemsList');
     if (!list) return;
 
+    // Contenedor ampliado a 350px para evitar scroll innecesario
+    list.style.maxHeight = "350px";
+    list.style.overflowY = "auto";
     list.innerHTML = '';
 
     table.items.forEach((item, index) => {
@@ -1565,23 +1580,18 @@ async function confirmPayReceipt(receiptId) {
                 newSalesBatch.push(saleRecord);
             });
 
-            // 1. Eliminar el recibo pagado del arreglo de recibos
             table.receipts.splice(receiptIndex, 1);
-
-            // 2. ELIMINAR DEFINITIVAMENTE los ítems pagados de la mesa (table.items)
             table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
 
-            // 3. Enviar el registro de la venta a la nube
             await sendNewSalesToCloud(newSalesBatch);
 
-            // 4. Validar estado final de la mesa
             if (table.items.length === 0 && table.receipts.length === 0) {
                 table.status = 'libre';
                 table.receipts = [];
                 saveData();
                 await syncDataToCloud();
                 alert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`);
-                showSection('tables-section'); // Libera la mesa y regresa al salón
+                showSection('tables-section');
             } else {
                 saveData();
                 await syncDataToCloud();
@@ -1593,8 +1603,6 @@ async function confirmPayReceipt(receiptId) {
         };
     });
 }
-
-
 
 async function cancelReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
@@ -2017,7 +2025,7 @@ async function saveInventoryItem() {
 /* 10. SINCRONIZACIÓN CON GOOGLE SHEETS Y LOCALSTORAGE        */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzzgU5BRotYmqWObRfxNWvYF34ywMmgo_-0ynSs9bfxiKAqt1fQze_TcyjJ-YKJqQUh7w/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwjYgpr8CH-cSBzhfMoLfMXNAqhxVxEzGFwMh-cDzF90bA5aRdpX1B6G8D-i476ndEV3Q/exec";
 
 
 async function loadDataFromCloud() {
@@ -2190,6 +2198,15 @@ function saveData() {
 }
 
 
-/* SE GUARDA LAS FACTURAS EN SHEETS
-  
-  */
+/* 
+​Teclado numérico nativo en el modal de pago.
+​Consecutivo de factura inmutable con segundos (FAC-AAAAMMDDHHMMSS).
+​Optimización de red: Sincronización masiva y guardado en Google 
+Sheets únicamente al enviar a cocina o al registrar un pago, 
+evitando peticiones innecesarias.
+​Sondeo inteligente de mesas con control de peticiones en vuelo 
+(cada 10 segundos) para evitar saturar la pestaña de red (Network).
+​Interfaz de cuenta ampliada (maxHeight: 350px) para visualizar 
+múltiples productos sin scroll innecesario tanto para meseros 
+como administradores.
+*/
