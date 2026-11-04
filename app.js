@@ -1407,15 +1407,20 @@ function printReceiptDoc(receiptId) {
         let itemModsHtml = '';
         if (item.modifications && item.modifications.length > 0) {
             item.modifications.forEach(m => {
-                if (m.includes('(+$') || m.includes('($')) {
-                    itemModsHtml += `<div style="font-size: 0.8rem; color: #555; margin-left: 10px;">&bull; ${m}</div>`;
+                // CORRECCIÓN: Mostrar todas las modificaciones relevantes, especialmente adicionales y cambios con costo o sustituciones
+                let upperM = m.toUpperCase();
+                if (upperM.includes('ADICIONAL') || upperM.includes('CAMBIADO') || upperM.includes('SIN ') || upperM.includes('(+$') || upperM.includes('+$')) {
+                    itemModsHtml += `<div style="font-size: 0.8rem; color: #333; margin-left: 12px; text-align: left;">&bull; ${m}</div>`;
                 }
             });
         }
 
         selectedItemsHtml += `
-            <div style="margin-bottom: 6px; text-align: left;">
-                <strong>${item.name}</strong> — <strong>$${item.finalPrice.toLocaleString()}</strong>
+            <div style="margin-bottom: 8px; text-align: left; border-bottom: 1px dotted #ccc; padding-bottom: 4px;">
+                <div style="display: flex; justify-content: space-between;">
+                    <strong>${item.name}</strong> 
+                    <strong>$${item.finalPrice.toLocaleString()}</strong>
+                </div>
                 ${itemModsHtml}
             </div>
         `;
@@ -1439,6 +1444,7 @@ function printReceiptDoc(receiptId) {
     receiptWindow.document.close();
     receiptWindow.print();
 }
+
 
 function renderReceiptsManager() {
     const table = tables.find(t => t.id === currentTableId);
@@ -2149,8 +2155,19 @@ async function loadDataFromCloud() {
             inventory = cloudData.inventory;
         }
 
-        if (Array.isArray(cloudData.salesHistory)) {
-            salesHistory = cloudData.salesHistory;
+        // CORRECCIÓN: Fusionar o conservar el historial local si la nube trae datos, evitando que se borre
+        if (Array.isArray(cloudData.salesHistory) && cloudData.salesHistory.length > 0) {
+            // Unir y eliminar duplicados basados en el número de factura y plato para mantener un historial íntegro
+            let localHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
+            let combined = [...cloudData.salesHistory];
+            
+            localHistory.forEach(localItem => {
+                let exists = combined.some(c => c.facnumero === localItem.facnumero && c.plato === localItem.plato && c.hora === localItem.hora);
+                if (!exists) {
+                    combined.push(localItem);
+                }
+            });
+            salesHistory = combined;
         }
 
         if (cloudData.config && typeof cloudData.config === 'object') {
@@ -2176,6 +2193,7 @@ async function loadDataFromCloud() {
         return false;
     }
 }
+
 
 async function saveDataAndSyncCloudSync(successMessage) {
     saveData();
@@ -2223,7 +2241,8 @@ async function syncDataToCloud() {
             addons: addons,
             inventory: inventory,
             users: users,
-            config: appConfig
+            config: appConfig,
+            salesHistory: salesHistory // 🛡️ Garantiza que el historial total se envíe y persista siempre en la nube
         };
 
         const response = await fetch(WEB_APP_URL, {
@@ -2237,7 +2256,7 @@ async function syncDataToCloud() {
 
         const result = await response.json();
         if (result.status === 'success') {
-            console.log("Datos sincronizados con Google Sheets correctamente.");
+            console.log("Datos y historial sincronizados con Google Sheets correctamente.");
         } else {
             console.error("Error en el servidor de Sheets:", result.message);
         }
@@ -2246,6 +2265,7 @@ async function syncDataToCloud() {
         console.error("No se pudo conectar con la nube para sincronizar:", error);
     }
 }
+
 
 async function sendNewSalesToCloud(salesArray) {
     try {
@@ -2279,12 +2299,14 @@ function saveData() {
     localStorage.setItem('restopos_products', JSON.stringify(products));
     localStorage.setItem('restopos_drinks', JSON.stringify(drinks));
     localStorage.setItem('restopos_inventory', JSON.stringify(inventory));
-    localStorage.setItem('restopos_sales_history', JSON.stringify(salesHistory));
+    localStorage.setItem('restopos_sales_history', JSON.stringify(salesHistory)); // 🛡️ Persistencia local inquebrantable
     localStorage.setItem('restopos_users', JSON.stringify(users));
     localStorage.setItem('restopos_config', JSON.stringify(appConfig));
 }
 
 
+
 /* 
-​ventanas emergenyes blancas
+​impresion de recibos con los adicionales 
+persistencia del historial de facturas
 */
