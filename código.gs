@@ -69,12 +69,21 @@ function getSheetData(sheetName) {
 
   var headers = rows[0].map(function(h) { return h.toString().trim().toLowerCase(); });
   var result = [];
+  var tz = Session.getScriptTimeZone();
 
   for (var i = 1; i < rows.length; i++) {
     var obj = {};
 
     for (var j = 0; j < headers.length; j++) {
       var val = rows[i][j];
+
+      if (sheetName === "Facturas") {
+        if (headers[j] === 'fecha' && val instanceof Date) {
+          val = Utilities.formatDate(val, tz, "dd/MM/yyyy");
+        } else if (headers[j] === 'hora' && val instanceof Date) {
+          val = Utilities.formatDate(val, tz, "hh:mm:ss a");
+        }
+      }
 
       try {
         val = JSON.parse(val);
@@ -173,15 +182,27 @@ function appendNewSales(sheetName, dataArray) {
   var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(h) { return h.toString().trim().toLowerCase(); });
   
   var rowsToInsert = [];
+  var tz = Session.getScriptTimeZone();
 
   dataArray.forEach(function(item) {
     var row = [];
     headers.forEach(function(header) {
       var val = item[header] !== undefined ? item[header] : "";
       
-      // Forzar formato numérico correcto en Google Sheets para el valor pagado
       if (header === 'valorpagado' && val !== "") {
         val = Number(val);
+      } else if (header === 'fecha') {
+        if (val instanceof Date) {
+          val = Utilities.formatDate(val, tz, "dd/MM/yyyy");
+        } else {
+          val = String(val);
+        }
+      } else if (header === 'hora') {
+        if (val instanceof Date) {
+          val = Utilities.formatDate(val, tz, "hh:mm:ss a");
+        } else {
+          val = String(val);
+        }
       } else if (typeof val === 'object') {
         val = JSON.stringify(val);
       }
@@ -192,19 +213,26 @@ function appendNewSales(sheetName, dataArray) {
   });
 
   if (rowsToInsert.length > 0) {
-    if (sheet.getLastRow() > 1) {
-      sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).clearContent();
-    }
-    
-    var range = sheet.getRange(2, 1, rowsToInsert.length, headers.length);
+    var nextRow = sheet.getLastRow() + 1;
+    var range = sheet.getRange(nextRow, 1, rowsToInsert.length, headers.length);
     range.setValues(rowsToInsert);
 
     var valIndex = headers.indexOf('valorpagado');
     if (valIndex !== -1) {
-      sheet.getRange(2, valIndex + 1, rowsToInsert.length, 1).setNumberFormat("$#,##0");
+      sheet.getRange(nextRow, valIndex + 1, rowsToInsert.length, 1).setNumberFormat("$#,##0");
+    }
+
+    var fechaIndex = headers.indexOf('fecha');
+    if (fechaIndex !== -1) {
+      sheet.getRange(nextRow, fechaIndex + 1, rowsToInsert.length, 1).setNumberFormat("@");
+    }
+
+    var horaIndex = headers.indexOf('hora');
+    if (horaIndex !== -1) {
+      sheet.getRange(nextRow, horaIndex + 1, rowsToInsert.length, 1).setNumberFormat("@");
     }
   }
 }
 
 
-// V6
+V8

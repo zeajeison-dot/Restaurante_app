@@ -1470,7 +1470,6 @@ async function confirmPayReceipt(receiptId) {
 
     let receipt = table.receipts[receiptIndex];
 
-    // Crear o reutilizar un modal personalizado para solicitar el pago con teclado numérico
     let modalOverlay = document.getElementById('customPaymentModal');
     if (!modalOverlay) {
         modalOverlay = document.createElement('div');
@@ -1527,7 +1526,6 @@ async function confirmPayReceipt(receiptId) {
 
             cleanup();
 
-            // Generación de consecutivo único con segundos (FAC-AAAAMMDDHHMMSS)
             let nowFull = new Date();
             let yyyy = nowFull.getFullYear();
             let mm = String(nowFull.getMonth() + 1).padStart(2, '0');
@@ -1540,6 +1538,8 @@ async function confirmPayReceipt(receiptId) {
 
             let dateStr = `${dd}/${mm}/${yyyy}`;
             let timeStr = nowFull.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+            let newSalesBatch = [];
 
             receipt.items.forEach(item => {
                 let filteredModifications = (item.modifications || []).filter(m => {
@@ -1562,27 +1562,38 @@ async function confirmPayReceipt(receiptId) {
                 };
 
                 salesHistory.push(saleRecord);
+                newSalesBatch.push(saleRecord);
             });
 
+            // 1. Eliminar el recibo pagado del arreglo de recibos
             table.receipts.splice(receiptIndex, 1);
+
+            // 2. ELIMINAR DEFINITIVAMENTE los ítems pagados de la mesa (table.items)
             table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
 
+            // 3. Enviar el registro de la venta a la nube
+            await sendNewSalesToCloud(newSalesBatch);
+
+            // 4. Validar estado final de la mesa
             if (table.items.length === 0 && table.receipts.length === 0) {
                 table.status = 'libre';
                 table.receipts = [];
                 saveData();
-                showSection('tables-section');
+                await syncDataToCloud();
+                alert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`);
+                showSection('tables-section'); // Libera la mesa y regresa al salón
             } else {
                 saveData();
+                await syncDataToCloud();
+                alert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`);
                 openBillSection();
             }
 
-            await syncDataToCloud();
-            alert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`);
             resolve(true);
         };
     });
 }
+
 
 
 async function cancelReceipt(receiptId) {
@@ -2006,12 +2017,8 @@ async function saveInventoryItem() {
 /* 10. SINCRONIZACIÓN CON GOOGLE SHEETS Y LOCALSTORAGE        */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwjYgpr8CH-cSBzhfMoLfMXNAqhxVxEzGFwMh-cDzF90bA5aRdpX1B6G8D-i476ndEV3Q/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzzgU5BRotYmqWObRfxNWvYF34ywMmgo_-0ynSs9bfxiKAqt1fQze_TcyjJ-YKJqQUh7w/exec";
 
-
-/* ---------------------------------------------------------- */
-/* CARGAR DATOS DESDE GOOGLE SHEETS                           */
-/* ---------------------------------------------------------- */
 
 async function loadDataFromCloud() {
     try {
@@ -2075,11 +2082,6 @@ async function loadDataFromCloud() {
     }
 }
 
-
-/* ---------------------------------------------------------- */
-/* GUARDAR DATOS Y SINCRONIZAR CON GOOGLE SHEETS              */
-/* ---------------------------------------------------------- */
-
 async function saveDataAndSyncCloudSync(successMessage) {
     saveData();
 
@@ -2090,7 +2092,6 @@ async function saveDataAndSyncCloudSync(successMessage) {
             drinks: drinks,
             addons: addons,
             inventory: inventory,
-            salesHistory: salesHistory,
             users: users,
             config: appConfig
         };
@@ -2118,11 +2119,6 @@ async function saveDataAndSyncCloudSync(successMessage) {
     }
 }
 
-
-/* ---------------------------------------------------------- */
-/* SINCRONIZAR DATOS CON GOOGLE SHEETS                        */
-/* ---------------------------------------------------------- */
-
 async function syncDataToCloud() {
     try {
         const payload = {
@@ -2131,7 +2127,6 @@ async function syncDataToCloud() {
             drinks: drinks,
             addons: addons,
             inventory: inventory,
-            salesHistory: salesHistory,
             users: users,
             config: appConfig
         };
@@ -2157,10 +2152,31 @@ async function syncDataToCloud() {
     }
 }
 
+async function sendNewSalesToCloud(salesArray) {
+    try {
+        const payload = {
+            salesHistory: salesArray
+        };
 
-/* ---------------------------------------------------------- */
-/* GUARDAR DATOS LOCALMENTE                                   */
-/* ---------------------------------------------------------- */
+        const response = await fetch(WEB_APP_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error("Error HTTP: " + response.status);
+        }
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            console.log("Venta registrada e inmutabilizada en Google Sheets correctamente.");
+        } else {
+            console.error("Error en el servidor de Sheets al registrar venta:", result.message);
+        }
+    } catch (error) {
+        console.error("No se pudo conectar con la nube para registrar la venta:", error);
+    }
+}
 
 function saveData() {
     localStorage.setItem('restopos_tables', JSON.stringify(tables));
@@ -2174,6 +2190,6 @@ function saveData() {
 }
 
 
-/* SE GUARDA LAS FAVTURAS EN SHEETS
+/* SE GUARDA LAS FACTURAS EN SHEETS
   
   */
