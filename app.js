@@ -1470,73 +1470,118 @@ async function confirmPayReceipt(receiptId) {
 
     let receipt = table.receipts[receiptIndex];
 
-    let amountPaidInput = prompt(`Total a pagar: $${receipt.total.toLocaleString()}\nIngrese el valor con el que paga el cliente:`);
-    if (amountPaidInput === null) return;
-
-    let amountPaid = parseFloat(amountPaidInput);
-    if (isNaN(amountPaid) || amountPaid < receipt.total) {
-        alert('❌ Monto inválido o insuficiente para cubrir el total de la cuenta.');
-        return;
+    // Crear o reutilizar un modal personalizado para solicitar el pago con teclado numérico
+    let modalOverlay = document.getElementById('customPaymentModal');
+    if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'customPaymentModal';
+        modalOverlay.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 1rem;";
+        
+        modalOverlay.innerHTML = `
+            <div style="background: var(--card-bg, #ffffff); padding: 1.5rem; border-radius: 12px; width: 100%; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                <h3 style="margin-top: 0; font-size: 1.1rem; color: var(--text);">Cobrar Cuenta</h3>
+                <p id="modalTotalLabel" style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></p>
+                <label style="font-size: 0.85rem; display: block; margin-bottom: 0.3rem; color: var(--text);">Ingrese el valor con el que paga:</label>
+                <input type="number" id="modalAmountInput" inputmode="numeric" pattern="[0-9]*" placeholder="Ej: 50000" style="width: 100%; padding: 0.6rem; font-size: 1.1rem; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; margin-bottom: 1rem; background: var(--bg); color: var(--text);">
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" id="modalCancelBtn" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem; width: auto; margin: 0;">Cancelar</button>
+                    <button type="button" id="modalConfirmBtn" class="btn btn-success" style="padding: 0.5rem 1rem; font-size: 0.9rem; width: auto; margin: 0; background: var(--success);">Aceptar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
     }
 
-    let change = amountPaid - receipt.total;
+    document.getElementById('modalTotalLabel').innerText = `Total a pagar: $${receipt.total.toLocaleString()}`;
+    const inputEl = document.getElementById('modalAmountInput');
+    inputEl.value = '';
+    modalOverlay.style.display = 'flex';
+    setTimeout(() => inputEl.focus(), 100);
 
-    let confirmed = confirm(`💵 Total cuenta: $${receipt.total.toLocaleString()}\n💰 Pagó con: $${amountPaid.toLocaleString()}\n\n👉 CAMBIO A ENTREGAR: $${change.toLocaleString()}\n\n¿Confirmar pago y registrar en Sheets?`);
+    return new Promise((resolve) => {
+        const confirmBtn = document.getElementById('modalConfirmBtn');
+        const cancelBtn = document.getElementById('modalCancelBtn');
 
-    if (!confirmed) return;
-
-    // Generar consecutivo de factura único con segundos (Ej: FAC-20261104143045) para evitar duplicados en el mismo minuto
-    let nowFull = new Date();
-    let yyyy = nowFull.getFullYear();
-    let mm = String(nowFull.getMonth() + 1).padStart(2, '0');
-    let dd = String(nowFull.getDate()).padStart(2, '0');
-    let hh = String(nowFull.getHours()).padStart(2, '0');
-    let min = String(nowFull.getMinutes()).padStart(2, '0');
-    let sec = String(nowFull.getSeconds()).padStart(2, '0');
-    
-    let facNumero = `FAC-${yyyy}${mm}${dd}${hh}${min}${sec}`;
-
-    let dateStr = `${dd}/${mm}/${yyyy}`;
-    let timeStr = nowFull.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-
-    receipt.items.forEach(item => {
-        let filteredModifications = (item.modifications || []).filter(m => {
-            let upperM = m.toUpperCase();
-            if (upperM.startsWith('MANTENER') || (upperM.startsWith('SIN ') && !upperM.includes('ADICIONAL'))) {
-                return false;
-            }
-            return true;
-        });
-
-        let saleRecord = {
-            facnumero: facNumero,
-            mesa: table.name,
-            plato: item.name,
-            detallesmodificaciones: filteredModifications.length > 0 ? filteredModifications.join(' | ') : 'Ninguna',
-            valorpagado: item.finalPrice,
-            fecha: dateStr,
-            hora: timeStr,
-            usuario: localStorage.getItem('restopos_current_user') || 'admin'
+        const cleanup = () => {
+            confirmBtn.onclick = null;
+            cancelBtn.onclick = null;
+            modalOverlay.style.display = 'none';
         };
 
-        salesHistory.push(saleRecord);
+        cancelBtn.onclick = () => {
+            cleanup();
+            resolve(false);
+        };
+
+        confirmBtn.onclick = async () => {
+            let amountPaid = parseFloat(inputEl.value);
+            if (isNaN(amountPaid) || amountPaid < receipt.total) {
+                alert('❌ Monto inválido o insuficiente para cubrir el total de la cuenta.');
+                return;
+            }
+
+            let change = amountPaid - receipt.total;
+            let confirmed = confirm(`💵 Total cuenta: $${receipt.total.toLocaleString()}\n💰 Pagó con: $${amountPaid.toLocaleString()}\n\n👉 CAMBIO A ENTREGAR: $${change.toLocaleString()}\n\n¿Confirmar pago y registrar en Sheets?`);
+
+            if (!confirmed) return;
+
+            cleanup();
+
+            // Generación de consecutivo único con segundos (FAC-AAAAMMDDHHMMSS)
+            let nowFull = new Date();
+            let yyyy = nowFull.getFullYear();
+            let mm = String(nowFull.getMonth() + 1).padStart(2, '0');
+            let dd = String(nowFull.getDate()).padStart(2, '0');
+            let hh = String(nowFull.getHours()).padStart(2, '0');
+            let min = String(nowFull.getMinutes()).padStart(2, '0');
+            let sec = String(nowFull.getSeconds()).padStart(2, '0');
+            
+            let facNumero = `FAC-${yyyy}${mm}${dd}${hh}${min}${sec}`;
+
+            let dateStr = `${dd}/${mm}/${yyyy}`;
+            let timeStr = nowFull.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+            receipt.items.forEach(item => {
+                let filteredModifications = (item.modifications || []).filter(m => {
+                    let upperM = m.toUpperCase();
+                    if (upperM.startsWith('MANTENER') || (upperM.startsWith('SIN ') && !upperM.includes('ADICIONAL'))) {
+                        return false;
+                    }
+                    return true;
+                });
+
+                let saleRecord = {
+                    facnumero: facNumero,
+                    mesa: table.name,
+                    plato: item.name,
+                    detallesmodificaciones: filteredModifications.length > 0 ? filteredModifications.join(' | ') : 'Ninguna',
+                    valorpagado: item.finalPrice,
+                    fecha: dateStr,
+                    hora: timeStr,
+                    usuario: localStorage.getItem('restopos_current_user') || 'admin'
+                };
+
+                salesHistory.push(saleRecord);
+            });
+
+            table.receipts.splice(receiptIndex, 1);
+            table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
+
+            if (table.items.length === 0 && table.receipts.length === 0) {
+                table.status = 'libre';
+                table.receipts = [];
+                saveData();
+                showSection('tables-section');
+            } else {
+                saveData();
+                openBillSection();
+            }
+
+            await syncDataToCloud();
+            alert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`);
+            resolve(true);
+        };
     });
-
-    table.receipts.splice(receiptIndex, 1);
-    table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
-
-    if (table.items.length === 0 && table.receipts.length === 0) {
-        table.status = 'libre';
-        table.receipts = [];
-        saveData();
-        showSection('tables-section');
-    } else {
-        saveData();
-        openBillSection();
-    }
-
-    await syncDataToCloud();
-    alert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`);
 }
 
 
