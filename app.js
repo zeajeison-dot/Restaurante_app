@@ -1485,15 +1485,16 @@ async function confirmPayReceipt(receiptId) {
 
     if (!confirmed) return;
 
-    // Generar consecutivo de factura con estructura exacta FAC-AAAAMMDDHHMM (formato 24 horas)
+    // Generar consecutivo de factura único con segundos (Ej: FAC-20261104143045) para evitar duplicados en el mismo minuto
     let nowFull = new Date();
     let yyyy = nowFull.getFullYear();
     let mm = String(nowFull.getMonth() + 1).padStart(2, '0');
     let dd = String(nowFull.getDate()).padStart(2, '0');
     let hh = String(nowFull.getHours()).padStart(2, '0');
     let min = String(nowFull.getMinutes()).padStart(2, '0');
+    let sec = String(nowFull.getSeconds()).padStart(2, '0');
     
-    let facNumero = `FAC-${yyyy}${mm}${dd}${hh}${min}`;
+    let facNumero = `FAC-${yyyy}${mm}${dd}${hh}${min}${sec}`;
 
     let dateStr = `${dd}/${mm}/${yyyy}`;
     let timeStr = nowFull.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
@@ -1537,6 +1538,7 @@ async function confirmPayReceipt(receiptId) {
     await syncDataToCloud();
     alert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`);
 }
+
 
 async function cancelReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
