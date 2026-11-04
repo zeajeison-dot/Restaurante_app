@@ -3,10 +3,8 @@
 /* ========================================================== */
 
 window.onload = async function() {
-    // Primero cargar los datos de Google Sheets para asegurar recuperación automática ante borrado de cookies
     await loadDataFromCloud();
 
-    // Después comprobar si existe una sesión anterior
     if (localStorage.getItem('restopos_logged') === 'true') {
         const username = localStorage.getItem('restopos_current_user') || 'admin';
         const role = localStorage.getItem('restopos_current_role') || 'admin';
@@ -15,7 +13,6 @@ window.onload = async function() {
     }
 };
 
-// Estructuras de datos principales (con respaldo en localStorage)
 let tables = JSON.parse(localStorage.getItem('restopos_tables')) || [
     { id: 1, name: 'Mesa 1', status: 'libre', items: [], receipts: [] },
     { id: 2, name: 'Mesa 2', status: 'libre', items: [], receipts: [] },
@@ -50,9 +47,9 @@ let drinks = JSON.parse(localStorage.getItem('restopos_drinks')) || [
 ];
 
 let inventory = JSON.parse(localStorage.getItem('restopos_inventory')) || [];
-let appConfig = JSON.parse(localStorage.getItem('restopos_config')) || { waiterAlarmInterval: 20 };
+let salesHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
+let appConfig = JSON.parse(localStorage.getItem('restopos_config')) || { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true };
 
-// Variables de control de sesión y edición activa
 let currentTableId = null;
 let editingProductId = null;
 let editingDrinkId = null;
@@ -111,6 +108,11 @@ function setupUserSession(username, role, isNewLogin = false) {
         alarmParamInput.value = appConfig.waiterAlarmInterval || 20;
     }
 
+    const waiterReceiptToggle = document.getElementById('waiterCanGenerateReceiptParam');
+    if (waiterReceiptToggle) {
+        waiterReceiptToggle.checked = appConfig.waiterCanGenerateReceipt !== false;
+    }
+
     if (isNewLogin) {
         if (role === 'cocinero') {
             showSection('kitchen-section');
@@ -133,12 +135,17 @@ function setupUserSession(username, role, isNewLogin = false) {
 
 async function saveWaiterAlarmConfig() {
     const val = parseInt(document.getElementById('waiterAlarmIntervalParam').value);
+    const canGen = document.getElementById('waiterCanGenerateReceiptParam')?.checked ?? true;
+
     if (isNaN(val) || val < 5) {
         alert('Ingrese un valor válido en segundos (mínimo 5).');
         return;
     }
+
     appConfig.waiterAlarmInterval = val;
-    await saveDataAndSyncCloudSync('Configuración de alarma guardada y sincronizada correctamente.');
+    appConfig.waiterCanGenerateReceipt = canGen;
+
+    await saveDataAndSyncCloudSync('Configuración y permisos guardados correctamente en Sheets.');
 }
 
 function renderDashboardMenu(role) {
@@ -1227,6 +1234,7 @@ async function markOrderServed(tableId) {
 
 function openBillSection() {
     const table = tables.find(t => t.id === currentTableId);
+    const role = localStorage.getItem('restopos_current_role') || 'admin';
 
     if (!table || table.items.length === 0) {
         alert('Esta mesa no tiene pedidos activos.');
@@ -1293,6 +1301,16 @@ function openBillSection() {
     calculatePartialTotal();
     renderReceiptsManager();
 
+    const generateReceiptBtn = document.querySelector('button[onclick="generateReceipt()"]');
+    if (generateReceiptBtn) {
+        if (role === 'admin') {
+            generateReceiptBtn.style.display = 'block';
+        } else if (role === 'mesero') {
+            let canGen = appConfig.waiterCanGenerateReceipt !== false;
+            generateReceiptBtn.style.display = canGen ? 'block' : 'none';
+        }
+    }
+
     document.getElementById('order-section').classList.add('hidden');
     document.getElementById('bill-section').classList.remove('hidden');
 }
@@ -1312,6 +1330,12 @@ function calculatePartialTotal() {
 
 async function generateReceipt() {
     const table = tables.find(t => t.id === currentTableId);
+    const role = localStorage.getItem('restopos_current_role') || 'admin';
+
+    if (role === 'mesero' && appConfig.waiterCanGenerateReceipt === false) {
+        alert('❌ Acción no autorizada: El administrador ha desactivado la generación de facturas para meseros.');
+        return;
+    }
 
     let selectedIndexes = [];
     let partialTotal = 0;
@@ -1446,19 +1470,72 @@ async function confirmPayReceipt(receiptId) {
 
     let receipt = table.receipts[receiptIndex];
 
-    if (confirm(`¿Confirmar pago del Recibo por valor de $${receipt.total.toLocaleString()}?`)) {
-        table.receipts.splice(receiptIndex, 1);
-        table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
+    let amountPaidInput = prompt(`Total a pagar: $${receipt.total.toLocaleString()}\nIngrese el valor con el que paga el cliente:`);
+    if (amountPaidInput === null) return;
 
-        if (table.items.length === 0 && table.receipts.length === 0) {
-            table.status = 'libre';
-            table.receipts = [];
-            showSection('tables-section');
-        } else {
-            openBillSection();
-        }
-        await syncDataToCloud();
+    let amountPaid = parseFloat(amountPaidInput);
+    if (isNaN(amountPaid) || amountPaid < receipt.total) {
+        alert('❌ Monto inválido o insuficiente para cubrir el total de la cuenta.');
+        return;
     }
+
+    let change = amountPaid - receipt.total;
+
+    let confirmed = confirm(`💵 Total cuenta: $${receipt.total.toLocaleString()}\n💰 Pagó con: $${amountPaid.toLocaleString()}\n\n👉 CAMBIO A ENTREGAR: $${change.toLocaleString()}\n\n¿Confirmar pago y registrar en Sheets?`);
+
+    if (!confirmed) return;
+
+    // Generar consecutivo de factura con estructura exacta FAC-AAAAMMDDHHMM (formato 24 horas)
+    let nowFull = new Date();
+    let yyyy = nowFull.getFullYear();
+    let mm = String(nowFull.getMonth() + 1).padStart(2, '0');
+    let dd = String(nowFull.getDate()).padStart(2, '0');
+    let hh = String(nowFull.getHours()).padStart(2, '0');
+    let min = String(nowFull.getMinutes()).padStart(2, '0');
+    
+    let facNumero = `FAC-${yyyy}${mm}${dd}${hh}${min}`;
+
+    let dateStr = `${dd}/${mm}/${yyyy}`;
+    let timeStr = nowFull.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+    receipt.items.forEach(item => {
+        let filteredModifications = (item.modifications || []).filter(m => {
+            let upperM = m.toUpperCase();
+            if (upperM.startsWith('MANTENER') || (upperM.startsWith('SIN ') && !upperM.includes('ADICIONAL'))) {
+                return false;
+            }
+            return true;
+        });
+
+        let saleRecord = {
+            facnumero: facNumero,
+            mesa: table.name,
+            plato: item.name,
+            detallesmodificaciones: filteredModifications.length > 0 ? filteredModifications.join(' | ') : 'Ninguna',
+            valorpagado: item.finalPrice,
+            fecha: dateStr,
+            hora: timeStr,
+            usuario: localStorage.getItem('restopos_current_user') || 'admin'
+        };
+
+        salesHistory.push(saleRecord);
+    });
+
+    table.receipts.splice(receiptIndex, 1);
+    table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
+
+    if (table.items.length === 0 && table.receipts.length === 0) {
+        table.status = 'libre';
+        table.receipts = [];
+        saveData();
+        showSection('tables-section');
+    } else {
+        saveData();
+        openBillSection();
+    }
+
+    await syncDataToCloud();
+    alert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`);
 }
 
 async function cancelReceipt(receiptId) {
@@ -1786,7 +1863,6 @@ async function saveAddon() {
 
     await saveDataAndSyncCloudSync('Adicional guardado y sincronizado en Google Sheets exitosamente.');
     
-    // Limpieza automática de los campos de texto tras guardar con éxito
     document.getElementById('addonName').value = '';
     document.getElementById('addonPrice').value = '';
     
@@ -1883,7 +1959,7 @@ async function saveInventoryItem() {
 /* 10. SINCRONIZACIÓN CON GOOGLE SHEETS Y LOCALSTORAGE        */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzYEWa6iM0KEj2stpMe0f-nhCBatB1cJAkZ5P9790NQOM6JA0ltCgY3wpCtcUXM0hI9Bw/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwjYgpr8CH-cSBzhfMoLfMXNAqhxVxEzGFwMh-cDzF90bA5aRdpX1B6G8D-i476ndEV3Q/exec";
 
 
 /* ---------------------------------------------------------- */
@@ -1922,6 +1998,10 @@ async function loadDataFromCloud() {
 
         if (Array.isArray(cloudData.inventory)) {
             inventory = cloudData.inventory;
+        }
+
+        if (Array.isArray(cloudData.salesHistory)) {
+            salesHistory = cloudData.salesHistory;
         }
 
         if (cloudData.config && typeof cloudData.config === 'object') {
@@ -1963,6 +2043,7 @@ async function saveDataAndSyncCloudSync(successMessage) {
             drinks: drinks,
             addons: addons,
             inventory: inventory,
+            salesHistory: salesHistory,
             users: users,
             config: appConfig
         };
@@ -2003,6 +2084,7 @@ async function syncDataToCloud() {
             drinks: drinks,
             addons: addons,
             inventory: inventory,
+            salesHistory: salesHistory,
             users: users,
             config: appConfig
         };
@@ -2039,30 +2121,12 @@ function saveData() {
     localStorage.setItem('restopos_products', JSON.stringify(products));
     localStorage.setItem('restopos_drinks', JSON.stringify(drinks));
     localStorage.setItem('restopos_inventory', JSON.stringify(inventory));
+    localStorage.setItem('restopos_sales_history', JSON.stringify(salesHistory));
     localStorage.setItem('restopos_users', JSON.stringify(users));
     localStorage.setItem('restopos_config', JSON.stringify(appConfig));
 }
 
 
-/* Sincronización online obligatoria para Bebidas:
- saveDrink y deleteDrink ahora verifican la conexión a internet
-  (navigator.onLine) y llaman a saveDataAndSyncCloudSync(), 
-  garantizando que la adición, modificación o eliminación de 
-  cualquier bebida impacte inmediatamente en Google Sheets.
-​Protección contra borrado de cookies/LocalStorage: Se modificó 
-la inicialización en window.onload y el flujo de
- loadDataFromCloud() para que, si el navegador del usuario
-  limpia el almacenamiento local, los datos de las bebidas 
-  (y de todo el sistema) se descarguen y reescriban en 
-  localStorage desde Google Sheets de forma automática y 
-  transparente antes de permitir operaciones. 
-  
- aplicado la corrección solicitada en la función saveAddon()
-  (correspondiente al módulo de Gestión de Adicionales y
-       Acompañamientos). Ahora, una vez que el usuario guarda
-        o registra con éxito un adicional, los campos de texto 
-        (addonName y addonPrice) se limpian automáticamente 
-        de manera inmediata, facilitando el ingreso fluido 
-        de nuevos registros sin necesidad de borrarlos manualmente.
+/* SE GUARDA LAS FAVTURAS EN SHEETS
   
   */

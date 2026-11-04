@@ -41,7 +41,20 @@ function getAllData() {
     drinks: getSheetData("Bebidas"),
     addons: getSheetData("Adicionales"),
     inventory: getSheetData("Inventario"),
-    users: getSheetData("Usuarios")
+    salesHistory: getSheetData("Facturas"),
+    users: getSheetData("Usuarios"),
+    config: getConfigData()
+  };
+}
+
+function getConfigData() {
+  var sheet = SS.getSheetByName("Config");
+  if (!sheet) return { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true };
+  var rows = sheet.getDataRange().getValues();
+  if (rows.length < 2) return { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true };
+  return {
+    waiterAlarmInterval: Number(rows[1][0]) || 20,
+    waiterCanGenerateReceipt: rows[1][1] !== false && rows[1][1] !== "false"
   };
 }
 
@@ -83,6 +96,15 @@ function saveAllData(data) {
   if (data.addons) saveSheetData("Adicionales", data.addons);
   if (data.inventory) saveSheetData("Inventario", data.inventory);
   
+  if (data.salesHistory) {
+    var sheetFacturas = SS.getSheetByName("Facturas");
+    if (!sheetFacturas) {
+      sheetFacturas = SS.insertSheet("Facturas");
+      sheetFacturas.appendRow(["facnumero", "mesa", "plato", "detallesmodificaciones", "valorpagado", "fecha", "hora", "usuario"]);
+    }
+    appendNewSales("Facturas", data.salesHistory);
+  }
+  
   if (data.users) {
     var sheetUsers = SS.getSheetByName("Usuarios");
     if (!sheetUsers) {
@@ -90,6 +112,18 @@ function saveAllData(data) {
       sheetUsers.appendRow(["id", "username", "pass", "role"]);
     }
     saveSheetData("Usuarios", data.users);
+  }
+
+  if (data.config) {
+    var sheetConfig = SS.getSheetByName("Config");
+    if (!sheetConfig) {
+      sheetConfig = SS.insertSheet("Config");
+      sheetConfig.appendRow(["waiterAlarmInterval", "waiterCanGenerateReceipt"]);
+    } else {
+      sheetConfig.clearContents();
+      sheetConfig.appendRow(["waiterAlarmInterval", "waiterCanGenerateReceipt"]);
+    }
+    sheetConfig.appendRow([data.config.waiterAlarmInterval || 20, data.config.waiterCanGenerateReceipt !== false]);
   }
 }
 
@@ -131,5 +165,46 @@ function saveSheetData(sheetName, dataArray) {
   }
 }
 
+function appendNewSales(sheetName, dataArray) {
+  var sheet = SS.getSheetByName(sheetName);
+  if (!sheet || dataArray.length === 0) return;
 
-// V3
+  var lastCol = sheet.getLastColumn();
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(h) { return h.toString().trim().toLowerCase(); });
+  
+  var rowsToInsert = [];
+
+  dataArray.forEach(function(item) {
+    var row = [];
+    headers.forEach(function(header) {
+      var val = item[header] !== undefined ? item[header] : "";
+      
+      // Forzar formato numérico correcto en Google Sheets para el valor pagado
+      if (header === 'valorpagado' && val !== "") {
+        val = Number(val);
+      } else if (typeof val === 'object') {
+        val = JSON.stringify(val);
+      }
+      
+      row.push(val);
+    });
+    rowsToInsert.push(row);
+  });
+
+  if (rowsToInsert.length > 0) {
+    if (sheet.getLastRow() > 1) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).clearContent();
+    }
+    
+    var range = sheet.getRange(2, 1, rowsToInsert.length, headers.length);
+    range.setValues(rowsToInsert);
+
+    var valIndex = headers.indexOf('valorpagado');
+    if (valIndex !== -1) {
+      sheet.getRange(2, valIndex + 1, rowsToInsert.length, 1).setNumberFormat("$#,##0");
+    }
+  }
+}
+
+
+// V6
