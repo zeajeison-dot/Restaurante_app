@@ -1,3 +1,7 @@
+/* ========================================================== */
+/* BACKEND RESTOPOS - GOOGLE APPS SCRIPT (VERSIÓN INTEGRADA)  */
+/* ========================================================== */
+
 var SS = SpreadsheetApp.getActiveSpreadsheet();
 
 function doGet(e) {
@@ -5,6 +9,10 @@ function doGet(e) {
 
   if (action === 'getData') {
     return ContentService.createTextOutput(JSON.stringify(getAllData()))
+      .setMimeType(ContentService.MimeType.JSON);
+  } 
+  else if (action === 'getDashboardData') {
+    return ContentService.createTextOutput(JSON.stringify(getDashboardDataOnly()))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -44,6 +52,14 @@ function getAllData() {
     salesHistory: getSheetData("Facturas"),
     users: getSheetData("Usuarios"),
     config: getConfigData()
+  };
+}
+
+// Función optimizada: Solo consulta el historial de facturas bajo demanda para el Dashboard
+function getDashboardDataOnly() {
+  return {
+    status: "success",
+    salesHistory: getSheetData("Facturas")
   };
 }
 
@@ -235,4 +251,4 @@ function appendNewSales(sheetName, dataArray) {
 }
 
 
-V8
+V10

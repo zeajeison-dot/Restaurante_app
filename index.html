@@ -58,6 +58,18 @@
             </div>
             <div class="grid" id="dashboardMenuGrid"></div>
         </div>
+        
+        <!-- MÓDULO DE DASHBOARD ANALÍTICO DE VENTAS -->
+<div id="dashboard-analytics-section" class="hidden" style="padding: 1rem;">
+    <h2>📊 Dashboard de Ventas</h2>
+    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Resumen de rendimiento y analíticas del restaurante</p>
+
+    <!-- Contenedor obligatorio donde app.js inyecta las métricas -->
+    <div id="dashboardAnalyticsContainer"></div>
+
+    <button class="btn btn-secondary admin-back-btn" onclick="showSection('dashboard-view')" style="margin-top: 1.5rem;">Volver al Menú</button>
+</div>
+
 
         <!-- GESTIÓN DE MESAS -->
         <div id="tables-section" class="card hidden">

@@ -46,7 +46,7 @@ let drinks = JSON.parse(localStorage.getItem('restopos_drinks')) || [
     { id: 3, name: 'Limonada natural', price: 5000 }
 ];
 
-let inventory = JSON.parse(localStorage.getItem('restopos_inventory')) || [];
+// Historial de ventas acumulado e inmutable para el dashboard
 let salesHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
 let appConfig = JSON.parse(localStorage.getItem('restopos_config')) || { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true };
 
@@ -154,15 +154,16 @@ function renderDashboardMenu(role) {
 
     grid.innerHTML = '';
 
+    // Tarjetas del menú principal del Administrador (Módulo de Inventario eliminado)
     let menuCards = [
+        { title: '📊 Dashboard de Ventas', desc: 'Analíticas y resultados comerciales', action: "showSection('dashboard-analytics-section')" },
         { title: '🪑 Mesas & Pedidos', desc: 'Control de salón', action: "showSection('tables-section')" },
         { title: '👨‍🍳 Módulo de Cocina', desc: 'Comandas en tiempo real', action: "showSection('kitchen-section')" },
         { title: '👥 Gestión de Usuarios', desc: 'Crear usuarios y permisos', action: "showSection('users-admin-section')" },
         { title: '⚙️ Gestionar Mesas', desc: 'Crear / Editar mesas', action: "showSection('tables-admin-section')" },
         { title: '🍔 Catálogo de Platos', desc: 'Platos y recetas', action: "showSection('catalog-section')" },
         { title: '🥤 Bebidas', desc: 'Gestión de bebidas', action: "showSection('drinks-section')" },
-        { title: '➕ Adicionales', desc: 'Extras con/sin costo', action: "showSection('addons-section')" },
-        { title: '📦 Inventario', desc: 'Control de insumos', action: "showSection('inventory-section')" }
+        { title: '➕ Adicionales', desc: 'Extras con/sin costo', action: "showSection('addons-section')" }
     ];
 
     menuCards.forEach(card => {
@@ -195,7 +196,7 @@ function logout() {
         'catalog-section',
         'drinks-section',
         'addons-section',
-        'inventory-section'
+        'dashboard-analytics-section'
     ];
 
     sections.forEach(id => {
@@ -210,6 +211,12 @@ function logout() {
 
 async function showSection(sectionId) {
     const role = localStorage.getItem('restopos_current_role') || 'admin';
+
+    // Validación de seguridad estricta para el Dashboard Analítico (Exclusivo Admin)
+    if (sectionId === 'dashboard-analytics-section' && role !== 'admin') {
+        showCustomAlert('❌ Acceso denegado: El módulo de Dashboard es exclusivo para el rol de Administrador.');
+        return;
+    }
 
     if (role === 'mesero' && sectionId !== 'tables-section' && sectionId !== 'order-section' && sectionId !== 'bill-section') {
         showCustomAlert('Acceso no autorizado para el rol de mesero.');
@@ -234,7 +241,7 @@ async function showSection(sectionId) {
         'catalog-section',
         'drinks-section',
         'addons-section',
-        'inventory-section'
+        'dashboard-analytics-section'
     ];
 
     sections.forEach(id => {
@@ -345,8 +352,8 @@ async function showSection(sectionId) {
     } else if (sectionId === 'addons-section') {
         cancelEditAddon();
         renderAddons();
-    } else if (sectionId === 'inventory-section') {
-        renderInventory();
+    } else if (sectionId === 'dashboard-analytics-section') {
+        renderSalesDashboard(); // Carga perezosa de analíticas del dashboard
     }
 }
 
@@ -522,8 +529,7 @@ function renderTablesAdmin() {
     const list = document.getElementById('tablesAdminList');
     if (!list) return;
 
-    // CORRECCIÓN: Ajustar el alto máximo de la lista de mesas para mostrar más elementos sin scroll innecesario
-    list.style.maxHeight = "550px"; // antes 350px Puedes cambiar este valor (ej. 400px o 450px) según lo alto que desees el módulo
+    list.style.maxHeight = "350px";
     list.style.overflowY = "auto";
     list.innerHTML = '';
 
@@ -545,7 +551,6 @@ function renderTablesAdmin() {
         list.appendChild(item);
     });
 }
-
 
 async function saveNewTable() {
     const nameInput = document.getElementById('newTableName');
@@ -1076,12 +1081,10 @@ async function sendOrderToKitchen() {
         }
     });
 
-    // 1. Marcar la mesa como ocupada inmediatamente en la interfaz y memoria local
     table.status = 'ocupada';
     renderOrderItems();
     saveData();
 
-    // 2. Intentar sincronizar con la nube de forma segura (si hay un fallo de red, no afecta el estado local)
     try {
         await syncDataToCloud();
         showCustomAlert(`👨‍🍳 ¡Pedido de la ${table.name} enviado a cocina y sincronizado con Google Sheets exitosamente!`);
@@ -1090,10 +1093,8 @@ async function sendOrderToKitchen() {
         showCustomAlert(`⚠️ Pedido guardado localmente para la ${table.name}. Se sincronizará en cuanto se restablezca la red.`);
     }
 
-    // Regresar al panel de mesas para reflejar el estado "ocupada"
     showSection('tables-section');
 }
-
 
 function renderKitchenOrders() {
     const container = document.getElementById('kitchenOrdersContainer');
@@ -1411,7 +1412,6 @@ function printReceiptDoc(receiptId) {
         let itemModsHtml = '';
         if (item.modifications && item.modifications.length > 0) {
             item.modifications.forEach(m => {
-                // CORRECCIÓN: Mostrar todas las modificaciones relevantes, especialmente adicionales y cambios con costo o sustituciones
                 let upperM = m.toUpperCase();
                 if (upperM.includes('ADICIONAL') || upperM.includes('CAMBIADO') || upperM.includes('SIN ') || upperM.includes('(+$') || upperM.includes('+$')) {
                     itemModsHtml += `<div style="font-size: 0.8rem; color: #333; margin-left: 12px; text-align: left;">&bull; ${m}</div>`;
@@ -1448,7 +1448,6 @@ function printReceiptDoc(receiptId) {
     receiptWindow.document.close();
     receiptWindow.print();
 }
-
 
 function renderReceiptsManager() {
     const table = tables.find(t => t.id === currentTableId);
@@ -2076,45 +2075,101 @@ async function deleteAddon(id) {
 
 
 /* ========================================================== */
-/* 9. GESTIÓN DE INVENTARIO                                   */
+/* 9. MÓDULO DE DASHBOARD ANALÍTICO DE VENTAS (BLINDADO)      */
 /* ========================================================== */
 
-function renderInventory() {
-    const list = document.getElementById('inventoryList');
-    if (!list) return;
-
-    list.innerHTML = '<h3>Insumos Registrados</h3>';
-    inventory.forEach(i => {
-        list.innerHTML += `<div class="order-item"><span>${i.name}</span><strong>${i.stock} ${i.unit}</strong></div>`;
-    });
-}
-
-async function saveInventoryItem() {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se puede modificar el inventario sin conexión a internet.');
+async function renderSalesDashboard() {
+    const container = document.getElementById('dashboardAnalyticsContainer');
+    if (!container) {
+        console.error("No se encontró el elemento #dashboardAnalyticsContainer en el HTML.");
         return;
     }
 
-    const nameVal = document.getElementById('invName').value;
-    const stock = parseFloat(document.getElementById('invStock').value);
-    const unit = document.getElementById('invUnit').value;
+    container.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <p>🔄 Consultando historial de facturas en la nube...</p>
+        </div>
+    `;
 
-    if (nameVal && !isNaN(stock) && unit) {
-        inventory.push({
-            id: inventory.length + 1,
-            name: nameVal,
-            stock,
-            unit
-        });
+    try {
+        const response = await fetch(WEB_APP_URL + "?action=getDashboardData");
+        if (!response.ok) throw new Error("Error HTTP: " + response.status);
+        
+        const result = await response.json();
 
-        renderInventory();
-
-        document.getElementById('invName').value = '';
-        document.getElementById('invStock').value = '';
-        document.getElementById('invUnit').value = '';
-
-        await saveDataAndSyncCloudSync('Insumo de inventario guardado y sincronizado en Google Sheets.');
+        if (result.status === 'success' && Array.isArray(result.salesHistory)) {
+            salesHistory = result.salesHistory;
+            localStorage.setItem('restopos_sales_history', JSON.stringify(salesHistory));
+        } else {
+            throw new Error(result.message || "Respuesta inválida del servidor.");
+        }
+    } catch (e) {
+        console.warn("No se pudo actualizar el historial desde la nube, usando caché local.", e);
+        salesHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
     }
+
+    container.innerHTML = '';
+
+    // Validar si el historial de ventas existe y tiene elementos
+    if (!Array.isArray(salesHistory) || salesHistory.length === 0) {
+        container.innerHTML = `
+            <div style="background: #ffffff; border: 1px solid var(--border); padding: 2rem; border-radius: 12px; text-align: center; color: var(--text-secondary);">
+                <h3 style="font-size: 1rem; margin-bottom: 0.5rem; color: var(--text);">Sin datos de ventas registrados</h3>
+                <p style="font-size: 0.85rem;">Asegúrate de que la hoja se llama "Facturas" en tu Google Sheet o comienza a cobrar cuentas para generar registros.</p>
+            </div>
+        `;
+        return;
+    }
+
+    let totalRevenue = 0;
+    let totalInvoicesSet = new Set();
+    let productCounts = {};
+
+    salesHistory.forEach(sale => {
+        let price = parseFloat(sale.valorpagado) || 0;
+        totalRevenue += price;
+        if (sale.facnumero) totalInvoicesSet.add(sale.facnumero);
+
+        let plato = sale.plato || 'Producto General';
+        productCounts[plato] = (productCounts[plato] || 0) + 1;
+    });
+
+    let totalInvoices = totalInvoicesSet.size;
+    let averageTicket = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+
+    let sortedProducts = Object.entries(productCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    let topProductsHtml = '';
+    sortedProducts.forEach(([prod, count]) => {
+        topProductsHtml += `
+            <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px dashed var(--border); font-size: 0.85rem;">
+                <span>${prod}</span>
+                <strong>${count} vendidos</strong>
+            </div>
+        `;
+    });
+
+    container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">VENTA TOTAL</span>
+                <strong style="font-size: 1.1rem; color: var(--primary);">$${Math.round(totalRevenue).toLocaleString()}</strong>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">TICKET PROMEDIO</span>
+                <strong style="font-size: 1.1rem; color: var(--success);">$${Math.round(averageTicket).toLocaleString()}</strong>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">TOTAL FACTURAS</span>
+                <strong style="font-size: 1.1rem; color: var(--text);">${totalInvoices}</strong>
+            </div>
+        </div>
+
+        <div style="background: #ffffff; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem;">
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text);">🏆 Top Productos Más Vendidos</h4>
+            ${topProductsHtml}
+        </div>
+    `;
 }
 
 
@@ -2122,7 +2177,7 @@ async function saveInventoryItem() {
 /* 10. SINCRONIZACIÓN CON GOOGLE SHEETS Y LOCALSTORAGE        */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwjYgpr8CH-cSBzhfMoLfMXNAqhxVxEzGFwMh-cDzF90bA5aRdpX1B6G8D-i476ndEV3Q/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyxNS-oNkfnLk6SDOSz45G4mb0qX5L5j4PbpzjSRnYBCm8YQ95i8TxLQBx9ju1KFJKyrA/exec";
 
 
 async function loadDataFromCloud() {
@@ -2155,25 +2210,6 @@ async function loadDataFromCloud() {
             addons = cloudData.addons;
         }
 
-        if (Array.isArray(cloudData.inventory)) {
-            inventory = cloudData.inventory;
-        }
-
-        // CORRECCIÓN: Fusionar o conservar el historial local si la nube trae datos, evitando que se borre
-        if (Array.isArray(cloudData.salesHistory) && cloudData.salesHistory.length > 0) {
-            // Unir y eliminar duplicados basados en el número de factura y plato para mantener un historial íntegro
-            let localHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
-            let combined = [...cloudData.salesHistory];
-            
-            localHistory.forEach(localItem => {
-                let exists = combined.some(c => c.facnumero === localItem.facnumero && c.plato === localItem.plato && c.hora === localItem.hora);
-                if (!exists) {
-                    combined.push(localItem);
-                }
-            });
-            salesHistory = combined;
-        }
-
         if (cloudData.config && typeof cloudData.config === 'object') {
             appConfig = cloudData.config;
         }
@@ -2198,7 +2234,6 @@ async function loadDataFromCloud() {
     }
 }
 
-
 async function saveDataAndSyncCloudSync(successMessage) {
     saveData();
 
@@ -2208,7 +2243,6 @@ async function saveDataAndSyncCloudSync(successMessage) {
             products: products,
             drinks: drinks,
             addons: addons,
-            inventory: inventory,
             users: users,
             config: appConfig
         };
@@ -2243,10 +2277,8 @@ async function syncDataToCloud() {
             products: products,
             drinks: drinks,
             addons: addons,
-            inventory: inventory,
             users: users,
-            config: appConfig,
-            salesHistory: salesHistory // 🛡️ Garantiza que el historial total se envíe y persista siempre en la nube
+            config: appConfig
         };
 
         const response = await fetch(WEB_APP_URL, {
@@ -2260,7 +2292,7 @@ async function syncDataToCloud() {
 
         const result = await response.json();
         if (result.status === 'success') {
-            console.log("Datos y historial sincronizados con Google Sheets correctamente.");
+            console.log("Datos sincronizados con Google Sheets correctamente.");
         } else {
             console.error("Error en el servidor de Sheets:", result.message);
         }
@@ -2269,7 +2301,6 @@ async function syncDataToCloud() {
         console.error("No se pudo conectar con la nube para sincronizar:", error);
     }
 }
-
 
 async function sendNewSalesToCloud(salesArray) {
     try {
@@ -2302,8 +2333,7 @@ function saveData() {
     localStorage.setItem('restopos_addons', JSON.stringify(addons));
     localStorage.setItem('restopos_products', JSON.stringify(products));
     localStorage.setItem('restopos_drinks', JSON.stringify(drinks));
-    localStorage.setItem('restopos_inventory', JSON.stringify(inventory));
-    localStorage.setItem('restopos_sales_history', JSON.stringify(salesHistory)); // 🛡️ Persistencia local inquebrantable
+    localStorage.setItem('restopos_sales_history', JSON.stringify(salesHistory));
     localStorage.setItem('restopos_users', JSON.stringify(users));
     localStorage.setItem('restopos_config', JSON.stringify(appConfig));
 }
@@ -2311,6 +2341,5 @@ function saveData() {
 
 
 /* 
-​impresion de recibos con los adicionales 
-persistencia del historial de facturas
+​Eliminacion de inventario y creacionndel dashboard
 */
