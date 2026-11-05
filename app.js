@@ -522,6 +522,9 @@ function renderTablesAdmin() {
     const list = document.getElementById('tablesAdminList');
     if (!list) return;
 
+    // CORRECCIÓN: Ajustar el alto máximo de la lista de mesas para mostrar más elementos sin scroll innecesario
+    list.style.maxHeight = "550px"; // antes 350px Puedes cambiar este valor (ej. 400px o 450px) según lo alto que desees el módulo
+    list.style.overflowY = "auto";
     list.innerHTML = '';
 
     tables.forEach(t => {
@@ -542,6 +545,7 @@ function renderTablesAdmin() {
         list.appendChild(item);
     });
 }
+
 
 async function saveNewTable() {
     const nameInput = document.getElementById('newTableName');
