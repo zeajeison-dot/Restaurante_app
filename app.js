@@ -295,7 +295,7 @@ async function showSection(sectionId) {
             }
         }, 10000);
 
-        } else if (sectionId === 'kitchen-section') {
+            } else if (sectionId === 'kitchen-section') {
         const kitchenSection = document.getElementById('kitchen-section');
         if (!kitchenSection) return;
 
@@ -308,23 +308,31 @@ async function showSection(sectionId) {
 
         let localLastUpdated = appConfig.lastUpdated || 0;
 
-        // Sondeo inteligente de bajo consumo (cada 4 segundos)
+        // 1. Temporizador local: Actualiza la cuenta regresiva en pantalla CADA SEGUNDO sin tocar Google Sheets
+        kitchenInterval = setInterval(() => {
+            if (kitchenSection && !kitchenSection.classList.contains('hidden')) {
+                renderKitchenOrders();
+            } else {
+                clearInterval(kitchenInterval);
+                kitchenInterval = null;
+            }
+        }, 1000);
+
+        // 2. Sondeo en segundo plano a la nube: Consulta únicamente el timestamp cada 15 segundos para buscar nuevos platos
         let isRefreshingKitchen = false;
-        kitchenInterval = setInterval(async () => {
+        const cloudPollInterval = setInterval(async () => {
             if (kitchenSection && !kitchenSection.classList.contains('hidden')) {
                 if (isRefreshingKitchen) return;
                 isRefreshingKitchen = true;
                 try {
-                    // 1. Petición ultraligera: Solo pregunta la marca de tiempo (no descarga tablas)
                     const resCheck = await fetch(WEB_APP_URL + "?action=getLastUpdated");
                     if (resCheck.ok) {
                         const checkData = await resCheck.json();
                         if (checkData && checkData.status === 'success') {
-                            // 2. Solo si la nube tiene un timestamp mayor, procedemos a descargar los datos completos
                             if (checkData.lastUpdated > localLastUpdated) {
                                 localLastUpdated = checkData.lastUpdated;
-                                await loadDataFromCloud(); // Descarga completa solo cuando hay cambios reales
-                                renderKitchenOrders();     // Refresca la pantalla de cocina al instante
+                                await loadDataFromCloud(); // Descarga la nueva comanda solo si el mesero envió algo
+                                renderKitchenOrders();     
                             }
                         }
                     }
@@ -334,11 +342,9 @@ async function showSection(sectionId) {
                     isRefreshingKitchen = false;
                 }
             } else {
-                clearInterval(kitchenInterval);
-                kitchenInterval = null;
+                clearInterval(cloudPollInterval);
             }
-        }, 60000); // Intervalo ajustado a 60 segundos para un balance perfecto entre inmediatez y ahorro de cuota
-
+        }, 60000); // Consulta a la nube cada 60 segundos (cero impacto en cuotas)
 
     } else if (sectionId === 'users-admin-section') {
         cancelEditUser();
