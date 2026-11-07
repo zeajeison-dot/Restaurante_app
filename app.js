@@ -8,7 +8,7 @@
 window.onload = async function() {
     await loadDataFromCloud();
 
-    if (localStorage.getItem('restopos_logged') === 'true') {
+    if (localStorage.getItem('restopos_logged') == 'true') {
         const username = localStorage.getItem('restopos_current_user') || 'admin';
         const role = localStorage.getItem('restopos_current_role') || 'admin';
 
@@ -40,7 +40,7 @@ let addons = JSON.parse(localStorage.getItem('restopos_addons')) || [
 ];
 
 let products = JSON.parse(localStorage.getItem('restopos_products')) || [
-    { id: 1, name: 'Costillas BBQ', price: 22000, components: [1, 2] }
+    { id: 1, name: 'Costillas BBQ', price: 22000, components: [1, 2], category: 'principales', active: true }
 ];
 
 let drinks = JSON.parse(localStorage.getItem('restopos_drinks')) || [
@@ -50,7 +50,7 @@ let drinks = JSON.parse(localStorage.getItem('restopos_drinks')) || [
 ];
 
 let salesHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
-let appConfig = JSON.parse(localStorage.getItem('restopos_config')) || { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true };
+let appConfig = JSON.parse(localStorage.getItem('restopos_config')) || { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true, lastUpdated: Date.now() };
 
 let currentTableId = null;
 let editingProductId = null;
@@ -141,6 +141,7 @@ async function saveWaiterAlarmConfig() {
 
     appConfig.waiterAlarmInterval = val;
     appConfig.waiterCanGenerateReceipt = canGen;
+    appConfig.lastUpdated = Date.now();
 
     await saveDataAndSyncCloudSync('Configuración y permisos guardados correctamente en Sheets.');
 }
@@ -294,22 +295,50 @@ async function showSection(sectionId) {
             }
         }, 10000);
 
-    } else if (sectionId === 'kitchen-section') {
+        } else if (sectionId === 'kitchen-section') {
         const kitchenSection = document.getElementById('kitchen-section');
         if (!kitchenSection) return;
 
         const timerConfigBox = document.getElementById('kitchenTimerConfigBox');
         if (timerConfigBox) timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
 
+        // Carga inicial completa al entrar a cocina
+        await loadDataFromCloud();
         renderKitchenOrders();
-        kitchenInterval = setInterval(() => {
+
+        let localLastUpdated = appConfig.lastUpdated || 0;
+
+        // Sondeo inteligente de bajo consumo (cada 4 segundos)
+        let isRefreshingKitchen = false;
+        kitchenInterval = setInterval(async () => {
             if (kitchenSection && !kitchenSection.classList.contains('hidden')) {
-                renderKitchenOrders();
+                if (isRefreshingKitchen) return;
+                isRefreshingKitchen = true;
+                try {
+                    // 1. Petición ultraligera: Solo pregunta la marca de tiempo (no descarga tablas)
+                    const resCheck = await fetch(WEB_APP_URL + "?action=getLastUpdated");
+                    if (resCheck.ok) {
+                        const checkData = await resCheck.json();
+                        if (checkData && checkData.status === 'success') {
+                            // 2. Solo si la nube tiene un timestamp mayor, procedemos a descargar los datos completos
+                            if (checkData.lastUpdated > localLastUpdated) {
+                                localLastUpdated = checkData.lastUpdated;
+                                await loadDataFromCloud(); // Descarga completa solo cuando hay cambios reales
+                                renderKitchenOrders();     // Refresca la pantalla de cocina al instante
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error en sondeo ligero de cocina:", e);
+                } finally {
+                    isRefreshingKitchen = false;
+                }
             } else {
                 clearInterval(kitchenInterval);
                 kitchenInterval = null;
             }
-        }, 1000);
+        }, 60000); // Intervalo ajustado a 60 segundos para un balance perfecto entre inmediatez y ahorro de cuota
+
 
     } else if (sectionId === 'users-admin-section') {
         cancelEditUser();
@@ -395,6 +424,7 @@ async function saveUser() {
         users.push({ id: newId, username, pass, role });
     }
 
+    appConfig.lastUpdated = Date.now();
     await saveDataAndSyncCloudSync('Usuario guardado en Google Sheets exitosamente.');
     document.getElementById('newUsername').value = '';
     document.getElementById('newUserPass').value = '';
@@ -435,6 +465,7 @@ async function deleteUser(id) {
     if (confirm(`¿Desea eliminar a "${user.username}"?`)) {
         users = users.filter(u => u.id != id);
         if (editingUserId == id) cancelEditUser();
+        appConfig.lastUpdated = Date.now();
         await saveDataAndSyncCloudSync('Usuario eliminado.');
         renderUsersAdmin();
     }
@@ -503,6 +534,7 @@ async function saveNewTable() {
         tables.push({ id: newId, name: name, status: 'libre', items: [], receipts: [] });
     }
 
+    appConfig.lastUpdated = Date.now();
     await saveDataAndSyncCloudSync('Mesa guardada exitosamente.');
     nameInput.value = '';
     renderTablesAdmin();
@@ -534,6 +566,7 @@ async function deleteTable(id) {
     if (confirm(`¿Eliminar ${table.name}?`)) {
         tables = tables.filter(t => t.id !== id);
         if (editingTableId === id) cancelEditTable();
+        appConfig.lastUpdated = Date.now();
         await saveDataAndSyncCloudSync('Mesa eliminada.');
         renderTablesAdmin();
     }
@@ -541,7 +574,7 @@ async function deleteTable(id) {
 
 
 /* ========================================================== */
-/* CORRECCIÓN: FUNCIÓN OPENTABLEORDER BLINDADA CONTRA NULOS    */
+/* 5. PEDIDOS Y COMANDAS                                      */
 /* ========================================================== */
 
 async function openTableOrder(id) {
@@ -552,29 +585,24 @@ async function openTableOrder(id) {
     if (!table) return;
     if (!table.receipts) table.receipts = [];
 
-    // Asignar UIDs únicos si los ítems no tienen
     table.items.forEach(item => {
         if (!item.uid) item.uid = '_' + Math.random().toString(36).substr(2, 9);
     });
 
-    // Cambiar de vista primero para que los elementos del DOM existan
     document.getElementById('tables-section').classList.add('hidden');
     document.getElementById('order-section').classList.remove('hidden');
 
-    // Actualizar título de la mesa de forma segura
     const orderTitleEl = document.getElementById('order-title');
     if (orderTitleEl) {
         orderTitleEl.innerText = `Pedido - ${table.name}`;
     }
 
-    // Gestionar banner de platos listos
     const readyBanner = document.getElementById('readyForPickupBanner');
     const hasReadyItems = table.items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
     if (readyBanner) {
         readyBanner.style.display = hasReadyItems ? 'block' : 'none';
     }
 
-    // Cargar categoría por defecto y comanda
     filterPlusCategory('sopas');
     renderPlusOrderItems();
 }
@@ -588,6 +616,7 @@ async function markTablePickedUp() {
         if (item.sentToKitchen && item.served) item.pickedUp = true;
     });
 
+    appConfig.lastUpdated = Date.now();
     await saveDataAndSyncCloudSync('Pedido marcado como recogido.');
     const readyBanner = document.getElementById('readyForPickupBanner');
     if (readyBanner) readyBanner.style.display = 'none';
@@ -595,14 +624,39 @@ async function markTablePickedUp() {
 }
 
 
+/* ========================================================== */
+/* FILTRADO ROBUSTO DEL CATÁLOGO POR CATEGORÍA Y ESTADO       */
+/* ========================================================== */
+
+function normalizeCategory(cat) {
+    if (!cat) return 'principales';
+    let c = String(cat).toLowerCase().trim();
+    if (c.includes('sopa') || c.includes('entrada')) return 'sopas';
+    if (c.includes('principal') || c.includes('plato')) return 'principales';
+    if (c.includes('bebida') || c.includes('jugo')) return 'bebidas';
+    if (c.includes('adicional') || c.includes('extra')) return 'adicionales';
+    return c;
+}
+
+function isProductActive(p) {
+    if (p.active === undefined || p.active === null) return true;
+    if (typeof p.active === 'boolean') return p.active;
+    let str = String(p.active).toLowerCase().trim();
+    if (str === 'false' || str === 'inactivo' || str === '0' || str === 'no') return false;
+    return true;
+}
+
 function filterPlusCategory(category, event) {
     currentPlusCategory = category;
 
-    const catButtons = document.querySelectorAll('.plus-cat-btn');
-    catButtons.forEach(btn => btn.style.background = '#ffffff');
+    document.querySelectorAll('.plus-cat-btn').forEach(btn => {
+        btn.style.background = '#ffffff';
+        btn.classList.remove('active-cat');
+    });
 
     if (event && event.currentTarget) {
         event.currentTarget.style.background = '#e2e8f0';
+        event.currentTarget.classList.add('active-cat');
     } else {
         const firstBtn = document.querySelector('.plus-cat-btn');
         if (firstBtn) firstBtn.style.background = '#e2e8f0';
@@ -612,19 +666,22 @@ function filterPlusCategory(category, event) {
     if (!catalogGrid) return;
     catalogGrid.innerHTML = '';
 
+    const targetCat = normalizeCategory(category);
+
     let itemsToDisplay = [];
-    if (category === 'sopas') {
-        itemsToDisplay = products.slice(0, Math.ceil(products.length / 2));
-    } else if (category === 'principales') {
-        itemsToDisplay = products;
-    } else if (category === 'bebidas') {
-        itemsToDisplay = drinks.map(d => ({ id: 'drink_' + d.id, name: d.name, price: d.price }));
-    } else if (category === 'adicionales') {
-        itemsToDisplay = addons.map(a => ({ id: 'addon_' + a.id, name: a.name, price: a.price }));
+    if (targetCat === 'bebidas') {
+        itemsToDisplay = drinks.map(d => ({ id: 'drink_' + d.id, name: d.name, price: d.price, category: 'bebidas', active: true }));
+    } else if (targetCat === 'adicionales') {
+        itemsToDisplay = addons.map(a => ({ id: 'addon_' + a.id, name: a.name, price: a.price, category: 'adicionales', active: true }));
+    } else {
+        itemsToDisplay = products.filter(p => {
+            const prodCat = normalizeCategory(p.category);
+            return prodCat === targetCat && isProductActive(p);
+        });
     }
 
     if (itemsToDisplay.length === 0) {
-        catalogGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; font-size: 0.8rem; color: var(--text-secondary); padding: 1rem;">No hay productos en esta categoría.</div>';
+        catalogGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; font-size: 0.8rem; color: var(--text-secondary); padding: 1rem;">No hay productos activos en esta categoría.</div>';
         return;
     }
 
@@ -632,11 +689,13 @@ function filterPlusCategory(category, event) {
         const btn = document.createElement('div');
         btn.style.cssText = "background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem; display: flex; flex-direction: column; justify-content: space-between; align-items: center; cursor: pointer; text-align: center; width: 110px; height: 55px; box-sizing: border-box;";
         
-        let itemId = String(item.id).includes('_') ? item.id : 'prod_' + item.id;
+        let itemId = String(item.id).startsWith('drink_') || String(item.id).startsWith('addon_') 
+            ? item.id 
+            : 'prod_' + item.id;
 
         btn.innerHTML = `
             <span style="font-size: 0.7rem; font-weight: bold; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.1;">${item.name}</span>
-            <span style="font-size: 0.7rem; color: var(--primary); font-weight: bold;">$${item.price.toLocaleString()}</span>
+            <span style="font-size: 0.7rem; color: var(--primary); font-weight: bold;">$${(item.price || 0).toLocaleString()}</span>
         `;
 
         btn.onclick = () => addProductDirectlyToOrder(itemId);
@@ -689,18 +748,6 @@ function addProductDirectlyToOrder(itemIdentifier) {
     saveData();
 }
 
-/**
- * Renderiza la comanda reflejando el estado de bloqueado, checkbox marcado 
- * y etiqueta "En Cocina" para los platos ya enviados.
- */
-/**
- * Renderiza la comanda reflejando con precisión si el plato está en cocina, 
- * ya fue servido, o está pendiente de envío.
- */
-/**
- * Renderiza la comanda reflejando los estados correctos: 
- * "En Cocina", "Listo en Cocina" y "Servido (Recogido)", situados junto al precio.
- */
 function renderPlusOrderItems() {
     const table = tables.find(t => t.id === currentTableId);
     const list = document.getElementById('plusOrderItemsList');
@@ -722,7 +769,6 @@ function renderPlusOrderItems() {
             let isCheckedAttr = (item.sentToKitchen || item.kitchenChecked) ? 'checked' : '';
             let disabledAttr = isSentOrBilled ? 'disabled' : '';
 
-            // Etiquetas de estado dinámicas junto al precio
             let statusBadge = '';
             if (item.billed) {
                 statusBadge = `<span style="font-size: 0.62rem; background: #e2e8f0; color: #475569; padding: 0.1rem 0.3rem; border-radius: 4px; font-weight: bold; margin-left: 6px; display: inline-block;">💳 Facturado</span>`;
@@ -759,8 +805,6 @@ function renderPlusOrderItems() {
     const orderTotalEl = document.getElementById('orderTotal');
     if (orderTotalEl) orderTotalEl.innerText = `$ ${total.toLocaleString()}`;
 }
-
-
 
 function updateItemKitchenCheck(index, isChecked) {
     const table = tables.find(t => t.id === currentTableId);
@@ -817,14 +861,6 @@ function playAlarmBeep() {
     }
 }
 
-/**
- * Envía a cocina únicamente los platos que tengan el checkbox seleccionado.
- * Cada envío genera una comanda independiente con su propio cronómetro.
- */
-/**
- * Modifica la función de envío para asegurar que los ítems enviados 
- * queden bloqueados, con checkbox marcado y etiqueta visual de estado.
- */
 async function sendOrderToKitchen() {
     const table = tables.find(t => t.id === currentTableId);
     if (!table || !table.items || table.items.length === 0) {
@@ -847,11 +883,15 @@ async function sendOrderToKitchen() {
             item.served = false;
             item.pickedUp = false;
             item.sentAt = now;
-            item.kitchenChecked = true; // Mantener marcado al enviarse
+            item.kitchenChecked = true;
         }
     });
 
     table.status = 'ocupada';
+    
+    // Actualizar el timestamp global para notificar instantáneamente al módulo de cocina
+    appConfig.lastUpdated = now;
+
     renderPlusOrderItems();
     saveData();
 
@@ -865,10 +905,6 @@ async function sendOrderToKitchen() {
     showSection('tables-section');
 }
 
-
-/**
- * Renderiza las comandas en cocina agrupando o separando por lote de envío (sentAt).
- */
 function renderKitchenOrders() {
     const container = document.getElementById('kitchenOrdersContainer');
     if (!container) return;
@@ -883,12 +919,10 @@ function renderKitchenOrders() {
     let activeBatches = [];
     let triggerAlarm = false;
 
-    // Agrupar platos en cocina divididos por su lote de envío (sentAt) para que funcionen como comandas distintas
     tables.forEach(table => {
         const activeItems = table.items.filter(item => item.sentToKitchen && !item.served);
         
         if (activeItems.length > 0) {
-            // Agrupar por el timestamp exacto de envío (sentAt)
             let batchesMap = {};
             activeItems.forEach(item => {
                 let batchKey = item.sentAt || now;
@@ -898,7 +932,6 @@ function renderKitchenOrders() {
                 batchesMap[batchKey].push(item);
             });
 
-            // Crear una tarjeta de comanda por cada lote/envío independiente
             Object.keys(batchesMap).forEach(batchKey => {
                 let batchTime = parseInt(batchKey);
                 activeBatches.push({
@@ -974,9 +1007,6 @@ function renderKitchenOrders() {
     });
 }
 
-/**
- * Marca como servidos únicamente los ítems pertenecientes a una comanda/lote específico en cocina.
- */
 async function markBatchServed(tableId, batchId) {
     const table = tables.find(t => t.id === tableId);
     if (!table) return;
@@ -988,11 +1018,11 @@ async function markBatchServed(tableId, batchId) {
                 item.pickedUp = false;
             }
         });
+        appConfig.lastUpdated = Date.now();
         renderKitchenOrders();
         await syncDataToCloud();
     }
 }
-
 
 
 /* ========================================================== */
@@ -1067,6 +1097,7 @@ async function generateReceipt() {
         date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
 
+    appConfig.lastUpdated = Date.now();
     await syncDataToCloud();
     openBillSection();
 }
@@ -1133,6 +1164,7 @@ async function confirmPayReceipt(receiptId) {
         table.receipts.splice(receiptIndex, 1);
         table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
 
+        appConfig.lastUpdated = Date.now();
         await sendNewSalesToCloud(newSalesBatch);
 
         if (table.items.length === 0 && table.receipts.length === 0) {
@@ -1155,6 +1187,7 @@ async function cancelReceipt(receiptId) {
 
     if (confirm('¿Anular recibo?')) {
         table.receipts.splice(receiptIndex, 1);
+        appConfig.lastUpdated = Date.now();
         saveData();
         openBillSection();
         await syncDataToCloud();
@@ -1210,16 +1243,168 @@ function renderRecipeCheckboxes() {
     });
 }
 
+function formatProductPriceInput(input) {
+    let rawValue = input.value.replace(/\D/g, '');
+    if (!rawValue) {
+        input.value = '';
+        return;
+    }
+    let numericValue = parseInt(rawValue, 10);
+    input.value = `$ ${numericValue.toLocaleString('es-CO')}`;
+}
+
+function getCleanPriceValue(formattedString) {
+    if (!formattedString) return 0;
+    let cleanStr = String(formattedString).replace(/\D/g, '');
+    return parseInt(cleanStr, 10) || 0;
+}
+
 function renderProducts() {
     const list = document.getElementById('productList');
     if (!list) return;
     list.innerHTML = '';
+
+    if (!Array.isArray(products) || products.length === 0) {
+        list.innerHTML = '<p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center; padding: 1rem;">No hay platos registrados.</p>';
+        return;
+    }
+
     products.forEach(p => {
         const item = document.createElement('div');
-        item.className = 'product-row';
-        item.innerHTML = `<span>${p.name} - $${p.price}</span>`;
+        item.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0.4rem; border-bottom: 1px solid var(--border); font-size: 0.85rem;";
+        
+        const categoryLabels = {
+            principales: 'Plato Principal',
+            sopas: 'Sopas y Entradas',
+            bebidas: 'Bebida',
+            adicionales: 'Adicional'
+        };
+        const catName = categoryLabels[p.category] || 'Plato Principal';
+
+        const activeBadge = p.active !== false 
+            ? `<span style="font-size: 0.65rem; background: #dcfce7; color: #15803d; padding: 0.1rem 0.35rem; border-radius: 4px; font-weight: bold; margin-left: 6px;">Activo</span>`
+            : `<span style="font-size: 0.65rem; background: #f1f5f9; color: #64748b; padding: 0.1rem 0.35rem; border-radius: 4px; font-weight: bold; margin-left: 6px;">Inactivo</span>`;
+
+        item.innerHTML = `
+            <div style="flex: 1; padding-right: 0.5rem; overflow: hidden;">
+                <div style="display: flex; align-items: center; flex-wrap: wrap;">
+                    <strong style="color: var(--text); font-size: 0.9rem;">${p.name}</strong>
+                    ${activeBadge}
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 2px;">
+                    <span style="font-size: 0.8rem; color: var(--primary); font-weight: bold;">$${(p.price || 0).toLocaleString('es-CO')}</span>
+                    <span style="font-size: 0.7rem; color: var(--text-secondary);">• ${catName}</span>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.4rem; align-items: center;">
+                <button onclick="editProduct(${p.id})" class="action-btn" title="Editar" style="background:none; border:none; cursor:pointer; font-size:1.1rem;">✏️</button>
+                <button onclick="deleteProduct(${p.id})" class="action-btn" title="Eliminar" style="background:none; border:none; cursor:pointer; font-size:1.1rem; color:#ef4444;">🗑️</button>
+            </div>
+        `;
         list.appendChild(item);
     });
+
+    const activeToggle = document.getElementById('newProdActive');
+    const statusLabel = document.getElementById('prodActiveStatusLabel');
+    if (activeToggle && statusLabel) {
+        activeToggle.onchange = function() {
+            statusLabel.innerText = this.checked ? 'Activo' : 'Inactivo';
+            statusLabel.style.color = this.checked ? '#16a34a' : '#64748b';
+        };
+    }
+}
+
+async function saveProduct() {
+    const nameInput = document.getElementById('newProdName');
+    const priceInput = document.getElementById('newProdPrice');
+    const categorySelect = document.getElementById('newProdCategory');
+    const activeToggle = document.getElementById('newProdActive');
+    
+    const name = nameInput.value.trim();
+    const price = getCleanPriceValue(priceInput.value);
+    const category = categorySelect.value;
+    const active = activeToggle.checked;
+
+    if (!name || price <= 0) {
+        showCustomAlert('Por favor ingrese el nombre del plato y un precio válido.');
+        return;
+    }
+
+    if (editingProductId !== null) {
+        const prod = products.find(p => p.id === editingProductId);
+        if (prod) {
+            prod.name = name;
+            prod.price = price;
+            prod.category = category;
+            prod.active = active;
+        }
+        cancelEditProduct();
+    } else {
+        const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+        products.push({ 
+            id: newId, 
+            name: name, 
+            price: price, 
+            category: category, 
+            active: active 
+        });
+    }
+
+    appConfig.lastUpdated = Date.now();
+    await saveDataAndSyncCloudSync('Plato guardado y sincronizado exitosamente.');
+    cancelEditProduct();
+    renderProducts();
+}
+
+function editProduct(id) {
+    const prod = products.find(p => p.id === id);
+    if (prod) {
+        editingProductId = id;
+        document.getElementById('newProdName').value = prod.name;
+        document.getElementById('newProdPrice').value = `$ ${prod.price.toLocaleString('es-CO')}`;
+        document.getElementById('newProdCategory').value = prod.category || 'principales';
+        
+        const activeToggle = document.getElementById('newProdActive');
+        const statusLabel = document.getElementById('prodActiveStatusLabel');
+        activeToggle.checked = prod.active !== false;
+        statusLabel.innerText = activeToggle.checked ? 'Activo' : 'Inactivo';
+        statusLabel.style.color = activeToggle.checked ? '#16a34a' : '#64748b';
+
+        document.getElementById('formProductTitle').innerText = 'Editar Plato';
+        document.getElementById('btnSaveProduct').innerText = 'Guardar Cambios (Online)';
+        document.getElementById('btnCancelEdit').classList.remove('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
+
+function cancelEditProduct() {
+    editingProductId = null;
+    document.getElementById('newProdName').value = '';
+    document.getElementById('newProdPrice').value = '';
+    document.getElementById('newProdCategory').value = 'principales';
+    
+    const activeToggle = document.getElementById('newProdActive');
+    const statusLabel = document.getElementById('prodActiveStatusLabel');
+    activeToggle.checked = true;
+    statusLabel.innerText = 'Activo';
+    statusLabel.style.color = '#16a34a';
+
+    document.getElementById('formProductTitle').innerText = 'Registro de Nuevo Plato';
+    document.getElementById('btnSaveProduct').innerText = 'Guardar Plato';
+    document.getElementById('btnCancelEdit').classList.add('hidden');
+}
+
+async function deleteProduct(id) {
+    const prod = products.find(p => p.id === id);
+    if (!prod) return;
+
+    if (confirm(`¿Desea eliminar el plato "${prod.name}"?`)) {
+        products = products.filter(p => p.id !== id);
+        if (editingProductId === id) cancelEditProduct();
+        appConfig.lastUpdated = Date.now();
+        await saveDataAndSyncCloudSync('Plato eliminado exitosamente.');
+        renderProducts();
+    }
 }
 
 function renderDrinks() {
@@ -1251,7 +1436,7 @@ function renderAddons() {
 /* 10. SINCRONIZACIÓN GOOGLE SHEETS                           */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxJGOBC0JjbwpN1ijtx-k-RP8VkUy2GCcq0fD91-_VfbtC7XbrkWpa4Ysdi_wgz-o47Fw/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyG0KBTAvQrywpQLrN_fjZENE4gjEXrETR0LdZdJihq4tKtXF8zLz6gjTwlTopeT-Vbfw/exec";
 
 async function loadDataFromCloud() {
     try {
@@ -1264,6 +1449,9 @@ async function loadDataFromCloud() {
             if (Array.isArray(cloudData.drinks)) drinks = cloudData.drinks;
             if (Array.isArray(cloudData.addons)) addons = cloudData.addons;
             if (Array.isArray(cloudData.users)) users = cloudData.users;
+            if (cloudData.config) {
+                appConfig = cloudData.config;
+            }
             saveData();
             return true;
         }
@@ -1312,9 +1500,6 @@ async function sendNewSalesToCloud(salesArray) {
 /* MÓDULO DE DASHBOARD ANALÍTICO DE VENTAS                    */
 /* ========================================================== */
 
-/**
- * Consulta el historial de facturas en la nube y renderiza métricas comerciales clave.
- */
 async function renderSalesDashboard() {
     const container = document.getElementById('dashboardAnalyticsContainer');
     if (!container) return;
@@ -1404,257 +1589,6 @@ async function renderSalesDashboard() {
     `;
 }
 
-/* ========================================================== */
-/* GESTIÓN Y ADMINISTRACIÓN DEL CATÁLOGO DE PLATOS & RECETAS  */
-/* ========================================================== */
-
-// Formateador dinámico para el campo de precio con formato de moneda y separador de miles
-function formatProductPriceInput(input) {
-    let rawValue = input.value.replace(/\D/g, ''); // Extraer solo números
-    if (!rawValue) {
-        input.value = '';
-        return;
-    }
-    let numericValue = parseInt(rawValue, 10);
-    input.value = `$ ${numericValue.toLocaleString('es-CO')}`;
-}
-
-// Extraer valor numérico limpio desde el string formateado
-function getCleanPriceValue(formattedString) {
-    if (!formattedString) return 0;
-    let cleanStr = String(formattedString).replace(/\D/g, '');
-    return parseInt(cleanStr, 10) || 0;
-}
-
-// Renderizar la lista de platos registrados
-function renderProducts() {
-    const list = document.getElementById('productList');
-    if (!list) return;
-    list.innerHTML = '';
-
-    if (!Array.isArray(products) || products.length === 0) {
-        list.innerHTML = '<p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center; padding: 1rem;">No hay platos registrados.</p>';
-        return;
-    }
-
-    products.forEach(p => {
-        const item = document.createElement('div');
-        item.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0.4rem; border-bottom: 1px solid var(--border); font-size: 0.85rem;";
-        
-        // Categoría formateada en texto legible
-        const categoryLabels = {
-            principales: 'Plato Principal',
-            sopas: 'Sopas y Entradas',
-            bebidas: 'Bebida',
-            adicionales: 'Adicional'
-        };
-        const catName = categoryLabels[p.category] || 'Plato Principal';
-
-        // Badge de estado Activo/Inactivo
-        const activeBadge = p.active !== false 
-            ? `<span style="font-size: 0.65rem; background: #dcfce7; color: #15803d; padding: 0.1rem 0.35rem; border-radius: 4px; font-weight: bold; margin-left: 6px;">Activo</span>`
-            : `<span style="font-size: 0.65rem; background: #f1f5f9; color: #64748b; padding: 0.1rem 0.35rem; border-radius: 4px; font-weight: bold; margin-left: 6px;">Inactivo</span>`;
-
-        item.innerHTML = `
-            <div style="flex: 1; padding-right: 0.5rem; overflow: hidden;">
-                <div style="display: flex; align-items: center; flex-wrap: wrap;">
-                    <strong style="color: var(--text); font-size: 0.9rem;">${p.name}</strong>
-                    ${activeBadge}
-                </div>
-                <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 2px;">
-                    <span style="font-size: 0.8rem; color: var(--primary); font-weight: bold;">$${(p.price || 0).toLocaleString('es-CO')}</span>
-                    <span style="font-size: 0.7rem; color: var(--text-secondary);">• ${catName}</span>
-                </div>
-                ${p.description ? `<p style="font-size: 0.75rem; color: #64748b; margin: 2px 0 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.description}</p>` : ''}
-            </div>
-            <div style="display: flex; gap: 0.4rem; align-items: center;">
-                <button onclick="editProduct(${p.id})" class="action-btn" title="Editar" style="background:none; border:none; cursor:pointer; font-size:1.1rem;">✏️</button>
-                <button onclick="deleteProduct(${p.id})" class="action-btn" title="Eliminar" style="background:none; border:none; cursor:pointer; font-size:1.1rem; color:#ef4444;">🗑️</button>
-            </div>
-        `;
-        list.appendChild(item);
-    });
-
-    // Listener para actualizar el texto del toggle en tiempo real
-    const activeToggle = document.getElementById('newProdActive');
-    const statusLabel = document.getElementById('prodActiveStatusLabel');
-    if (activeToggle && statusLabel) {
-        activeToggle.onchange = function() {
-            statusLabel.innerText = this.checked ? 'Activo' : 'Inactivo';
-            statusLabel.style.color = this.checked ? '#16a34a' : '#64748b';
-        };
-    }
-}
-
-// Guardar o actualizar plato (corregido el nombre de la función de limpieza)
-async function saveProduct() {
-    const nameInput = document.getElementById('newProdName');
-    const priceInput = document.getElementById('newProdPrice');
-    const categorySelect = document.getElementById('newProdCategory');
-    const activeToggle = document.getElementById('newProdActive');
-    
-    const name = nameInput.value.trim();
-    const price = getCleanPriceValue(priceInput.value);
-    const category = categorySelect.value;
-    const active = activeToggle.checked;
-
-    if (!name || price <= 0) {
-        showCustomAlert('Por favor ingrese el nombre del plato y un precio válido.');
-        return;
-    }
-
-    if (editingProductId !== null) {
-        const prod = products.find(p => p.id === editingProductId);
-        if (prod) {
-            prod.name = name;
-            prod.price = price;
-            prod.category = category;
-            prod.active = active;
-        }
-        cancelEditProduct();
-    } else {
-        const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
-        products.push({ 
-            id: newId, 
-            name: name, 
-            price: price, 
-            category: category, 
-            active: active 
-        });
-    }
-
-    await saveDataAndSyncCloudSync('Plato guardado y sincronizado exitosamente.');
-    cancelEditProduct(); // <-- Llamada corregida
-    renderProducts();
-}
-
-// Editar plato existente
-function editProduct(id) {
-    const prod = products.find(p => p.id === id);
-    if (prod) {
-        editingProductId = id;
-        document.getElementById('newProdName').value = prod.name;
-        document.getElementById('newProdPrice').value = `$ ${prod.price.toLocaleString('es-CO')}`;
-        document.getElementById('newProdCategory').value = prod.category || 'principales';
-        
-        const activeToggle = document.getElementById('newProdActive');
-        const statusLabel = document.getElementById('prodActiveStatusLabel');
-        activeToggle.checked = prod.active !== false;
-        statusLabel.innerText = activeToggle.checked ? 'Activo' : 'Inactivo';
-        statusLabel.style.color = activeToggle.checked ? '#16a34a' : '#64748b';
-
-        document.getElementById('formProductTitle').innerText = 'Editar Plato';
-        document.getElementById('btnSaveProduct').innerText = 'Guardar Cambios (Online)';
-        document.getElementById('btnCancelEdit').classList.remove('hidden');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-}
-
-// Cancelar edición y limpiar formulario
-function cancelEditProduct() {
-    editingProductId = null;
-    document.getElementById('newProdName').value = '';
-    document.getElementById('newProdPrice').value = '';
-    document.getElementById('newProdCategory').value = 'principales';
-    
-    const activeToggle = document.getElementById('newProdActive');
-    const statusLabel = document.getElementById('prodActiveStatusLabel');
-    activeToggle.checked = true;
-    statusLabel.innerText = 'Activo';
-    statusLabel.style.color = '#16a34a';
-
-    document.getElementById('formProductTitle').innerText = 'Registro de Nuevo Plato';
-    document.getElementById('btnSaveProduct').innerText = 'Guardar Plato';
-    document.getElementById('btnCancelEdit').classList.add('hidden');
-}
-
-
-/* ========================================================== */
-/* FILTRADO ROBUSTO DEL CATÁLOGO POR CATEGORÍA Y ESTADO       */
-/* ========================================================== */
-
-// Función auxiliar para normalizar categorías sin importar cómo vengan de Sheets o LocalStorage
-function normalizeCategory(cat) {
-    if (!cat) return 'principales';
-    let c = String(cat).toLowerCase().trim();
-    if (c.includes('sopa') || c.includes('entrada')) return 'sopas';
-    if (c.includes('principal') || c.includes('plato')) return 'principales';
-    if (c.includes('bebida') || c.includes('jugo')) return 'bebidas';
-    if (c.includes('adicional') || c.includes('extra')) return 'adicionales';
-    return c;
-}
-
-// Función auxiliar para verificar si el producto está activo (maneja booleanos y textos de Sheets)
-function isProductActive(p) {
-    if (p.active === undefined || p.active === null) return true;
-    if (typeof p.active === 'boolean') return p.active;
-    let str = String(p.active).toLowerCase().trim();
-    if (str === 'false' || str === 'inactivo' || str === '0' || str === 'no') return false;
-    return true;
-}
-
-// Filtrar y mostrar los platos en la pantalla de pedidos según la categoría seleccionada por el mesero
-function filterPlusCategory(category, event) {
-    // Actualizar estilos activos de los 4 botones superiores
-    document.querySelectorAll('.plus-cat-btn').forEach(btn => {
-        btn.style.background = '#ffffff';
-        btn.classList.remove('active-cat');
-    });
-
-    if (event && event.currentTarget) {
-        event.currentTarget.style.background = '#e2e8f0';
-        event.currentTarget.classList.add('active-cat');
-    }
-
-    const catalogGrid = document.getElementById('plusCatalogGrid');
-    if (!catalogGrid) return;
-    catalogGrid.innerHTML = '';
-
-    // Normalizar la categoría objetivo que se quiere mostrar
-    const targetCat = normalizeCategory(category);
-
-    // Filtrar usando los normalizadores para asegurar coincidencia exacta con Sheets
-    const filteredProducts = products.filter(p => {
-        const prodCat = normalizeCategory(p.category);
-        return prodCat === targetCat && isProductActive(p);
-    });
-
-    if (filteredProducts.length === 0) {
-        catalogGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); font-size: 0.8rem; padding: 0.5rem;">No hay productos activos en esta categoría.</div>`;
-        return;
-    }
-
-    filteredProducts.forEach(prod => {
-        const btn = document.createElement('button');
-        btn.style.cssText = "background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: center; align-items: center;";
-        btn.innerHTML = `
-            <strong style="font-size: 0.75rem; color: var(--text); line-height: 1.1; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">${prod.name}</strong>
-            <span style="font-size: 0.7rem; color: var(--primary); font-weight: bold; margin-top: 2px;">$${(prod.price || 0).toLocaleString('es-CO')}</span>
-        `;
-        // Corregido: Llamar a addProductDirectlyToOrder pasando 'prod_' + id
-        btn.onclick = () => addProductDirectlyToOrder('prod_' + prod.id);
-        catalogGrid.appendChild(btn);
-    });
-}
-
-
-
-
-
-// Eliminar plato
-async function deleteProduct(id) {
-    const prod = products.find(p => p.id === id);
-    if (!prod) return;
-
-    if (confirm(`¿Desea eliminar el plato "${prod.name}"?`)) {
-        products = products.filter(p => p.id !== id);
-        if (editingProductId === id) cancelEditProduct();
-        await saveDataAndSyncCloudSync('Plato eliminado exitosamente.');
-        renderProducts();
-    }
-}
-
-
 function saveData() {
     localStorage.setItem('restopos_tables', JSON.stringify(tables));
     localStorage.setItem('restopos_addons', JSON.stringify(addons));
@@ -1664,7 +1598,3 @@ function saveData() {
     localStorage.setItem('restopos_users', JSON.stringify(users));
     localStorage.setItem('restopos_config', JSON.stringify(appConfig));
 }
-
-/**
- * archivo comentado
- */

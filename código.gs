@@ -4,6 +4,9 @@
 
 var SS = SpreadsheetApp.getActiveSpreadsheet();
 
+/**
+ * Manejador de peticiones GET. Permite consultar datos generales o de dashboard.
+ */
 function doGet(e) {
   var action = e.parameter.action;
 
@@ -23,6 +26,9 @@ function doGet(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+/**
+ * Manejador de peticiones POST. Recibe los datos enviados desde la app y los guarda en las hojas.
+ */
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
@@ -42,6 +48,9 @@ function doPost(e) {
   }
 }
 
+/**
+ * Consulta y estructura todos los datos del sistema desde las diferentes pestañas de Google Sheets.
+ */
 function getAllData() {
   return {
     tables: getSheetData("Mesas"),
@@ -55,7 +64,9 @@ function getAllData() {
   };
 }
 
-// Función optimizada: Solo consulta el historial de facturas bajo demanda para el Dashboard
+/**
+ * Función optimizada: Solo consulta el historial de facturas bajo demanda para el Dashboard.
+ */
 function getDashboardDataOnly() {
   return {
     status: "success",
@@ -63,17 +74,25 @@ function getDashboardDataOnly() {
   };
 }
 
+/**
+ * Obtiene los parámetros de configuración global y la marca de tiempo del último cambio.
+ */
 function getConfigData() {
   var sheet = SS.getSheetByName("Config");
-  if (!sheet) return { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true };
+  if (!sheet) return { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true, lastUpdated: Date.now() };
   var rows = sheet.getDataRange().getValues();
-  if (rows.length < 2) return { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true };
+  if (rows.length < 2) return { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true, lastUpdated: Date.now() };
+  
   return {
     waiterAlarmInterval: Number(rows[1][0]) || 20,
-    waiterCanGenerateReceipt: rows[1][1] !== false && rows[1][1] !== "false"
+    waiterCanGenerateReceipt: rows[1][1] !== false && rows[1][1] !== "false",
+    lastUpdated: rows[1][2] || Date.now()
   };
 }
 
+/**
+ * Lee los datos de una hoja específica y los convierte en un arreglo de objetos JSON basados en los encabezados.
+ */
 function getSheetData(sheetName) {
   var sheet = SS.getSheetByName(sheetName);
 
@@ -114,9 +133,33 @@ function getSheetData(sheetName) {
   return result;
 }
 
+/**
+ * Recibe el objeto general de datos y distribuye el guardado a cada pestaña correspondiente.
+ */
 function saveAllData(data) {
   if (data.tables) saveSheetData("Mesas", data.tables);
-  if (data.products) saveSheetData("Productos", data.products);
+  
+  // Guardar productos asegurando la existencia de columnas category y active
+  if (data.products) {
+    var sheetProducts = SS.getSheetByName("Productos");
+    if (!sheetProducts) {
+      sheetProducts = SS.insertSheet("Productos");
+      sheetProducts.appendRow(["id", "name", "price", "components", "category", "active"]);
+    } else {
+      var headers = sheetProducts.getRange(1, 1, 1, sheetProducts.getLastColumn() || 1).getValues()[0].map(function(h) { return h.toString().trim().toLowerCase(); });
+      
+      if (headers.indexOf("category") === -1) {
+        sheetProducts.getRange(1, sheetProducts.getLastColumn() + 1).setValue("category");
+      }
+      
+      var updatedHeaders = sheetProducts.getRange(1, 1, 1, sheetProducts.getLastColumn()).getValues()[0].map(function(h) { return h.toString().trim().toLowerCase(); });
+      if (updatedHeaders.indexOf("active") === -1) {
+        sheetProducts.getRange(1, sheetProducts.getLastColumn() + 1).setValue("active");
+      }
+    }
+    saveSheetData("Productos", data.products);
+  }
+
   if (data.drinks) saveSheetData("Bebidas", data.drinks);
   if (data.addons) saveSheetData("Adicionales", data.addons);
   if (data.inventory) saveSheetData("Inventario", data.inventory);
@@ -139,19 +182,28 @@ function saveAllData(data) {
     saveSheetData("Usuarios", data.users);
   }
 
+  // Guardar configuración general y actualizar la marca de tiempo (timestamp)
   if (data.config) {
     var sheetConfig = SS.getSheetByName("Config");
+    var currentTime = Date.now();
     if (!sheetConfig) {
       sheetConfig = SS.insertSheet("Config");
-      sheetConfig.appendRow(["waiterAlarmInterval", "waiterCanGenerateReceipt"]);
+      sheetConfig.appendRow(["waiterAlarmInterval", "waiterCanGenerateReceipt", "lastUpdated"]);
     } else {
       sheetConfig.clearContents();
-      sheetConfig.appendRow(["waiterAlarmInterval", "waiterCanGenerateReceipt"]);
+      sheetConfig.appendRow(["waiterAlarmInterval", "waiterCanGenerateReceipt", "lastUpdated"]);
     }
-    sheetConfig.appendRow([data.config.waiterAlarmInterval || 20, data.config.waiterCanGenerateReceipt !== false]);
+    sheetConfig.appendRow([
+      data.config.waiterAlarmInterval || 20, 
+      data.config.waiterCanGenerateReceipt !== false,
+      data.config.lastUpdated || currentTime
+    ]);
   }
 }
 
+/**
+ * Sobrescribe los datos de una hoja manteniendo los encabezados de la fila 1.
+ */
 function saveSheetData(sheetName, dataArray) {
   var sheet = SS.getSheetByName(sheetName);
 
@@ -190,6 +242,9 @@ function saveSheetData(sheetName, dataArray) {
   }
 }
 
+/**
+ * Añade nuevas ventas al final de la pestaña de facturas aplicando formato monetario y de fecha.
+ */
 function appendNewSales(sheetName, dataArray) {
   var sheet = SS.getSheetByName(sheetName);
   if (!sheet || dataArray.length === 0) return;
@@ -250,5 +305,4 @@ function appendNewSales(sheetName, dataArray) {
   }
 }
 
-
-V10
+v12
