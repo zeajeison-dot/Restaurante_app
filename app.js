@@ -1251,7 +1251,7 @@ function renderAddons() {
 /* 10. SINCRONIZACIÓN GOOGLE SHEETS                           */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyxNS-oNkfnLk6SDOSz45G4mb0qX5L5j4PbpzjSRnYBCm8YQ95i8TxLQBx9ju1KFJKyrA/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxJGOBC0JjbwpN1ijtx-k-RP8VkUy2GCcq0fD91-_VfbtC7XbrkWpa4Ysdi_wgz-o47Fw/exec";
 
 async function loadDataFromCloud() {
     try {
@@ -1402,6 +1402,256 @@ async function renderSalesDashboard() {
             ${topProductsHtml}
         </div>
     `;
+}
+
+/* ========================================================== */
+/* GESTIÓN Y ADMINISTRACIÓN DEL CATÁLOGO DE PLATOS & RECETAS  */
+/* ========================================================== */
+
+// Formateador dinámico para el campo de precio con formato de moneda y separador de miles
+function formatProductPriceInput(input) {
+    let rawValue = input.value.replace(/\D/g, ''); // Extraer solo números
+    if (!rawValue) {
+        input.value = '';
+        return;
+    }
+    let numericValue = parseInt(rawValue, 10);
+    input.value = `$ ${numericValue.toLocaleString('es-CO')}`;
+}
+
+// Extraer valor numérico limpio desde el string formateado
+function getCleanPriceValue(formattedString) {
+    if (!formattedString) return 0;
+    let cleanStr = String(formattedString).replace(/\D/g, '');
+    return parseInt(cleanStr, 10) || 0;
+}
+
+// Renderizar la lista de platos registrados
+function renderProducts() {
+    const list = document.getElementById('productList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    if (!Array.isArray(products) || products.length === 0) {
+        list.innerHTML = '<p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center; padding: 1rem;">No hay platos registrados.</p>';
+        return;
+    }
+
+    products.forEach(p => {
+        const item = document.createElement('div');
+        item.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0.4rem; border-bottom: 1px solid var(--border); font-size: 0.85rem;";
+        
+        // Categoría formateada en texto legible
+        const categoryLabels = {
+            principales: 'Plato Principal',
+            sopas: 'Sopas y Entradas',
+            bebidas: 'Bebida',
+            adicionales: 'Adicional'
+        };
+        const catName = categoryLabels[p.category] || 'Plato Principal';
+
+        // Badge de estado Activo/Inactivo
+        const activeBadge = p.active !== false 
+            ? `<span style="font-size: 0.65rem; background: #dcfce7; color: #15803d; padding: 0.1rem 0.35rem; border-radius: 4px; font-weight: bold; margin-left: 6px;">Activo</span>`
+            : `<span style="font-size: 0.65rem; background: #f1f5f9; color: #64748b; padding: 0.1rem 0.35rem; border-radius: 4px; font-weight: bold; margin-left: 6px;">Inactivo</span>`;
+
+        item.innerHTML = `
+            <div style="flex: 1; padding-right: 0.5rem; overflow: hidden;">
+                <div style="display: flex; align-items: center; flex-wrap: wrap;">
+                    <strong style="color: var(--text); font-size: 0.9rem;">${p.name}</strong>
+                    ${activeBadge}
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 2px;">
+                    <span style="font-size: 0.8rem; color: var(--primary); font-weight: bold;">$${(p.price || 0).toLocaleString('es-CO')}</span>
+                    <span style="font-size: 0.7rem; color: var(--text-secondary);">• ${catName}</span>
+                </div>
+                ${p.description ? `<p style="font-size: 0.75rem; color: #64748b; margin: 2px 0 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.description}</p>` : ''}
+            </div>
+            <div style="display: flex; gap: 0.4rem; align-items: center;">
+                <button onclick="editProduct(${p.id})" class="action-btn" title="Editar" style="background:none; border:none; cursor:pointer; font-size:1.1rem;">✏️</button>
+                <button onclick="deleteProduct(${p.id})" class="action-btn" title="Eliminar" style="background:none; border:none; cursor:pointer; font-size:1.1rem; color:#ef4444;">🗑️</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+
+    // Listener para actualizar el texto del toggle en tiempo real
+    const activeToggle = document.getElementById('newProdActive');
+    const statusLabel = document.getElementById('prodActiveStatusLabel');
+    if (activeToggle && statusLabel) {
+        activeToggle.onchange = function() {
+            statusLabel.innerText = this.checked ? 'Activo' : 'Inactivo';
+            statusLabel.style.color = this.checked ? '#16a34a' : '#64748b';
+        };
+    }
+}
+
+// Guardar o actualizar plato (corregido el nombre de la función de limpieza)
+async function saveProduct() {
+    const nameInput = document.getElementById('newProdName');
+    const priceInput = document.getElementById('newProdPrice');
+    const categorySelect = document.getElementById('newProdCategory');
+    const activeToggle = document.getElementById('newProdActive');
+    
+    const name = nameInput.value.trim();
+    const price = getCleanPriceValue(priceInput.value);
+    const category = categorySelect.value;
+    const active = activeToggle.checked;
+
+    if (!name || price <= 0) {
+        showCustomAlert('Por favor ingrese el nombre del plato y un precio válido.');
+        return;
+    }
+
+    if (editingProductId !== null) {
+        const prod = products.find(p => p.id === editingProductId);
+        if (prod) {
+            prod.name = name;
+            prod.price = price;
+            prod.category = category;
+            prod.active = active;
+        }
+        cancelEditProduct();
+    } else {
+        const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+        products.push({ 
+            id: newId, 
+            name: name, 
+            price: price, 
+            category: category, 
+            active: active 
+        });
+    }
+
+    await saveDataAndSyncCloudSync('Plato guardado y sincronizado exitosamente.');
+    cancelEditProduct(); // <-- Llamada corregida
+    renderProducts();
+}
+
+// Editar plato existente
+function editProduct(id) {
+    const prod = products.find(p => p.id === id);
+    if (prod) {
+        editingProductId = id;
+        document.getElementById('newProdName').value = prod.name;
+        document.getElementById('newProdPrice').value = `$ ${prod.price.toLocaleString('es-CO')}`;
+        document.getElementById('newProdCategory').value = prod.category || 'principales';
+        
+        const activeToggle = document.getElementById('newProdActive');
+        const statusLabel = document.getElementById('prodActiveStatusLabel');
+        activeToggle.checked = prod.active !== false;
+        statusLabel.innerText = activeToggle.checked ? 'Activo' : 'Inactivo';
+        statusLabel.style.color = activeToggle.checked ? '#16a34a' : '#64748b';
+
+        document.getElementById('formProductTitle').innerText = 'Editar Plato';
+        document.getElementById('btnSaveProduct').innerText = 'Guardar Cambios (Online)';
+        document.getElementById('btnCancelEdit').classList.remove('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
+
+// Cancelar edición y limpiar formulario
+function cancelEditProduct() {
+    editingProductId = null;
+    document.getElementById('newProdName').value = '';
+    document.getElementById('newProdPrice').value = '';
+    document.getElementById('newProdCategory').value = 'principales';
+    
+    const activeToggle = document.getElementById('newProdActive');
+    const statusLabel = document.getElementById('prodActiveStatusLabel');
+    activeToggle.checked = true;
+    statusLabel.innerText = 'Activo';
+    statusLabel.style.color = '#16a34a';
+
+    document.getElementById('formProductTitle').innerText = 'Registro de Nuevo Plato';
+    document.getElementById('btnSaveProduct').innerText = 'Guardar Plato';
+    document.getElementById('btnCancelEdit').classList.add('hidden');
+}
+
+
+/* ========================================================== */
+/* FILTRADO ROBUSTO DEL CATÁLOGO POR CATEGORÍA Y ESTADO       */
+/* ========================================================== */
+
+// Función auxiliar para normalizar categorías sin importar cómo vengan de Sheets o LocalStorage
+function normalizeCategory(cat) {
+    if (!cat) return 'principales';
+    let c = String(cat).toLowerCase().trim();
+    if (c.includes('sopa') || c.includes('entrada')) return 'sopas';
+    if (c.includes('principal') || c.includes('plato')) return 'principales';
+    if (c.includes('bebida') || c.includes('jugo')) return 'bebidas';
+    if (c.includes('adicional') || c.includes('extra')) return 'adicionales';
+    return c;
+}
+
+// Función auxiliar para verificar si el producto está activo (maneja booleanos y textos de Sheets)
+function isProductActive(p) {
+    if (p.active === undefined || p.active === null) return true;
+    if (typeof p.active === 'boolean') return p.active;
+    let str = String(p.active).toLowerCase().trim();
+    if (str === 'false' || str === 'inactivo' || str === '0' || str === 'no') return false;
+    return true;
+}
+
+// Filtrar y mostrar los platos en la pantalla de pedidos según la categoría seleccionada por el mesero
+function filterPlusCategory(category, event) {
+    // Actualizar estilos activos de los 4 botones superiores
+    document.querySelectorAll('.plus-cat-btn').forEach(btn => {
+        btn.style.background = '#ffffff';
+        btn.classList.remove('active-cat');
+    });
+
+    if (event && event.currentTarget) {
+        event.currentTarget.style.background = '#e2e8f0';
+        event.currentTarget.classList.add('active-cat');
+    }
+
+    const catalogGrid = document.getElementById('plusCatalogGrid');
+    if (!catalogGrid) return;
+    catalogGrid.innerHTML = '';
+
+    // Normalizar la categoría objetivo que se quiere mostrar
+    const targetCat = normalizeCategory(category);
+
+    // Filtrar usando los normalizadores para asegurar coincidencia exacta con Sheets
+    const filteredProducts = products.filter(p => {
+        const prodCat = normalizeCategory(p.category);
+        return prodCat === targetCat && isProductActive(p);
+    });
+
+    if (filteredProducts.length === 0) {
+        catalogGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); font-size: 0.8rem; padding: 0.5rem;">No hay productos activos en esta categoría.</div>`;
+        return;
+    }
+
+    filteredProducts.forEach(prod => {
+        const btn = document.createElement('button');
+        btn.style.cssText = "background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: center; align-items: center;";
+        btn.innerHTML = `
+            <strong style="font-size: 0.75rem; color: var(--text); line-height: 1.1; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">${prod.name}</strong>
+            <span style="font-size: 0.7rem; color: var(--primary); font-weight: bold; margin-top: 2px;">$${(prod.price || 0).toLocaleString('es-CO')}</span>
+        `;
+        // Corregido: Llamar a addProductDirectlyToOrder pasando 'prod_' + id
+        btn.onclick = () => addProductDirectlyToOrder('prod_' + prod.id);
+        catalogGrid.appendChild(btn);
+    });
+}
+
+
+
+
+
+// Eliminar plato
+async function deleteProduct(id) {
+    const prod = products.find(p => p.id === id);
+    if (!prod) return;
+
+    if (confirm(`¿Desea eliminar el plato "${prod.name}"?`)) {
+        products = products.filter(p => p.id !== id);
+        if (editingProductId === id) cancelEditProduct();
+        await saveDataAndSyncCloudSync('Plato eliminado exitosamente.');
+        renderProducts();
+    }
 }
 
 

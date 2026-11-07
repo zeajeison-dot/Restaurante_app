@@ -204,24 +204,26 @@
             </div>
 
             <!-- 4 Botones Superiores de Categorías (Uniforme en 1 solo renglón) -->
+            <!-- 4 Botones Superiores de Categorías (Altura incrementada un 50%, ancho y distribución intactos) -->
             <div id="plusCategoriesBar" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3rem; margin-bottom: 0.5rem;">
-                <button class="plus-cat-btn active-cat" onclick="filterPlusCategory('sopas', event)" style="background: #e2e8f0; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
+                <button class="plus-cat-btn active-cat" onclick="filterPlusCategory('sopas', event)" style="background: #e2e8f0; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
                     <span>Sopas y Entradas</span>
-                    <span style="font-size: 0.65rem; margin-top: 1px;">🍲</span>
+                    <span style="font-size: 0.65rem; margin-top: 2px;">🍲</span>
                 </button>
-                <button class="plus-cat-btn" onclick="filterPlusCategory('principales', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
+                <button class="plus-cat-btn" onclick="filterPlusCategory('principales', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
                     <span>Plato Principal</span>
-                    <span style="font-size: 0.65rem; margin-top: 1px;">🍛</span>
+                    <span style="font-size: 0.65rem; margin-top: 2px;">🍛</span>
                 </button>
-                <button class="plus-cat-btn" onclick="filterPlusCategory('bebidas', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
+                <button class="plus-cat-btn" onclick="filterPlusCategory('bebidas', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
                     <span>Bebida</span>
-                    <span style="font-size: 0.65rem; margin-top: 1px;">🥛</span>
+                    <span style="font-size: 0.65rem; margin-top: 2px;">🥛</span>
                 </button>
-                <button class="plus-cat-btn" onclick="filterPlusCategory('adicionales', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
+                <button class="plus-cat-btn" onclick="filterPlusCategory('adicionales', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
                     <span>Adicionales</span>
-                    <span style="font-size: 0.65rem; margin-top: 1px;">➕</span>
+                    <span style="font-size: 0.65rem; margin-top: 2px;">➕</span>
                 </button>
             </div>
+
 
             <!-- Catálogo de Productos (2 líneas exactas, scroll horizontal) -->
             <div id="plusCatalogGrid" style="height: 135px; min-height: 135px; max-height: 135px; display: grid; grid-template-rows: repeat(2, 1fr); grid-auto-flow: column; gap: 0.3rem; overflow-x: auto; background: #f8fafc; padding: 0.3rem; border-radius: 8px; border: 1px solid var(--border); box-sizing: border-box; margin-bottom: 0.5rem;">
@@ -279,31 +281,61 @@
             <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="backToOrderSection()">Volver al Pedido</button>
         </div>
 
-        <!-- ==========================================
-           10. MÓDULO DE CATÁLOGO DE PLATOS Y RECETAS
+                   <!-- ==========================================
+           10. MÓDULO DE CATÁLOGO DE PLATOS & RECETAS
            ================================---------- -->
-        <div id="catalog-section" class="card hidden">
+        <div id="catalog-section" class="card hidden" style="max-width: 600px; margin: auto;">
             <h2>Catálogo de Platos & Recetas</h2>
-            <div class="input-group">
-                <label id="formProductTitle">Nombre del Plato Principal</label>
-                <input type="text" id="newProdName" placeholder="Ej: Costillas BBQ">
+            
+            <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                <h3 id="formProductTitle" style="font-size: 1rem; margin-bottom: 0.75rem; color: var(--text);">Registro de Nuevo Plato</h3>
+
+                <!-- 1. Nombre del Plato -->
+                <div class="input-group">
+                    <label>Nombre del Plato:</label>
+                    <input type="text" id="newProdName" placeholder="Ej: Costillas BBQ">
+                </div>
+
+                <!-- 2. Precio y Categoría -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <div class="input-group">
+                        <label>Precio del Plato ($):</label>
+                        <input type="text" id="newProdPrice" inputmode="numeric" pattern="[0-9]*" placeholder="$ 0" oninput="formatProductPriceInput(this)">
+                    </div>
+                    <div class="input-group">
+                        <label>Categoría del Plato:</label>
+                        <select id="newProdCategory" style="padding: 0.5rem; font-size: 0.85rem; border-radius: 6px; border: 1px solid var(--border);">
+                            <option value="principales">🍛 Platos Principales</option>
+                            <option value="sopas">🍲 Sopas y Entradas</option>
+                            <option value="bebidas">🥛 Bebidas</option>
+                            <option value="adicionales">➕ Adicionales</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 3. Toggle Estado (Activo / Inactivo) -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; background: #ffffff; padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border);">
+                    <span style="font-weight: bold; font-size: 0.85rem;">Estado del Plato:</span>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+                        <input type="checkbox" id="newProdActive" checked style="width: 18px; height: 18px; cursor: pointer;">
+                        <span id="prodActiveStatusLabel" style="font-size: 0.85rem; font-weight: bold; color: #16a34a;">Activo</span>
+                    </label>
+                </div>
+
+                <!-- Botón Guardar -->
+                <button class="btn" id="btnSaveProduct" onclick="saveProduct()">Guardar Plato</button>
+                <button class="btn btn-secondary hidden" id="btnCancelEdit" onclick="cancelEditProduct()" style="margin-top: 0.5rem;">Cancelar Edición</button>
             </div>
-            <div class="input-group">
-                <label>Precio Base ($)</label>
-                <input type="number" id="newProdPrice" placeholder="Ej: 22000">
-            </div>
-            <div class="input-group">
-                <label>Insumos / Componentes que consume del inventario:</label>
-                <div id="recipeComponentsSelector" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border); padding: 0.6rem; border-radius: 8px; background: #fafafa; display: flex; flex-direction: column; gap: 0.5rem;"></div>
-            </div>
-            <button class="btn" id="btnSaveProduct" onclick="saveProduct()">Guardar Plato</button>
-            <button class="btn btn-secondary hidden" id="btnCancelEdit" onclick="cancelEditProduct()">Cancelar Edición</button>
-            <div style="margin-top: 1.5rem;">
+
+            <!-- Listado de Platos Registrados -->
+            <div>
                 <h3>Platos Registrados</h3>
-                <div id="productList" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
+                <div id="productList" style="margin-top: 0.5rem; max-height: 280px; overflow-y: auto;"></div>
             </div>
+
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
+
 
         <!-- ==========================================
            11. MÓDULO DE GESTIÓN DE BEBIDAS
