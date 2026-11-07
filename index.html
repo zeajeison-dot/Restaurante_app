@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <!-- Configuración general del documento y metadatos base -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RestoPOS - Control de Restaurante</title>
+    
+    <!-- Enlaces a recursos PWA y hojas de estilos externas -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#1e293b">
     <link rel="stylesheet" href="./styles.css">
+
+    <!-- Estilos locales específicos para animaciones de alerta (Cocina y Mesas) -->
     <style>
+        /* Animación intermitente para las tarjetas de cocina en estado de alerta o retraso */
         @keyframes blink-animation {
             0% { opacity: 1; border-color: #ef4444; }
             50% { opacity: 0.4; border-color: #b91c1c; }
@@ -15,6 +21,7 @@
         }
         .kitchen-card-alert { animation: blink-animation 1s infinite; }
 
+        /* Animación parpadeante en tonos amarillos para notificar platos listos en mesas */
         @keyframes table-blink-yellow {
             0% { background-color: #fef08a; border-color: #eab308; transform: scale(1); }
             50% { background-color: #fef9c3; border-color: #ca8a04; transform: scale(1.02); }
@@ -27,9 +34,12 @@
     </style>
 </head>
 <body>
+    <!-- Contenedor principal de la aplicación con diseño responsivo -->
     <div class="container">
 
-        <!-- VISTA DE LOGIN -->
+        <!-- ==========================================
+           1. VISTA DE AUTENTICACIÓN / LOGIN
+           ================================---------- -->
         <div id="login-view" class="card">
             <div style="text-align: center; margin-bottom: 1.5rem;">
                 <h2>RestoPOS</h2>
@@ -47,7 +57,9 @@
             <p style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">Admin por defecto: admin / 123</p>
         </div>
 
-        <!-- PANEL PRINCIPAL (DASHBOARD) -->
+        <!-- ==========================================
+           2. PANEL PRINCIPAL (DASHBOARD GENERAL)
+           ================================---------- -->
         <div id="dashboard-view" class="hidden">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <div>
@@ -56,22 +68,26 @@
                 </div>
                 <button class="btn btn-secondary" style="width: auto; padding: 0.5rem 1rem; margin: 0;" onclick="logout()">Salir</button>
             </div>
+            <!-- Cuadrícula contenedora de los módulos de acceso rápido -->
             <div class="grid" id="dashboardMenuGrid"></div>
         </div>
         
-        <!-- MÓDULO DE DASHBOARD ANALÍTICO DE VENTAS -->
-<div id="dashboard-analytics-section" class="hidden" style="padding: 1rem;">
-    <h2>📊 Dashboard de Ventas</h2>
-    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Resumen de rendimiento y analíticas del restaurante</p>
+        <!-- ==========================================
+           3. MÓDULO DE DASHBOARD ANALÍTICO DE VENTAS
+           ================================---------- -->
+        <div id="dashboard-analytics-section" class="hidden" style="padding: 1rem;">
+            <h2>📊 Dashboard de Ventas</h2>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Resumen de rendimiento y analíticas del restaurante</p>
 
-    <!-- Contenedor obligatorio donde app.js inyecta las métricas -->
-    <div id="dashboardAnalyticsContainer"></div>
+            <!-- Contenedor obligatorio donde app.js inyecta dinámicamente las métricas y gráficos -->
+            <div id="dashboardAnalyticsContainer"></div>
 
-    <button class="btn btn-secondary admin-back-btn" onclick="showSection('dashboard-view')" style="margin-top: 1.5rem;">Volver al Menú</button>
-</div>
+            <button class="btn btn-secondary admin-back-btn" onclick="showSection('dashboard-view')" style="margin-top: 1.5rem;">Volver al Menú</button>
+        </div>
 
-
-        <!-- GESTIÓN DE MESAS -->
+        <!-- ==========================================
+           4. MÓDULO DE GESTIÓN DE MESAS (SALÓN)
+           ================================---------- -->
         <div id="tables-section" class="card hidden">
             <div id="tablesHeaderBar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
                 <div>
@@ -82,8 +98,10 @@
             </div>
 
             <p style="color: var(--text-secondary); font-size: 0.9rem;">Toca una mesa para ver o tomar su pedido:</p>
+            <!-- Cuadrícula interactiva de mesas del salón -->
             <div class="table-grid" id="tableGridContainer"></div>
             
+            <!-- Panel de configuración de alertas sonoras (Exclusivo para administradores) -->
             <div id="waiterAlarmConfigCard" style="margin-top: 1.5rem; background: #f1f5f9; padding: 1rem; border-radius: 8px; display: none;">
                 <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">⚙️ Configuración de Alarma de Meseros</h3>
                 <div class="input-group" style="margin-bottom: 0.5rem;">
@@ -96,12 +114,15 @@
             <button class="btn btn-secondary admin-back-btn" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- MÓDULO DE COCINA (KDS) -->
+        <!-- ==========================================
+           5. MÓDULO DE COCINA (KDS - KITCHEN DISPLAY SYSTEM)
+           ================================---------- -->
         <div id="kitchen-section" class="card hidden">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
                 <h2 style="margin: 0; font-size: 1.1rem;">👨‍🍳 Comandas en Cocina</h2>
                 <button class="btn btn-secondary" style="width: auto; padding: 0.4rem 0.8rem; margin: 0; font-size: 0.85rem;" onclick="logout()">Salir</button>
             </div>
+            <!-- Controles de parámetros de tiempo y alertas para comandas -->
             <div id="kitchenTimerConfigBox" style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; background: #f1f5f9; padding: 0.75rem; border-radius: 8px;">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <label style="font-size: 0.85rem; margin:0; font-weight: bold;">Tiempo límite (min):</label>
@@ -112,11 +133,14 @@
                     <input type="number" id="kitchenAlarmParam" value="5" min="1" max="30" style="width: 70px; padding: 0.3rem;">
                 </div>
             </div>
+            <!-- Contenedor de comandas en tiempo real -->
             <div id="kitchenOrdersContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; max-height: 55vh; overflow-y: auto;"></div>
             <button class="btn btn-secondary admin-back-btn" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- GESTIÓN DE USUARIOS -->
+        <!-- ==========================================
+           6. MÓDULO DE GESTIÓN DE USUARIOS Y PERMISOS
+           ================================---------- -->
         <div id="users-admin-section" class="card hidden">
             <h2>👥 Gestión de Usuarios y Permisos</h2>
             <div class="input-group">
@@ -144,7 +168,9 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- GESTIÓN DE MESAS (ADMIN) -->
+        <!-- ==========================================
+           7. MÓDULO DE ADMINISTRACIÓN DE MESAS
+           ================================---------- -->
         <div id="tables-admin-section" class="card hidden">
             <h2>Administración de Mesas</h2>
             <div class="input-group">
@@ -160,43 +186,88 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- TOMA DE PEDIDOS -->
-        <div id="order-section" class="card hidden">
-            <h2 id="order-title">Pedido de Mesa</h2>
-            <div id="readyForPickupBanner" style="display: none; background: #fef08a; border: 2px solid #eab308; padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; text-align: center;">
-                <strong style="color: #854d0e; display: block; font-size: 0.95rem;">🔔 ¡Platos listos para recoger en cocina!</strong>
-                <button class="btn" style="background: #eab308; color: #713f12; margin-top: 0.5rem; font-weight: bold; width: auto; padding: 0.4rem 1rem;" onclick="markTablePickedUp()">✅ Marcar como Recogido y Entregado</button>
+        <!-- ==========================================
+           8. MÓDULO DE TOMA DE PEDIDOS (NUEVO DISEÑO PLUS)
+           ================================---------- -->
+        <div id="order-section" class="card hidden" style="padding: 0.75rem; max-width: 600px; margin: auto; display: flex; flex-direction: column; height: 88vh; box-sizing: border-box;">
+            
+            <!-- Encabezado de Mesa -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h2 id="order-title" style="margin: 0; font-size: 1.1rem;">Pedido - Mesa</h2>
+                <button onclick="showSection('tables-section')" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; width: auto; margin:0;">⬅️ Volver</button>
             </div>
 
-            <div class="input-group">
-                <label>Seleccionar Plato o Bebida</label>
-                <select id="productSelect" onchange="loadProductRecipeOptions()"></select>
+            <!-- Banner de platos listos -->
+            <div id="readyForPickupBanner" style="display: none; background: #fef08a; border: 2px solid #eab308; padding: 0.5rem; border-radius: 6px; margin-bottom: 0.5rem; text-align: center;">
+                <strong style="color: #854d0e; display: block; font-size: 0.85rem;">🔔 ¡Platos listos para recoger en cocina!</strong>
+                <button class="btn" style="background: #eab308; color: #713f12; margin-top: 0.3rem; font-weight: bold; width: auto; padding: 0.3rem 0.8rem; font-size: 0.8rem;" onclick="markTablePickedUp()">✅ Marcar como Recogido</button>
             </div>
 
-            <div id="dishCustomizationBox" style="background: #f1f5f9; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: none;">
-                <h4 id="customizationBoxTitle" style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text);">Personalización del Plato:</h4>
-                <div id="recipeComponentsList" style="margin-bottom: 0.75rem;"></div>
-                <div id="addonsSelectionList"></div>
+            <!-- 4 Botones Superiores de Categorías (Uniforme en 1 solo renglón) -->
+            <div id="plusCategoriesBar" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3rem; margin-bottom: 0.5rem;">
+                <button class="plus-cat-btn active-cat" onclick="filterPlusCategory('sopas', event)" style="background: #e2e8f0; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
+                    <span>Sopas y Entradas</span>
+                    <span style="font-size: 0.65rem; margin-top: 1px;">🍲</span>
+                </button>
+                <button class="plus-cat-btn" onclick="filterPlusCategory('principales', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
+                    <span>Plato Principal</span>
+                    <span style="font-size: 0.65rem; margin-top: 1px;">🍛</span>
+                </button>
+                <button class="plus-cat-btn" onclick="filterPlusCategory('bebidas', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
+                    <span>Bebida</span>
+                    <span style="font-size: 0.65rem; margin-top: 1px;">🥛</span>
+                </button>
+                <button class="plus-cat-btn" onclick="filterPlusCategory('adicionales', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;">
+                    <span>Adicionales</span>
+                    <span style="font-size: 0.65rem; margin-top: 1px;">➕</span>
+                </button>
             </div>
 
-            <button class="btn" id="btnAddOrUpdateOrder" onclick="saveOrderCustomization()">Agregar al Pedido</button>
-            <button class="btn btn-secondary hidden" id="btnCancelOrderEdit" onclick="cancelOrderEdit()">Cancelar Edición</button>
+            <!-- Catálogo de Productos (2 líneas exactas, scroll horizontal) -->
+            <div id="plusCatalogGrid" style="height: 135px; min-height: 135px; max-height: 135px; display: grid; grid-template-rows: repeat(2, 1fr); grid-auto-flow: column; gap: 0.3rem; overflow-x: auto; background: #f8fafc; padding: 0.3rem; border-radius: 8px; border: 1px solid var(--border); box-sizing: border-box; margin-bottom: 0.5rem;">
+                <!-- Inyectado dinámicamente -->
+            </div>
 
-            <div style="margin-top: 1.5rem;">
-                <h3>Cuenta Actual</h3>
-                <div id="orderItemsList" style="max-height: 180px; overflow-y: auto; margin-bottom: 1rem;"></div>
-                <div style="display: flex; justify-content: space-between; font-size: 1.2rem; font-weight: bold; margin-bottom: 1rem;">
-                    <span>Total:</span>
-                    <span id="orderTotal">$ 0</span>
+            <!-- Sección de Comanda / Ítems con 4 Columnas -->
+            <div style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 0.5rem; box-sizing: border-box;">
+                <div style="background: var(--primary); color: white; display: grid; grid-template-columns: 35px 2.2fr 2.5fr 40px; padding: 0.4rem 0.2rem; font-size: 0.75rem; font-weight: bold; text-align: center; align-items: center;">
+                    <div>🧑‍🍳</div>
+                    <div>Plató</div>
+                    <div>Observaciones</div>
+                    <div>🚥 Acción</div>
+                </div>
+                <div id="plusOrderItemsList" style="flex: 1; overflow-y: auto; padding: 0.2rem;">
+                    <!-- Inyectado dinámicamente -->
                 </div>
             </div>
 
-            <button class="btn" style="background: #f59e0b; color: white;" onclick="sendOrderToKitchen()">👨‍🍳 Enviar a Cocina</button>
-            <button class="btn" style="background: var(--success); margin-top: 0.5rem;" onclick="openBillSection()">💳 Ver Cuenta / Recibos</button>
-            <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="showSection('tables-section')">Volver a Mesas</button>
+            <!-- Total acumulado -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.3rem 0.5rem; background: #f1f5f9; border-radius: 6px; margin-bottom: 0.5rem;">
+                <strong style="font-size: 0.9rem;">Total a Pagar:</strong>
+                <strong id="orderTotal" style="font-size: 1.1rem; color: var(--primary);">$ 0</strong>
+            </div>
+
+            <!-- 3 Botones Inferiores (Horizontales y uniformes) -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; height: 42px; min-height: 42px;">
+                <button onclick="sendOrderToKitchen()" class="btn btn-warning" style="padding: 0.2rem; font-size: 0.75rem; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; margin: 0; width: 100%;">
+                    <span>Enviar a Cocina</span>
+                    <span style="font-size: 0.7rem;">🧑‍🍳</span>
+                </button>
+                <button onclick="openBillSection()" class="btn btn-success" style="padding: 0.2rem; font-size: 0.75rem; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; margin: 0; width: 100%; background: #10b981;">
+                    <span>Ver Cuenta</span>
+                    <span style="font-size: 0.7rem;">💳 / Recibos</span>
+                </button>
+                <button onclick="showSection('tables-section')" class="btn btn-secondary" style="padding: 0.2rem; font-size: 0.75rem; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; margin: 0; width: 100%;">
+                    <span>Volver a Mesas</span>
+                    <span style="font-size: 0.7rem;">👈</span>
+                </button>
+            </div>
+
         </div>
 
-        <!-- GESTIÓN DE CUENTAS -->
+        <!-- ==========================================
+           9. MÓDULO DE GESTIÓN DE CUENTAS Y FACTURACIÓN
+           ================================---------- -->
         <div id="bill-section" class="card hidden">
             <h2 id="bill-title">Resumen de Cuenta</h2>
             <div id="billItemsList" style="max-height: 160px; overflow-y: auto; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;"></div>
@@ -208,7 +279,9 @@
             <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="backToOrderSection()">Volver al Pedido</button>
         </div>
 
-        <!-- CATÁLOGO DE PLATOS -->
+        <!-- ==========================================
+           10. MÓDULO DE CATÁLOGO DE PLATOS Y RECETAS
+           ================================---------- -->
         <div id="catalog-section" class="card hidden">
             <h2>Catálogo de Platos & Recetas</h2>
             <div class="input-group">
@@ -232,7 +305,9 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- GESTIÓN DE BEBIDAS (CON SINCRONIZACIÓN SHEETS Y ASOCIACIÓN DE INVENTARIO) -->
+        <!-- ==========================================
+           11. MÓDULO DE GESTIÓN DE BEBIDAS
+           ================================---------- -->
         <div id="drinks-section" class="card hidden">
             <h2>🥤 Gestión de Bebidas</h2>
             <div class="input-group">
@@ -256,7 +331,9 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- ADICIONALES -->
+        <!-- ==========================================
+           12. MÓDULO DE ADICIONALES Y ACOMPAÑAMIENTOS
+           ================================---------- -->
         <div id="addons-section" class="card hidden">
             <h2>Gestión de Adicionales y Acompañamientos</h2>
             <div class="input-group">
@@ -280,33 +357,9 @@
             <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
         </div>
 
-        <!-- INVENTARIO Y CONSUMO -->
-        <div id="inventory-section" class="card hidden">
-            <h2>📦 Control de Inventario y Entradas</h2>
-            <div class="input-group">
-                <label id="formInvTitle">Nombre del Insumo / Ingrediente</label>
-                <input type="text" id="invName" placeholder="Ej: Costilla de Res, Cerveza">
-            </div>
-            <div class="input-group">
-                <label>Cantidad Inicial / Ingreso de Stock</label>
-                <input type="number" id="invStock" placeholder="Ej: 50">
-            </div>
-            <div class="input-group">
-                <label>Unidad de Medida</label>
-                <input type="text" id="invUnit" placeholder="Ej: Unidades, Gramos, Litros">
-            </div>
-            <button class="btn" id="btnSaveInventory" onclick="saveInventoryItem()">Registrar Ingreso en Inventario (Online)</button>
-            <button class="btn btn-secondary hidden" id="btnCancelInvEdit" onclick="cancelEditInventory()">Cancelar Edición</button>
-
-            <div style="margin-top: 1.5rem;">
-                <h3>Insumos Registrados en el Sistema</h3>
-                <div id="inventoryList" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
-            </div>
-            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">Volver al Menú</button>
-        </div>
-
     </div>
 
+    <!-- Script principal de la aplicación -->
     <script src="./app.js"></script>
 </body>
 </html>

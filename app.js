@@ -1,6 +1,9 @@
-/* ========================================================== */
-/* 1. INICIALIZACIÓN Y ESTADOS GLOBALES                      */
-/* ========================================================== */
+/**
+ * ==========================================================
+ * SISTEMA RESTOPOS - CONTROL Y GESTIÓN DE RESTAURANTE
+ * ARCHIVO PRINCIPAL DE LÓGICA DE NEGOCIO (app.js)
+ * ==========================================================
+ */
 
 window.onload = async function() {
     await loadDataFromCloud();
@@ -46,7 +49,6 @@ let drinks = JSON.parse(localStorage.getItem('restopos_drinks')) || [
     { id: 3, name: 'Limonada natural', price: 5000 }
 ];
 
-// Historial de ventas acumulado e inmutable para el dashboard
 let salesHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
 let appConfig = JSON.parse(localStorage.getItem('restopos_config')) || { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true };
 
@@ -56,7 +58,7 @@ let editingDrinkId = null;
 let editingAddonId = null;
 let editingTableId = null;
 let editingUserId = null;
-let editingOrderItemIndex = null;
+let currentPlusCategory = 'sopas';
 let kitchenInterval = null;
 let tablesRefreshInterval = null; 
 let lastKitchenAlarmTime = 0; 
@@ -108,11 +110,6 @@ function setupUserSession(username, role, isNewLogin = false) {
         alarmParamInput.value = appConfig.waiterAlarmInterval || 20;
     }
 
-    const waiterReceiptToggle = document.getElementById('waiterCanGenerateReceiptParam');
-    if (waiterReceiptToggle) {
-        waiterReceiptToggle.checked = appConfig.waiterCanGenerateReceipt !== false;
-    }
-
     if (isNewLogin) {
         if (role === 'cocinero') {
             showSection('kitchen-section');
@@ -154,7 +151,6 @@ function renderDashboardMenu(role) {
 
     grid.innerHTML = '';
 
-    // Tarjetas del menú principal del Administrador (Módulo de Inventario eliminado)
     let menuCards = [
         { title: '📊 Dashboard de Ventas', desc: 'Analíticas y resultados comerciales', action: "showSection('dashboard-analytics-section')" },
         { title: '🪑 Mesas & Pedidos', desc: 'Control de salón', action: "showSection('tables-section')" },
@@ -212,7 +208,6 @@ function logout() {
 async function showSection(sectionId) {
     const role = localStorage.getItem('restopos_current_role') || 'admin';
 
-    // Validación de seguridad estricta para el Dashboard Analítico (Exclusivo Admin)
     if (sectionId === 'dashboard-analytics-section' && role !== 'admin') {
         showCustomAlert('❌ Acceso denegado: El módulo de Dashboard es exclusivo para el rol de Administrador.');
         return;
@@ -246,33 +241,18 @@ async function showSection(sectionId) {
 
     sections.forEach(id => {
         const el = document.getElementById(id);
-        if (el) {
-            el.classList.add('hidden');
-        }
+        if (el) el.classList.add('hidden');
     });
 
     const target = document.getElementById(sectionId);
-    if (target) {
-        target.classList.remove('hidden');
-    }
+    if (target) target.classList.remove('hidden');
 
-    if (kitchenInterval) {
-        clearInterval(kitchenInterval);
-        kitchenInterval = null;
-    }
-
-    if (tablesRefreshInterval) {
-        clearInterval(tablesRefreshInterval);
-        tablesRefreshInterval = null;
-    }
+    if (kitchenInterval) { clearInterval(kitchenInterval); kitchenInterval = null; }
+    if (tablesRefreshInterval) { clearInterval(tablesRefreshInterval); tablesRefreshInterval = null; }
 
     const backBtns = document.querySelectorAll('.admin-back-btn');
     backBtns.forEach(btn => {
-        if (role === 'admin') {
-            btn.style.display = 'block';
-        } else {
-            btn.style.display = 'none';
-        }
+        btn.style.display = (role === 'admin') ? 'block' : 'none';
     });
 
     if (sectionId === 'tables-section') {
@@ -294,19 +274,17 @@ async function showSection(sectionId) {
         renderTables();
 
         let isRefreshingTables = false;
-
         tablesRefreshInterval = setInterval(async () => {
             const tablesSec = document.getElementById('tables-section');
             if (tablesSec && !tablesSec.classList.contains('hidden')) {
                 if (isRefreshingTables) return;
                 isRefreshingTables = true;
-
                 try {
                     await loadDataFromCloud();
                     renderTables();
                     checkWaiterReadyAlarm();
                 } catch (e) {
-                    console.error("Error en sondeo automático de mesas:", e);
+                    console.error("Error en sondeo de mesas:", e);
                 } finally {
                     isRefreshingTables = false;
                 }
@@ -321,12 +299,9 @@ async function showSection(sectionId) {
         if (!kitchenSection) return;
 
         const timerConfigBox = document.getElementById('kitchenTimerConfigBox');
-        if (timerConfigBox) {
-            timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
-        }
+        if (timerConfigBox) timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
 
         renderKitchenOrders();
-
         kitchenInterval = setInterval(() => {
             if (kitchenSection && !kitchenSection.classList.contains('hidden')) {
                 renderKitchenOrders();
@@ -353,7 +328,7 @@ async function showSection(sectionId) {
         cancelEditAddon();
         renderAddons();
     } else if (sectionId === 'dashboard-analytics-section') {
-        renderSalesDashboard(); // Carga perezosa de analíticas del dashboard
+        renderSalesDashboard();
     }
 }
 
@@ -372,37 +347,33 @@ function checkWaiterReadyAlarm() {
 
 
 /* ========================================================== */
-/* 3. MÓDULO DE GESTIÓN DE USUARIOS Y PERMISOS                 */
+/* 3. GESTIÓN DE USUARIOS Y PERMISOS                          */
 /* ========================================================== */
 
 function renderUsersAdmin() {
     const list = document.getElementById('usersList');
     if (!list) return;
-
     list.innerHTML = '';
-
     users.forEach(u => {
         const item = document.createElement('div');
         item.className = 'product-row';
-
         item.innerHTML = `
             <div class="product-info">
                 <span><strong>${u.username}</strong></span>
                 <span style="font-size:0.75rem; color: var(--text-secondary); display:block; text-transform:uppercase;">Rol: ${u.role}</span>
             </div>
             <div class="product-actions">
-                <button onclick="editUser(${u.id})" class="action-btn" title="Editar Usuario">✏️</button>
-                <button onclick="deleteUser(${u.id})" class="action-btn" title="Eliminar Usuario">🗑️</button>
+                <button onclick="editUser(${u.id})" class="action-btn" title="Editar">✏️</button>
+                <button onclick="deleteUser(${u.id})" class="action-btn" title="Eliminar">🗑️</button>
             </div>
         `;
-
         list.appendChild(item);
     });
 }
 
 async function saveUser() {
     if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se puede crear o modificar usuarios sin conexión a internet.');
+        showCustomAlert('❌ Acción bloqueada: Sin conexión a internet.');
         return;
     }
 
@@ -411,47 +382,36 @@ async function saveUser() {
     const role = document.getElementById('newUserRole').value;
 
     if (!username || !pass) {
-        showCustomAlert('Por favor ingrese el nombre de usuario y la contraseña.');
+        showCustomAlert('Por favor ingrese usuario y contraseña.');
         return;
     }
 
     if (editingUserId !== null) {
         const user = users.find(u => u.id == editingUserId);
-        if (user) {
-            user.username = username;
-            user.pass = pass;
-            user.role = role;
-        }
+        if (user) { user.username = username; user.pass = pass; user.role = role; }
         cancelEditUser();
     } else {
         const newId = users.length > 0 ? Math.max(...users.map(u => Number(u.id))) + 1 : 1;
         users.push({ id: newId, username, pass, role });
     }
 
-    await saveDataAndSyncCloudSync('Usuario guardado y registrado en Google Sheets exitosamente.');
-
+    await saveDataAndSyncCloudSync('Usuario guardado en Google Sheets exitosamente.');
     document.getElementById('newUsername').value = '';
     document.getElementById('newUserPass').value = '';
     renderUsersAdmin();
 }
 
 function editUser(id) {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se puede editar usuarios sin conexión a internet.');
-        return;
-    }
-
+    if (!navigator.onLine) { showCustomAlert('❌ Sin conexión a internet.'); return; }
     const user = users.find(u => u.id == id);
     if (user) {
         editingUserId = id;
         document.getElementById('newUsername').value = user.username;
         document.getElementById('newUserPass').value = user.pass;
         document.getElementById('newUserRole').value = user.role;
-
         document.getElementById('formUserTitle').innerText = 'Editar Usuario';
-        document.getElementById('btnSaveUser').innerText = 'Guardar Cambios de Usuario (Online)';
+        document.getElementById('btnSaveUser').innerText = 'Guardar Cambios (Online)';
         document.getElementById('btnCancelUserEdit').classList.remove('hidden');
-
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 }
@@ -461,30 +421,21 @@ function cancelEditUser() {
     document.getElementById('newUsername').value = '';
     document.getElementById('newUserPass').value = '';
     document.getElementById('newUserRole').value = 'mesero';
-
     document.getElementById('formUserTitle').innerText = 'Nombre de Usuario';
     document.getElementById('btnSaveUser').innerText = 'Crear / Guardar Usuario (Online)';
     document.getElementById('btnCancelUserEdit').classList.add('hidden');
 }
 
 async function deleteUser(id) {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se puede eliminar usuarios sin conexión a internet.');
-        return;
-    }
-
+    if (!navigator.onLine) { showCustomAlert('❌ Sin conexión a internet.'); return; }
     const user = users.find(u => u.id == id);
     if (!user) return;
+    if (user.username === 'admin') { showCustomAlert('No se puede eliminar el administrador.'); return; }
 
-    if (user.username === 'admin') {
-        showCustomAlert('No se puede eliminar el usuario administrador principal.');
-        return;
-    }
-
-    if (confirm(`¿Desea eliminar permanentemente al usuario "${user.username}" de la aplicación y de Google Sheets?`)) {
+    if (confirm(`¿Desea eliminar a "${user.username}"?`)) {
         users = users.filter(u => u.id != id);
         if (editingUserId == id) cancelEditUser();
-        await saveDataAndSyncCloudSync('Usuario eliminado y actualizado en Google Sheets.');
+        await saveDataAndSyncCloudSync('Usuario eliminado.');
         renderUsersAdmin();
     }
 }
@@ -497,30 +448,22 @@ async function deleteUser(id) {
 function renderTables() {
     const container = document.getElementById('tableGridContainer');
     if (!container) return;
-
     container.innerHTML = '';
 
     tables.forEach(t => {
         const div = document.createElement('div');
-        
         let hasReadyItems = t.items && t.items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
         let hasInKitchenItems = t.items && t.items.some(item => item.sentToKitchen && !item.served);
 
         let classNames = `table-item ${t.status}`;
         let statusText = t.status;
 
-        if (hasReadyItems) {
-            classNames += ` table-item-alert`;
-            statusText = '¡Listos en cocina!';
-        } else if (hasInKitchenItems) {
-            classNames = `table-item ocupada`;
-            statusText = 'En cocina';
-        }
+        if (hasReadyItems) { classNames += ` table-item-alert`; statusText = '¡Listos en cocina!'; }
+        else if (hasInKitchenItems) { classNames = `table-item ocupada`; statusText = 'En cocina'; }
 
         div.className = classNames;
         div.innerHTML = `${t.name}<br><span style="font-size:0.65rem; text-transform:uppercase;">${statusText}</span>`;
         div.onclick = () => openTableOrder(t.id);
-
         container.appendChild(div);
     });
 }
@@ -528,26 +471,20 @@ function renderTables() {
 function renderTablesAdmin() {
     const list = document.getElementById('tablesAdminList');
     if (!list) return;
-
-    list.style.maxHeight = "350px";
-    list.style.overflowY = "auto";
     list.innerHTML = '';
-
     tables.forEach(t => {
         const item = document.createElement('div');
         item.className = 'product-row';
-
         item.innerHTML = `
             <div class="product-info">
                 <span><strong>${t.name}</strong></span>
                 <span style="font-size:0.75rem; color: var(--text-secondary); display:block; text-transform:uppercase;">Estado: ${t.status}</span>
             </div>
             <div class="product-actions">
-                <button onclick="editTable(${t.id})" class="action-btn" title="Editar Mesa">✏️</button>
-                <button onclick="deleteTable(${t.id})" class="action-btn" title="Eliminar Mesa">🗑️</button>
+                <button onclick="editTable(${t.id})" class="action-btn" title="Editar">✏️</button>
+                <button onclick="deleteTable(${t.id})" class="action-btn" title="Eliminar">🗑️</button>
             </div>
         `;
-
         list.appendChild(item);
     });
 }
@@ -555,30 +492,18 @@ function renderTablesAdmin() {
 async function saveNewTable() {
     const nameInput = document.getElementById('newTableName');
     const name = nameInput.value.trim();
-
-    if (!name) {
-        showCustomAlert('Por favor ingrese el nombre de la mesa.');
-        return;
-    }
+    if (!name) { showCustomAlert('Ingrese el nombre de la mesa.'); return; }
 
     if (editingTableId !== null) {
         const table = tables.find(t => t.id === editingTableId);
-        if (table) {
-            table.name = name;
-        }
+        if (table) table.name = name;
         cancelEditTable();
     } else {
         const newId = tables.length > 0 ? Math.max(...tables.map(t => t.id)) + 1 : 1;
-        tables.push({
-            id: newId,
-            name: name,
-            status: 'libre',
-            items: [],
-            receipts: []
-        });
+        tables.push({ id: newId, name: name, status: 'libre', items: [], receipts: [] });
     }
 
-    await saveDataAndSyncCloudSync('Mesa guardada y actualizada en Google Sheets exitosamente.');
+    await saveDataAndSyncCloudSync('Mesa guardada exitosamente.');
     nameInput.value = '';
     renderTablesAdmin();
 }
@@ -588,12 +513,7 @@ function editTable(id) {
     if (table) {
         editingTableId = id;
         document.getElementById('newTableName').value = table.name;
-
-        const container = document.getElementById('newTableName').closest('.input-group').parentNode;
-        const cancelBtn = document.getElementById('btnCancelTableEdit');
-        if (cancelBtn) cancelBtn.classList.remove('hidden');
-
-        container.querySelector('button').innerText = 'Guardar Cambios de Mesa';
+        document.getElementById('btnCancelTableEdit').classList.remove('hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 }
@@ -601,441 +521,283 @@ function editTable(id) {
 function cancelEditTable() {
     editingTableId = null;
     document.getElementById('newTableName').value = '';
-
-    const saveBtn = document.querySelector('#tables-admin-section button');
-    if (saveBtn) saveBtn.innerText = 'Guardar Mesa';
-
-    const cancelBtn = document.getElementById('btnCancelTableEdit');
-    if (cancelBtn) cancelBtn.classList.add('hidden');
+    document.getElementById('btnCancelTableEdit').classList.add('hidden');
 }
 
 async function deleteTable(id) {
     const table = tables.find(t => t.id === id);
     if (!table) return;
-
     if (table.status === 'ocupada' || (table.items && table.items.length > 0)) {
-        showCustomAlert('No se puede eliminar una mesa que se encuentra ocupada o tiene pedidos activos.');
+        showCustomAlert('No se puede eliminar una mesa ocupada.');
         return;
     }
-
-    if (confirm(`¿Desea eliminar la ${table.name}?`)) {
+    if (confirm(`¿Eliminar ${table.name}?`)) {
         tables = tables.filter(t => t.id !== id);
         if (editingTableId === id) cancelEditTable();
-        await saveDataAndSyncCloudSync('Mesa eliminada y actualizada en Google Sheets.');
+        await saveDataAndSyncCloudSync('Mesa eliminada.');
         renderTablesAdmin();
     }
 }
 
 
 /* ========================================================== */
-/* 5. MÓDULO DE PEDIDOS Y PERSONALIZACIÓN                     */
+/* CORRECCIÓN: FUNCIÓN OPENTABLEORDER BLINDADA CONTRA NULOS    */
 /* ========================================================== */
 
 async function openTableOrder(id) {
     currentTableId = id;
-
     await loadDataFromCloud();
 
     const table = tables.find(t => t.id === id);
+    if (!table) return;
     if (!table.receipts) table.receipts = [];
 
+    // Asignar UIDs únicos si los ítems no tienen
     table.items.forEach(item => {
         if (!item.uid) item.uid = '_' + Math.random().toString(36).substr(2, 9);
     });
 
-    document.getElementById('order-title').innerText = `Pedido - ${table.name}`;
+    // Cambiar de vista primero para que los elementos del DOM existan
+    document.getElementById('tables-section').classList.add('hidden');
+    document.getElementById('order-section').classList.remove('hidden');
 
+    // Actualizar título de la mesa de forma segura
+    const orderTitleEl = document.getElementById('order-title');
+    if (orderTitleEl) {
+        orderTitleEl.innerText = `Pedido - ${table.name}`;
+    }
+
+    // Gestionar banner de platos listos
     const readyBanner = document.getElementById('readyForPickupBanner');
     const hasReadyItems = table.items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
     if (readyBanner) {
         readyBanner.style.display = hasReadyItems ? 'block' : 'none';
     }
 
-    const select = document.getElementById('productSelect');
-    select.innerHTML = '<option value="">-- Seleccione un plato o bebida --</option>';
-
-    products.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = 'prod_' + p.id;
-        opt.innerText = `${p.name} - $${p.price.toLocaleString()}`;
-        select.appendChild(opt);
-    });
-
-    drinks.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = 'drink_' + d.id;
-        opt.innerText = `🥤 [Bebida] ${d.name} - $${d.price.toLocaleString()}`;
-        select.appendChild(opt);
-    });
-
-    cancelOrderEdit();
-    renderOrderItems();
-
-    document.getElementById('tables-section').classList.add('hidden');
-    document.getElementById('order-section').classList.remove('hidden');
+    // Cargar categoría por defecto y comanda
+    filterPlusCategory('sopas');
+    renderPlusOrderItems();
 }
+
 
 async function markTablePickedUp() {
     const table = tables.find(t => t.id === currentTableId);
     if (!table) return;
 
     table.items.forEach(item => {
-        if (item.sentToKitchen && item.served) {
-            item.pickedUp = true;
-        }
+        if (item.sentToKitchen && item.served) item.pickedUp = true;
     });
 
-    await saveDataAndSyncCloudSync('Pedido marcado como recogido y actualizado en Google Sheets.');
-
+    await saveDataAndSyncCloudSync('Pedido marcado como recogido.');
     const readyBanner = document.getElementById('readyForPickupBanner');
     if (readyBanner) readyBanner.style.display = 'none';
-
-    renderOrderItems();
+    renderPlusOrderItems();
 }
 
-function loadProductRecipeOptions(selectedComponentChoices = [], selectedAddonsData = []) {
-    const val = document.getElementById('productSelect').value;
-    const box = document.getElementById('dishCustomizationBox');
-    const compList = document.getElementById('recipeComponentsList');
-    const addonsBox = document.getElementById('addonsSelectionList');
 
-    if (!val) {
-        box.style.display = 'none';
-        return;
-    }
+function filterPlusCategory(category, event) {
+    currentPlusCategory = category;
 
-    if (val.startsWith('drink_')) {
-        box.style.display = 'none';
-        return;
-    }
+    const catButtons = document.querySelectorAll('.plus-cat-btn');
+    catButtons.forEach(btn => btn.style.background = '#ffffff');
 
-    box.style.display = 'block';
-
-    const prodId = parseInt(val.replace('prod_', ''));
-    const product = products.find(p => p.id === prodId);
-
-    compList.innerHTML = '<strong style="font-size:0.85rem; color:var(--text-secondary);">Componentes Base:</strong>';
-
-    if (product && product.components && product.components.length > 0) {
-        product.components.forEach((compId, idx) => {
-            const addonObj = addons.find(a => a.id === compId);
-
-            if (addonObj) {
-                const div = document.createElement('div');
-                div.style.cssText = "display: flex; align-items: center; justify-content: space-between; margin-top: 0.4rem; font-size: 0.9rem;";
-
-                let subOptions = `<option value="Mantener (${addonObj.name})">Mantener (${addonObj.name})</option>`;
-
-                addons.filter(a => a.price === 0).forEach(freeA => {
-                    if (freeA.id !== compId) {
-                        subOptions += `<option value="Cambiado por ${freeA.name}">Cambiar por ${freeA.name} (Sin costo)</option>`;
-                    }
-                });
-
-                subOptions += `<option value="SIN ${addonObj.name}">[Retirar sin sustituto]</option>`;
-
-                div.innerHTML = `
-                    <span>${addonObj.name}</span>
-                    <select class="component-choice" data-original="${addonObj.name}" style="width: 55%; padding: 0.3rem; font-size: 0.85rem;">
-                        ${subOptions}
-                    </select>
-                `;
-
-                compList.appendChild(div);
-
-                if (selectedComponentChoices.length > 0 && selectedComponentChoices[idx]) {
-                    const selectEl = div.querySelector('.component-choice');
-                    selectEl.value = selectedComponentChoices[idx];
-                }
-            }
-        });
-
+    if (event && event.currentTarget) {
+        event.currentTarget.style.background = '#e2e8f0';
     } else {
-        compList.innerHTML += '<p style="font-size:0.85rem; color:var(--text-secondary);">Este plato no tiene componentes base.</p>';
+        const firstBtn = document.querySelector('.plus-cat-btn');
+        if (firstBtn) firstBtn.style.background = '#e2e8f0';
     }
 
-    addonsBox.innerHTML = '<strong style="font-size:0.85rem; color:var(--text-secondary); display:block; margin-top:0.75rem;">Adicionales con costo extra:</strong>';
+    const catalogGrid = document.getElementById('plusCatalogGrid');
+    if (!catalogGrid) return;
+    catalogGrid.innerHTML = '';
 
-    let extraAddonsExist = false;
+    let itemsToDisplay = [];
+    if (category === 'sopas') {
+        itemsToDisplay = products.slice(0, Math.ceil(products.length / 2));
+    } else if (category === 'principales') {
+        itemsToDisplay = products;
+    } else if (category === 'bebidas') {
+        itemsToDisplay = drinks.map(d => ({ id: 'drink_' + d.id, name: d.name, price: d.price }));
+    } else if (category === 'adicionales') {
+        itemsToDisplay = addons.map(a => ({ id: 'addon_' + a.id, name: a.name, price: a.price }));
+    }
 
-    addons.forEach(ad => {
-        if (ad.price > 0) {
-            extraAddonsExist = true;
+    if (itemsToDisplay.length === 0) {
+        catalogGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; font-size: 0.8rem; color: var(--text-secondary); padding: 1rem;">No hay productos en esta categoría.</div>';
+        return;
+    }
 
-            let matched = selectedAddonsData.find(item => item.id === ad.id);
-            let isChecked = matched ? 'checked' : '';
-            let qty = matched ? matched.qty : 1;
-            let displayStyle = matched ? 'display: inline-block;' : 'display: none;';
+    itemsToDisplay.forEach(item => {
+        const btn = document.createElement('div');
+        btn.style.cssText = "background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem; display: flex; flex-direction: column; justify-content: space-between; align-items: center; cursor: pointer; text-align: center; width: 110px; height: 55px; box-sizing: border-box;";
+        
+        let itemId = String(item.id).includes('_') ? item.id : 'prod_' + item.id;
 
-            const div = document.createElement('div');
-            div.style.cssText = "display: flex; align-items: center; justify-content: space-between; margin-top: 0.4rem;";
+        btn.innerHTML = `
+            <span style="font-size: 0.7rem; font-weight: bold; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.1;">${item.name}</span>
+            <span style="font-size: 0.7rem; color: var(--primary); font-weight: bold;">$${item.price.toLocaleString()}</span>
+        `;
 
-            div.innerHTML = `
-                <label class="checkbox-label" style="flex: 1;">
-                    <input type="checkbox" class="addon-checkbox" value="${ad.id}" data-price="${ad.price}" data-name="${ad.name}" ${isChecked} onchange="toggleAddonQuantity(this)">
-                    <span>${ad.name} (+$${ad.price.toLocaleString()})</span>
-                </label>
-                <select class="addon-qty-select" data-id="${ad.id}" style="width: 70px; padding: 0.2rem; font-size: 0.85rem; ${displayStyle}">
-                    <option value="1" ${qty == 1 ? 'selected' : ''}>1</option>
-                    <option value="2" ${qty == 2 ? 'selected' : ''}>2</option>
-                    <option value="3" ${qty == 3 ? 'selected' : ''}>3</option>
-                    <option value="4" ${qty == 4 ? 'selected' : ''}>4</option>
-                    <option value="5" ${qty == 5 ? 'selected' : ''}>5</option>
-                </select>
-            `;
-
-            addonsBox.appendChild(div);
-        }
+        btn.onclick = () => addProductDirectlyToOrder(itemId);
+        catalogGrid.appendChild(btn);
     });
-
-    if (!extraAddonsExist) {
-        addonsBox.innerHTML += '<p style="font-size:0.85rem; color:var(--text-secondary);">No hay adicionales con costo registrados.</p>';
-    }
 }
 
-function toggleAddonQuantity(checkbox) {
-    const parentRow = checkbox.closest('div');
-    const selectQty = parentRow.querySelector('.addon-qty-select');
-
-    if (checkbox.checked) {
-        selectQty.style.display = 'inline-block';
-    } else {
-        selectQty.style.display = 'none';
-        selectQty.value = '1';
-    }
-}
-
-async function saveOrderCustomization() {
-    const val = document.getElementById('productSelect').value;
+function addProductDirectlyToOrder(itemIdentifier) {
     const table = tables.find(t => t.id === currentTableId);
+    if (!table) return;
 
-    if (!val || !table) {
-        showCustomAlert('Seleccione un producto o bebida válido.');
-        return;
-    }
-
-    let finalPrice = 0;
     let name = '';
-    let modifications = [];
-    let componentChoices = [];
-    let addonsData = [];
+    let finalPrice = 0;
     let productId = 0;
 
-    if (val.startsWith('drink_')) {
-        let drinkId = parseInt(val.replace('drink_', ''));
-        let drink = drinks.find(d => d.id === drinkId);
-
-        if (!drink) {
-            showCustomAlert('No se encontró la bebida seleccionada.');
-            return;
-        }
-
-        finalPrice = drink.price;
-        name = drink.name;
-        productId = drink.id;
-
+    if (String(itemIdentifier).startsWith('drink_')) {
+        let id = parseInt(itemIdentifier.replace('drink_', ''));
+        let drink = drinks.find(d => d.id === id);
+        if (drink) { name = drink.name; finalPrice = drink.price; productId = drink.id; }
+    } else if (String(itemIdentifier).startsWith('addon_')) {
+        let id = parseInt(itemIdentifier.replace('addon_', ''));
+        let addon = addons.find(a => a.id === id);
+        if (addon) { name = addon.name; finalPrice = addon.price; productId = addon.id; }
     } else {
-        let prodId = parseInt(val.replace('prod_', ''));
-        let product = products.find(p => p.id === prodId);
-
-        if (!product) {
-            showCustomAlert('No se encontró el plato seleccionado.');
-            return;
-        }
-
-        finalPrice = product.price;
-        name = product.name;
-        productId = product.id;
-
-        document.querySelectorAll('.component-choice').forEach(select => {
-            const choice = select.value;
-            const originalComponent = select.getAttribute('data-original');
-
-            componentChoices.push(choice);
-
-            if (choice.startsWith('SIN ')) {
-                modifications.push(`SIN ${originalComponent}`);
-            } else if (choice.startsWith('Cambiado por ')) {
-                const replacement = choice.replace('Cambiado por ', '');
-                modifications.push(`SIN ${originalComponent}`);
-                modifications.push(`CAMBIADO POR ${replacement}`);
-            }
-        });
-
-        document.querySelectorAll('.addon-checkbox:checked').forEach(chk => {
-            const id = parseInt(chk.value);
-            const dataName = chk.getAttribute('data-name');
-            const unitPrice = parseFloat(chk.getAttribute('data-price')) || 0;
-
-            const qtySelect = chk.closest('div').querySelector('.addon-qty-select');
-            const qty = parseInt(qtySelect.value) || 1;
-
-            let totalAddonPrice = unitPrice * qty;
-            finalPrice += totalAddonPrice;
-
-            addonsData.push({ id, qty });
-
-            if (qty > 1) {
-                modifications.push(`Adicional: ${dataName} x${qty}`);
-            } else {
-                modifications.push(`Adicional: ${dataName}`);
-            }
-        });
+        let id = parseInt(String(itemIdentifier).replace('prod_', ''));
+        let prod = products.find(p => p.id === id);
+        if (prod) { name = prod.name; finalPrice = prod.price; productId = prod.id; }
     }
+
+    if (!name) return;
 
     const orderItemData = {
         uid: '_' + Math.random().toString(36).substr(2, 9),
         productId: productId,
         name: name,
         finalPrice: finalPrice,
-        modifications: modifications,
-        componentChoices: componentChoices,
-        addonsData: addonsData,
+        modifications: [],
+        observation: '',
+        kitchenChecked: false,
         billed: false,
         sentToKitchen: false,
         served: false,
         pickedUp: false
     };
 
-    if (editingOrderItemIndex !== null) {
-        orderItemData.uid = table.items[editingOrderItemIndex].uid || orderItemData.uid;
-        orderItemData.billed = table.items[editingOrderItemIndex].billed || false;
-        orderItemData.sentToKitchen = table.items[editingOrderItemIndex].sentToKitchen || false;
-        orderItemData.sentAt = table.items[editingOrderItemIndex].sentAt || null;
-        orderItemData.served = table.items[editingOrderItemIndex].served || false;
-        orderItemData.pickedUp = table.items[editingOrderItemIndex].pickedUp || false;
-
-        table.items[editingOrderItemIndex] = orderItemData;
-    } else {
-        table.items.push(orderItemData);
-    }
-
+    table.items.push(orderItemData);
     table.status = 'ocupada';
 
-    cancelOrderEdit();
-    renderOrderItems();
+    renderPlusOrderItems();
     saveData();
 }
 
-function editOrderItem(index) {
+/**
+ * Renderiza la comanda reflejando el estado de bloqueado, checkbox marcado 
+ * y etiqueta "En Cocina" para los platos ya enviados.
+ */
+/**
+ * Renderiza la comanda reflejando con precisión si el plato está en cocina, 
+ * ya fue servido, o está pendiente de envío.
+ */
+/**
+ * Renderiza la comanda reflejando los estados correctos: 
+ * "En Cocina", "Listo en Cocina" y "Servido (Recogido)", situados junto al precio.
+ */
+function renderPlusOrderItems() {
     const table = tables.find(t => t.id === currentTableId);
-    const item = table.items[index];
-
-    if (!item) return;
-
-    if (item.billed) {
-        showCustomAlert('Este plato ya fue facturado. Anule el recibo asociado para poder editarlo.');
-        return;
-    }
-
-    editingOrderItemIndex = index;
-
-    let selectVal = products.some(p => p.id === item.productId)
-        ? 'prod_' + item.productId
-        : 'drink_' + item.productId;
-
-    document.getElementById('productSelect').value = selectVal;
-    loadProductRecipeOptions(item.componentChoices || [], item.addonsData || []);
-
-    document.getElementById('customizationBoxTitle').innerText = `Editando: ${item.name}`;
-    document.getElementById('btnAddOrUpdateOrder').innerText = 'Guardar Cambios del Plato';
-    document.getElementById('btnCancelOrderEdit').classList.remove('hidden');
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function cancelOrderEdit() {
-    editingOrderItemIndex = null;
-    document.getElementById('productSelect').value = '';
-    document.getElementById('dishCustomizationBox').style.display = 'none';
-    document.getElementById('customizationBoxTitle').innerText = 'Personalización del Plato:';
-    document.getElementById('btnAddOrUpdateOrder').innerText = 'Agregar al Pedido';
-    document.getElementById('btnCancelOrderEdit').classList.add('hidden');
-}
-
-function renderOrderItems() {
-    const table = tables.find(t => t.id === currentTableId);
-    const list = document.getElementById('orderItemsList');
-
+    const list = document.getElementById('plusOrderItemsList');
     if (!list || !table) return;
 
     list.innerHTML = '';
     let total = 0;
 
     if (table.items.length === 0) {
-        list.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No hay productos en esta mesa.</p>';
+        list.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 1.5rem; font-size: 0.85rem;">No hay productos en esta mesa.</p>';
     } else {
         table.items.forEach((item, index) => {
             total += item.finalPrice;
 
             const row = document.createElement('div');
-            row.className = 'order-item';
+            row.style.cssText = "display: grid; grid-template-columns: 35px 2.2fr 2.5fr 40px; padding: 0.35rem 0.2rem; border-bottom: 1px solid var(--border); align-items: center; font-size: 0.8rem;";
 
-            let modsHtml = '';
-            if (item.modifications && item.modifications.length > 0) {
-                item.modifications.forEach(m => {
-                    modsHtml += `<span class="mod-tag">↳ ${m}</span>`;
-                });
+            let isSentOrBilled = item.sentToKitchen || item.billed;
+            let isCheckedAttr = (item.sentToKitchen || item.kitchenChecked) ? 'checked' : '';
+            let disabledAttr = isSentOrBilled ? 'disabled' : '';
+
+            // Etiquetas de estado dinámicas junto al precio
+            let statusBadge = '';
+            if (item.billed) {
+                statusBadge = `<span style="font-size: 0.62rem; background: #e2e8f0; color: #475569; padding: 0.1rem 0.3rem; border-radius: 4px; font-weight: bold; margin-left: 6px; display: inline-block;">💳 Facturado</span>`;
+            } else if (item.pickedUp) {
+                statusBadge = `<span style="font-size: 0.62rem; background: #dcfce7; color: #15803d; padding: 0.1rem 0.3rem; border-radius: 4px; font-weight: bold; margin-left: 6px; display: inline-block;">✅ Servido</span>`;
+            } else if (item.served) {
+                statusBadge = `<span style="font-size: 0.62rem; background: #fef08a; color: #854d0e; padding: 0.1rem 0.3rem; border-radius: 4px; font-weight: bold; margin-left: 6px; display: inline-block;">🔔 Listo en Cocina</span>`;
+            } else if (item.sentToKitchen) {
+                statusBadge = `<span style="font-size: 0.62rem; background: #e0f2fe; color: #0369a1; padding: 0.1rem 0.3rem; border-radius: 4px; font-weight: bold; margin-left: 6px; display: inline-block;">🧑‍🍳 En Cocina</span>`;
             }
 
-            let billedBadge = item.billed
-                ? `<span style="font-size:0.7rem; background:#fee2e2; color:#dc2626; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">FACTURADO</span>`
-                : '';
-
-            let servedBadge = item.served
-                ? `<span style="font-size:0.7rem; background:#dcfce7; color:#15803d; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">SERVIDO COCINA</span>`
-                : '';
-
-            let kitchenBadge = (item.sentToKitchen && !item.served)
-                ? `<span style="font-size:0.7rem; background:#dbeafe; color:#1d4ed8; padding:0.1rem 0.3rem; border-radius:4px; margin-left:5px;">EN COCINA</span>`
-                : '';
-
             row.innerHTML = `
-                <div>
-                    <strong>${item.name}</strong> ${billedBadge} ${servedBadge} ${kitchenBadge}
-                    ${modsHtml}
+                <div style="text-align: center;">
+                    <input type="checkbox" ${isCheckedAttr} ${disabledAttr} onchange="updateItemKitchenCheck(${index}, this.checked)" style="width: 16px; height: 16px; cursor: pointer;">
                 </div>
-                <div style="text-align: right; display: flex; align-items: center; gap: 0.2rem;">
-                    <strong>$${item.finalPrice.toLocaleString()}</strong>
-                    <button onclick="editOrderItem(${index})" class="action-btn" title="Editar Plato" ${item.billed ? 'style="opacity:0.4;"' : ''}>✏️</button>
-                    <button onclick="removeOrderItem(${index})" class="action-btn" title="Eliminar Plato" ${item.billed ? 'style="opacity:0.4;"' : ''}>❌</button>
+                <div style="padding-left: 2px; overflow: hidden;">
+                    <strong style="font-size: 0.78rem; display: block; color: var(--text);">${item.name}</strong>
+                    <div style="display: flex; align-items: center; flex-wrap: wrap;">
+                        <span style="font-size: 0.7rem; color: var(--primary); font-weight: bold;">$${item.finalPrice.toLocaleString()}</span>
+                        ${statusBadge}
+                    </div>
+                </div>
+                <div style="padding: 0 2px;">
+                    <input type="text" value="${item.observation || ''}" ${disabledAttr} placeholder="Nota..." oninput="updateItemObservation(${index}, this.value)" style="width: 100%; padding: 0.25rem; font-size: 0.75rem; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; background: ${isSentOrBilled ? '#f1f5f9' : 'var(--bg)'}; color: var(--text);">
+                </div>
+                <div style="text-align: center;">
+                    <button onclick="removePlusOrderItem(${index})" class="action-btn" title="Eliminar" style="font-size: 0.9rem; background: none; border: none; cursor: ${isSentOrBilled ? 'not-allowed' : 'pointer'}; color: ${isSentOrBilled ? '#cbd5e1' : '#ef4444'};" ${disabledAttr}>🗑️</button>
                 </div>
             `;
-
             list.appendChild(row);
         });
     }
 
     const orderTotalEl = document.getElementById('orderTotal');
-    if (orderTotalEl) {
-        orderTotalEl.innerText = `$ ${total.toLocaleString()}`;
+    if (orderTotalEl) orderTotalEl.innerText = `$ ${total.toLocaleString()}`;
+}
+
+
+
+function updateItemKitchenCheck(index, isChecked) {
+    const table = tables.find(t => t.id === currentTableId);
+    if (table && table.items[index]) {
+        table.items[index].kitchenChecked = isChecked;
+        saveData();
     }
 }
 
-async function removeOrderItem(index) {
+function updateItemObservation(index, textValue) {
+    const table = tables.find(t => t.id === currentTableId);
+    if (table && table.items[index]) {
+        table.items[index].observation = textValue;
+        table.items[index].modifications = textValue ? [`Nota: ${textValue}`] : [];
+        saveData();
+    }
+}
+
+async function removePlusOrderItem(index) {
     const table = tables.find(t => t.id === currentTableId);
     const item = table.items[index];
 
     if (item && item.billed) {
-        showCustomAlert('Este plato ya fue facturado. Anule el recibo asociado para poder eliminarlo.');
+        showCustomAlert('Este plato ya fue facturado.');
         return;
     }
 
-    if (editingOrderItemIndex === index) cancelOrderEdit();
-
     table.items.splice(index, 1);
+    if (table.items.length === 0) table.status = 'libre';
 
-    if (table.items.length === 0) {
-        table.status = 'libre';
-    }
-
-    renderOrderItems();
+    renderPlusOrderItems();
     saveData();
 }
 
 
 /* ========================================================== */
-/* 6. MÓDULO DE COCINA (KDS) Y CRONÓMETRO                     */
+/* 6. MÓDULO DE COCINA (KDS)                                   */
 /* ========================================================== */
 
 function playAlarmBeep() {
@@ -1051,294 +813,220 @@ function playAlarmBeep() {
         osc.start();
         osc.stop(audioCtx.currentTime + 0.4);
     } catch (e) {
-        console.log("Audio no soportado o bloqueado por el navegador", e);
+        console.log("Audio bloqueado", e);
     }
 }
 
+/**
+ * Envía a cocina únicamente los platos que tengan el checkbox seleccionado.
+ * Cada envío genera una comanda independiente con su propio cronómetro.
+ */
+/**
+ * Modifica la función de envío para asegurar que los ítems enviados 
+ * queden bloqueados, con checkbox marcado y etiqueta visual de estado.
+ */
 async function sendOrderToKitchen() {
     const table = tables.find(t => t.id === currentTableId);
-
     if (!table || !table.items || table.items.length === 0) {
-        showCustomAlert('No hay platos o bebidas en esta mesa para enviar a cocina.');
+        showCustomAlert('No hay platos en esta mesa.');
         return;
     }
 
-    let unkitchenedItems = table.items.filter(item => !item.sentToKitchen);
+    let itemsToSend = table.items.filter(item => !item.sentToKitchen && item.kitchenChecked);
 
-    if (unkitchenedItems.length === 0) {
-        showCustomAlert('Todos los ítems de esta mesa ya fueron enviados a cocina previamente.');
+    if (itemsToSend.length === 0) {
+        showCustomAlert('⚠️ Por favor seleccione con el checkbox al menos un plato nuevo para enviar a cocina.');
         return;
     }
 
     const now = Date.now();
 
     table.items.forEach(item => {
-        if (!item.sentToKitchen) {
+        if (!item.sentToKitchen && item.kitchenChecked) {
             item.sentToKitchen = true;
             item.served = false;
             item.pickedUp = false;
             item.sentAt = now;
+            item.kitchenChecked = true; // Mantener marcado al enviarse
         }
     });
 
     table.status = 'ocupada';
-    renderOrderItems();
+    renderPlusOrderItems();
     saveData();
 
     try {
         await syncDataToCloud();
-        showCustomAlert(`👨‍🍳 ¡Pedido de la ${table.name} enviado a cocina y sincronizado con Google Sheets exitosamente!`);
+        showCustomAlert(`👨‍🍳 Comanda enviada a cocina exitosamente (${itemsToSend.length} ítem(s)).`);
     } catch (error) {
-        console.warn("Advertencia: No se pudo sincronizar de inmediato con la nube, pero el pedido quedó guardado localmente.", error);
-        showCustomAlert(`⚠️ Pedido guardado localmente para la ${table.name}. Se sincronizará en cuanto se restablezca la red.`);
+        showCustomAlert(`⚠️ Guardado localmente. Se sincronizará al haber red.`);
     }
 
     showSection('tables-section');
 }
 
+
+/**
+ * Renderiza las comandas en cocina agrupando o separando por lote de envío (sentAt).
+ */
 function renderKitchenOrders() {
     const container = document.getElementById('kitchenOrdersContainer');
     if (!container) return;
-
     container.innerHTML = '';
 
     const limitMinutes = parseInt(document.getElementById('kitchenTimerParam').value) || 15;
     const limitSeconds = limitMinutes * 60;
-
     const alarmMinutes = parseInt(document.getElementById('kitchenAlarmParam')?.value) || 5;
     const alarmSeconds = alarmMinutes * 60;
-
     const now = Date.now();
-    let activeOrders = [];
+
+    let activeBatches = [];
     let triggerAlarm = false;
 
+    // Agrupar platos en cocina divididos por su lote de envío (sentAt) para que funcionen como comandas distintas
     tables.forEach(table => {
         const activeItems = table.items.filter(item => item.sentToKitchen && !item.served);
-
+        
         if (activeItems.length > 0) {
-            let earliestSentAt = Math.min(...activeItems.map(i => i.sentAt || now));
+            // Agrupar por el timestamp exacto de envío (sentAt)
+            let batchesMap = {};
+            activeItems.forEach(item => {
+                let batchKey = item.sentAt || now;
+                if (!batchesMap[batchKey]) {
+                    batchesMap[batchKey] = [];
+                }
+                batchesMap[batchKey].push(item);
+            });
 
-            activeOrders.push({
-                tableId: table.id,
-                tableName: table.name,
-                items: activeItems,
-                sentAt: earliestSentAt
+            // Crear una tarjeta de comanda por cada lote/envío independiente
+            Object.keys(batchesMap).forEach(batchKey => {
+                let batchTime = parseInt(batchKey);
+                activeBatches.push({
+                    tableId: table.id,
+                    tableName: table.name,
+                    batchId: batchTime,
+                    items: batchesMap[batchKey],
+                    sentAt: batchTime
+                });
             });
         }
     });
 
-    activeOrders.sort((a, b) => a.sentAt - b.sentAt);
+    activeBatches.sort((a, b) => a.sentAt - b.sentAt);
 
-    activeOrders.forEach(order => {
-        const elapsedSecs = Math.floor((now - order.sentAt) / 1000);
+    activeBatches.forEach(batch => {
+        const elapsedSecs = Math.floor((now - batch.sentAt) / 1000);
         const remainingSecs = limitSeconds - elapsedSecs;
-        if (remainingSecs <= alarmSeconds) {
-            triggerAlarm = true;
-        }
+        if (remainingSecs <= alarmSeconds) triggerAlarm = true;
     });
 
-    if (triggerAlarm) {
-        if (now - lastKitchenAlarmTime >= 30000) {
-            playAlarmBeep();
-            lastKitchenAlarmTime = now;
-        }
+    if (triggerAlarm && (now - lastKitchenAlarmTime >= 30000)) {
+        playAlarmBeep();
+        lastKitchenAlarmTime = now;
     }
 
-    if (activeOrders.length === 0) {
+    if (activeBatches.length === 0) {
         container.innerHTML = `
             <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
-                <h3>No hay comandas pendientes en la cocina</h3>
-                <p>Los pedidos enviados por los meseros aparecerán aquí automáticamente.</p>
+                <h3>No hay comandas pendientes</h3>
             </div>
         `;
         return;
     }
 
-    activeOrders.forEach(order => {
-        const elapsedSecs = Math.floor((now - order.sentAt) / 1000);
+    activeBatches.forEach(batch => {
+        const elapsedSecs = Math.floor((now - batch.sentAt) / 1000);
         const remainingSecs = limitSeconds - elapsedSecs;
-        const percentRemaining = limitSeconds > 0 ? (remainingSecs / limitSeconds) * 100 : 0;
-
         const isExpired = remainingSecs <= 0;
         const absRemaining = Math.abs(remainingSecs);
         const remMins = Math.floor(absRemaining / 60);
         const remSecs = absRemaining % 60;
-
         const timeFormatted = `${isExpired ? '-' : ''}${remMins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
 
-        let cardBg = '#dcfce7';
-        let borderColor = '#22c55e';
-        let textColor = '#15803d';
-        let cardExtraClass = '';
-
-        if (isExpired || percentRemaining <= 25) {
-            cardBg = '#fee2e2';
-            borderColor = '#ef4444';
-            textColor = '#b91c1c';
-            cardExtraClass = 'kitchen-card-alert';
-        } else if (percentRemaining <= 50) {
-            cardBg = '#fef9c3';
-            borderColor = '#eab308';
-            textColor = '#a16207';
-        } else {
-            cardBg = '#dcfce7';
-            borderColor = '#22c55e';
-            textColor = '#15803d';
-        }
+        let cardBg = isExpired ? '#fee2e2' : '#dcfce7';
+        let borderColor = isExpired ? '#ef4444' : '#22c55e';
+        let textColor = isExpired ? '#b91c1c' : '#15803d';
 
         const card = document.createElement('div');
-        card.className = cardExtraClass;
-        card.style.cssText = `background: ${cardBg}; border: 2px solid ${borderColor}; border-radius: 12px; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between;`;
+        card.style.cssText = `background: ${cardBg}; border: 2px solid ${borderColor}; border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; justify-content: space-between;`;
 
         let itemsHtml = '';
-        order.items.forEach(item => {
-            let modsHtml = '';
-            if (item.modifications && item.modifications.length > 0) {
-                item.modifications.forEach(m => {
-                    let formattedMod = m;
-                    let modStyle = "font-size: 0.85rem; margin-top: 0.2rem; display: block;";
-
-                    if (m.startsWith('SIN ')) {
-                        formattedMod = `⛔ ${m}`;
-                        modStyle += " color: #dc2626; font-weight: bold;";
-                    } else if (m.startsWith('CAMBIADO POR ')) {
-                        formattedMod = `✅ ${m}`;
-                        modStyle += " color: #16a34a; font-weight: bold;";
-                    } else if (m.startsWith('Adicional:')) {
-                        let addonCleanText = m.replace('Adicional: ', '').replace(/\s*\(.*\)/, '');
-                        formattedMod = `➕ ${addonCleanText}`;
-                        modStyle += " color: #2563eb; font-weight: bold;";
-                    }
-
-                    modsHtml += `<div style="${modStyle}">${formattedMod}</div>`;
-                });
-            }
-
+        batch.items.forEach(item => {
             itemsHtml += `
-                <div style="border-bottom: 1px dashed rgba(0,0,0,0.15); padding: 0.5rem 0;">
-                    <strong style="font-size: 1rem; color: var(--text);">• ${item.name}</strong>
-                    ${modsHtml}
+                <div style="border-bottom: 1px dashed rgba(0,0,0,0.15); padding: 0.4rem 0;">
+                    <strong>• ${item.name}</strong>
+                    ${item.observation ? `<div style="font-size:0.8rem; color:#2563eb;">Nota: ${item.observation}</div>` : ''}
                 </div>
             `;
         });
 
         card.innerHTML = `
             <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${borderColor}; padding-bottom: 0.5rem; margin-bottom: 0.75rem;">
-                    <h3 style="font-size: 1.1rem; color: var(--text); margin: 0;">${order.tableName}</h3>
-                    <span style="font-size: 0.85rem; background: #ffffff; color: ${textColor}; padding: 0.2rem 0.6rem; border-radius: 6px; font-weight: bold; border: 1px solid ${borderColor};">⏱️ ${timeFormatted}</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${borderColor}; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                    <h3 style="margin: 0; font-size: 1.1rem;">${batch.tableName} <span style="font-size:0.75rem; color:var(--text-secondary);">(Lote #${new Date(batch.batchId).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})})</span></h3>
+                    <span style="font-size: 0.85rem; background: #fff; color: ${textColor}; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: bold;">⏱️ ${timeFormatted}</span>
                 </div>
                 <div>${itemsHtml}</div>
             </div>
-            <button class="btn btn-secondary" style="margin-top: 1rem; padding: 0.4rem; font-size: 0.85rem; background: ${borderColor}; color: white;" onclick="markOrderServed(${order.tableId})">✅ Marcar Servido</button>
+            <button class="btn btn-secondary" style="margin-top: 1rem; padding: 0.4rem; background: ${borderColor}; color: white;" onclick="markBatchServed(${batch.tableId}, ${batch.batchId})">✅ Marcar Lote Servido</button>
         `;
-
         container.appendChild(card);
     });
 }
 
-async function markOrderServed(tableId) {
+/**
+ * Marca como servidos únicamente los ítems pertenecientes a una comanda/lote específico en cocina.
+ */
+async function markBatchServed(tableId, batchId) {
     const table = tables.find(t => t.id === tableId);
     if (!table) return;
 
-    if (confirm(`¿Marcar todos los ítems de la ${table.name} como servidos/despachados de cocina?`)) {
+    if (confirm(`¿Marcar este lote de la ${table.name} como servido?`)) {
         table.items.forEach(item => {
-            if (item.sentToKitchen) {
+            if (item.sentToKitchen && item.sentAt === batchId) {
                 item.served = true;
                 item.pickedUp = false;
             }
         });
-
         renderKitchenOrders();
         await syncDataToCloud();
     }
 }
 
 
+
 /* ========================================================== */
-/* 7. MÓDULO DE CUENTAS, FACTURACIÓN Y RECIBOS               */
+/* 7. CUENTAS Y FACTURACIÓN                                   */
 /* ========================================================== */
 
 function openBillSection() {
     const table = tables.find(t => t.id === currentTableId);
-    const role = localStorage.getItem('restopos_current_role') || 'admin';
-
     if (!table || table.items.length === 0) {
         showCustomAlert('Esta mesa no tiene pedidos activos.');
         return;
     }
 
     if (!table.receipts) table.receipts = [];
-
-    let activeBilledUids = [];
-    table.receipts.forEach(r => {
-        if (r.itemUids) activeBilledUids.push(...r.itemUids);
-    });
-
-    table.items.forEach(item => {
-        if (item.billed && !activeBilledUids.includes(item.uid)) {
-            item.billed = false;
-        }
-    });
-
-    saveData();
-
     document.getElementById('bill-title').innerText = `Cuenta - ${table.name}`;
     const list = document.getElementById('billItemsList');
     if (!list) return;
 
-    list.style.maxHeight = "350px";
-    list.style.overflowY = "auto";
     list.innerHTML = '';
-
     table.items.forEach((item, index) => {
-        let modsHtml = '';
-        if (item.modifications && item.modifications.length > 0) {
-            item.modifications.forEach(m => {
-                modsHtml += `<span class="mod-tag">↳ ${m}</span>`;
-            });
-        }
-
         const div = document.createElement('div');
         div.className = 'order-item';
-
-        if (item.billed) {
-            div.innerHTML = `
-                <div style="flex: 1; opacity: 0.5;">
-                    <span style="font-size:0.7rem; background:#fee2e2; color:#dc2626; padding:0.1rem 0.3rem; border-radius:4px; font-weight:bold;">[ ASIGNADO A RECIBO ]</span>
-                    <strong>${item.name}</strong>
-                    ${modsHtml}
-                </div>
-                <strong style="text-decoration: line-through;">$${item.finalPrice.toLocaleString()}</strong>
-            `;
-        } else {
-            div.innerHTML = `
-                <label class="checkbox-label" style="flex: 1; align-items: flex-start;">
-                    <input type="checkbox" class="bill-item-chk" value="${index}" data-price="${item.finalPrice}" onchange="calculatePartialTotal()" style="margin-top: 3px;">
-                    <div>
-                        <strong>${item.name}</strong>
-                        ${modsHtml}
-                    </div>
-                </label>
-                <strong style="margin-left: 1rem;">$${item.finalPrice.toLocaleString()}</strong>
-            `;
-        }
-
+        div.innerHTML = `
+            <label class="checkbox-label" style="flex: 1;">
+                <input type="checkbox" class="bill-item-chk" value="${index}" data-price="${item.finalPrice}" onchange="calculatePartialTotal()">
+                <span><strong>${item.name}</strong> ${item.observation ? '(' + item.observation + ')' : ''}</span>
+            </label>
+            <strong>$${item.finalPrice.toLocaleString()}</strong>
+        `;
         list.appendChild(div);
     });
 
     calculatePartialTotal();
     renderReceiptsManager();
-
-    const generateReceiptBtn = document.querySelector('button[onclick="generateReceipt()"]');
-    if (generateReceiptBtn) {
-        if (role === 'admin') {
-            generateReceiptBtn.style.display = 'block';
-        } else if (role === 'mesero') {
-            let canGen = appConfig.waiterCanGenerateReceipt !== false;
-            generateReceiptBtn.style.display = canGen ? 'block' : 'none';
-        }
-    }
 
     document.getElementById('order-section').classList.add('hidden');
     document.getElementById('bill-section').classList.remove('hidden');
@@ -1347,106 +1035,40 @@ function openBillSection() {
 function calculatePartialTotal() {
     let partialTotal = 0;
     document.querySelectorAll('.bill-item-chk:checked').forEach(chk => {
-        let price = parseFloat(chk.getAttribute('data-price')) || 0;
-        partialTotal += price;
+        partialTotal += parseFloat(chk.getAttribute('data-price')) || 0;
     });
-
     const selectedTotalEl = document.getElementById('selectedPartialTotal');
-    if (selectedTotalEl) {
-        selectedTotalEl.innerText = `$ ${Math.round(partialTotal).toLocaleString()}`;
-    }
+    if (selectedTotalEl) selectedTotalEl.innerText = `$ ${Math.round(partialTotal).toLocaleString()}`;
 }
 
 async function generateReceipt() {
     const table = tables.find(t => t.id === currentTableId);
-    const role = localStorage.getItem('restopos_current_role') || 'admin';
-
-    if (role === 'mesero' && appConfig.waiterCanGenerateReceipt === false) {
-        showCustomAlert('❌ Acción no autorizada: El administrador ha desactivado la generación de facturas para meseros.');
-        return;
-    }
-
-    let selectedIndexes = [];
-    let partialTotal = 0;
-    let receiptItems = [];
-    let receiptItemUids = [];
+    let receiptItems = [], receiptItemUids = [], partialTotal = 0;
 
     document.querySelectorAll('.bill-item-chk:checked').forEach(chk => {
         let idx = parseInt(chk.value);
         let item = table.items[idx];
-
         partialTotal += item.finalPrice;
         receiptItems.push({ ...item });
         receiptItemUids.push(item.uid);
-        selectedIndexes.push(idx);
-
         item.billed = true;
     });
 
-    if (selectedIndexes.length === 0) {
-        showCustomAlert('Seleccione al menos un plato o bebida para generar el recibo.');
+    if (receiptItems.length === 0) {
+        showCustomAlert('Seleccione al menos un ítem.');
         return;
     }
 
-    const newReceipt = {
+    table.receipts.push({
         id: Date.now(),
         items: receiptItems,
         itemUids: receiptItemUids,
         total: Math.round(partialTotal),
         date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    table.receipts.push(newReceipt);
-    await syncDataToCloud();
-    openBillSection();
-}
-
-function printReceiptDoc(receiptId) {
-    const table = tables.find(t => t.id === currentTableId);
-    const receipt = table.receipts.find(r => r.id === receiptId);
-
-    if (!receipt) return;
-
-    let selectedItemsHtml = '';
-    receipt.items.forEach(item => {
-        let itemModsHtml = '';
-        if (item.modifications && item.modifications.length > 0) {
-            item.modifications.forEach(m => {
-                let upperM = m.toUpperCase();
-                if (upperM.includes('ADICIONAL') || upperM.includes('CAMBIADO') || upperM.includes('SIN ') || upperM.includes('(+$') || upperM.includes('+$')) {
-                    itemModsHtml += `<div style="font-size: 0.8rem; color: #333; margin-left: 12px; text-align: left;">&bull; ${m}</div>`;
-                }
-            });
-        }
-
-        selectedItemsHtml += `
-            <div style="margin-bottom: 8px; text-align: left; border-bottom: 1px dotted #ccc; padding-bottom: 4px;">
-                <div style="display: flex; justify-content: space-between;">
-                    <strong>${item.name}</strong> 
-                    <strong>$${item.finalPrice.toLocaleString()}</strong>
-                </div>
-                ${itemModsHtml}
-            </div>
-        `;
     });
 
-    let receiptWindow = window.open('', '_blank', 'width=400,height=600');
-    receiptWindow.document.write(`
-        <html>
-        <head><title>Recibo - ${table.name}</title></head>
-        <body style="font-family: monospace; padding: 1rem; text-align: center;">
-            <h3>RestoPOS - Recibo de Venta</h3>
-            <p>${table.name} | Hora: ${receipt.date}</p>
-            <hr>
-            <div style="text-align: left;">${selectedItemsHtml}</div>
-            <hr>
-            <h3 style="text-align: right;">TOTAL: $${receipt.total.toLocaleString()}</h3>
-            <p>¡Gracias por su visita!</p>
-        </body>
-        </html>
-    `);
-    receiptWindow.document.close();
-    receiptWindow.print();
+    await syncDataToCloud();
+    openBillSection();
 }
 
 function renderReceiptsManager() {
@@ -1457,7 +1079,6 @@ function renderReceiptsManager() {
         container = document.createElement('div');
         container.id = 'receiptsManagerContainer';
         container.style.cssText = "margin-top: 1rem; border-top: 2px dashed var(--border); padding-top: 0.75rem;";
-
         const billItemsList = document.getElementById('billItemsList');
         if (billItemsList && billItemsList.nextSibling) {
             document.getElementById('bill-section').insertBefore(container, billItemsList.nextSibling);
@@ -1465,248 +1086,74 @@ function renderReceiptsManager() {
     }
 
     if (!table.receipts || table.receipts.length === 0) {
-        if (container) {
-            container.innerHTML = '<p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">No hay recibos generados aún.</p>';
-        }
+        container.innerHTML = '<p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">No hay recibos.</p>';
         return;
     }
 
-    let html = `<h4 style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text);">Recibos Generados (Seleccione para pagar o anular):</h4>`;
-
+    let html = `<h4>Recibos Generados:</h4>`;
     table.receipts.forEach((rc, rIdx) => {
-        let itemNames = rc.items.map(i => i.name).join(', ');
-
         html += `
-            <div style="background: #f1f5f9; padding: 0.6rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
-                <div>
-                    <strong>Recibo #${rIdx + 1}</strong> (${rc.date})<br>
-                    <span style="color: var(--text-secondary);">${itemNames}</span><br>
-                    <strong style="color: var(--primary);">Total: $${rc.total.toLocaleString()}</strong>
-                </div>
+            <div style="background: #f1f5f9; padding: 0.5rem; border-radius: 6px; margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                <div><strong>Recibo #${rIdx + 1}</strong> - $${rc.total.toLocaleString()}</div>
                 <div style="display: flex; gap: 0.3rem;">
-                    <button class="btn btn-secondary" style="padding: 0.3rem 0.5rem; font-size: 0.75rem; width: auto; margin:0;" onclick="printReceiptDoc(${rc.id})">🖨️</button>
-                    <button class="btn btn-success" style="padding: 0.3rem 0.5rem; font-size: 0.75rem; width: auto; margin:0; background: var(--success);" onclick="confirmPayReceipt(${rc.id})">Pagar</button>
-                    <button class="btn btn-danger" style="padding: 0.3rem 0.5rem; font-size: 0.75rem; width: auto; margin:0;" onclick="cancelReceipt(${rc.id})">Anular</button>
+                    <button class="btn btn-success" style="padding: 0.2rem 0.4rem; font-size: 0.75rem; width: auto;" onclick="confirmPayReceipt(${rc.id})">Pagar</button>
+                    <button class="btn btn-danger" style="padding: 0.2rem 0.4rem; font-size: 0.75rem; width: auto;" onclick="cancelReceipt(${rc.id})">Anular</button>
                 </div>
             </div>
         `;
     });
-
-    if (container) container.innerHTML = html;
-}
-
-/* ========================================================== */
-/* MODALES PERSONALIZADOS (REEMPLAZO DE ALERT / CONFIRM)      */
-/* ========================================================== */
-
-function showCustomAlert(message, callback) {
-    let alertOverlay = document.getElementById('customAlertModal');
-    if (!alertOverlay) {
-        alertOverlay = document.createElement('div');
-        alertOverlay.id = 'customAlertModal';
-        alertOverlay.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 10001; padding: 1rem;";
-        
-        alertOverlay.innerHTML = `
-            <div style="background: var(--card-bg, #ffffff); padding: 1.5rem; border-radius: 12px; width: 100%; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center;">
-                <h3 style="margin-top: 0; font-size: 1.1rem; color: var(--text);">Aviso</h3>
-                <p id="customAlertMessage" style="font-size: 0.9rem; color: var(--text); margin-bottom: 1.2rem; line-height: 1.4; white-space: pre-line;"></p>
-                <button type="button" id="customAlertOkBtn" class="btn btn-success" style="padding: 0.5rem 1.5rem; font-size: 0.9rem; width: auto; margin: 0; background: var(--success); color: white; border: none; border-radius: 6px; cursor: pointer;">Aceptar</button>
-            </div>
-        `;
-        document.body.appendChild(alertOverlay);
-    }
-
-    document.getElementById('customAlertMessage').innerText = message;
-    alertOverlay.style.display = 'flex';
-
-    const okBtn = document.getElementById('customAlertOkBtn');
-    okBtn.onclick = () => {
-        alertOverlay.style.display = 'none';
-        okBtn.onclick = null;
-        if (typeof callback === 'function') callback();
-    };
+    container.innerHTML = html;
 }
 
 async function confirmPayReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
     const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
-
     if (receiptIndex === -1) return;
 
     let receipt = table.receipts[receiptIndex];
+    if (confirm(`¿Cobrar recibo por valor de $${receipt.total.toLocaleString()}?`)) {
+        let nowFull = new Date();
+        let facNumero = `FAC-${nowFull.getFullYear()}${String(nowFull.getMonth()+1).padStart(2,'0')}${String(nowFull.getDate()).padStart(2,'0')}${String(nowFull.getHours()).padStart(2,'0')}${String(nowFull.getMinutes()).padStart(2,'0')}`;
 
-    let modalOverlay = document.getElementById('customPaymentModal');
-    if (!modalOverlay) {
-        modalOverlay = document.createElement('div');
-        modalOverlay.id = 'customPaymentModal';
-        modalOverlay.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 1rem;";
-        
-        modalOverlay.innerHTML = `
-            <div style="background: var(--card-bg, #ffffff); padding: 1.5rem; border-radius: 12px; width: 100%; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-                <h3 style="margin-top: 0; font-size: 1.1rem; color: var(--text);">Cobrar Cuenta</h3>
-                <p id="modalTotalLabel" style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></p>
-                <label style="font-size: 0.85rem; display: block; margin-bottom: 0.3rem; color: var(--text);">Ingrese el valor con el que paga:</label>
-                <input type="number" id="modalAmountInput" inputmode="numeric" pattern="[0-9]*" placeholder="Ej: 50000" style="width: 100%; padding: 0.6rem; font-size: 1.1rem; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; margin-bottom: 1rem; background: var(--bg); color: var(--text);">
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button type="button" id="modalCancelBtn" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem; width: auto; margin: 0;">Cancelar</button>
-                    <button type="button" id="modalConfirmBtn" class="btn btn-success" style="padding: 0.5rem 1rem; font-size: 0.9rem; width: auto; margin: 0; background: var(--success);">Aceptar</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modalOverlay);
+        let newSalesBatch = [];
+        receipt.items.forEach(item => {
+            newSalesBatch.push({
+                facnumero: facNumero,
+                mesa: table.name,
+                plato: item.name,
+                detallesmodificaciones: item.observation || 'Ninguna',
+                valorpagado: item.finalPrice,
+                fecha: new Date().toLocaleDateString(),
+                hora: new Date().toLocaleTimeString(),
+                usuario: localStorage.getItem('restopos_current_user') || 'admin'
+            });
+        });
+
+        salesHistory.push(...newSalesBatch);
+        table.receipts.splice(receiptIndex, 1);
+        table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
+
+        await sendNewSalesToCloud(newSalesBatch);
+
+        if (table.items.length === 0 && table.receipts.length === 0) {
+            table.status = 'libre';
+            saveData();
+            await syncDataToCloud();
+            showCustomAlert('✅ ¡Pago registrado con éxito!', () => showSection('tables-section'));
+        } else {
+            saveData();
+            await syncDataToCloud();
+            openBillSection();
+        }
     }
-
-    let changeModalOverlay = document.getElementById('customChangeModal');
-    if (!changeModalOverlay) {
-        changeModalOverlay = document.createElement('div');
-        changeModalOverlay.id = 'customChangeModal';
-        changeModalOverlay.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 10000; padding: 1rem;";
-        
-        changeModalOverlay.innerHTML = `
-            <div style="background: var(--card-bg, #ffffff); padding: 1.5rem; border-radius: 12px; width: 100%; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-                <h3 style="margin-top: 0; font-size: 1.1rem; color: var(--text);">Confirmar Pago</h3>
-                <div id="changeModalDetails" style="font-size: 0.9rem; color: var(--text); margin-bottom: 1rem; line-height: 1.5;"></div>
-                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                    <button type="button" id="changeModalCancelBtn" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem; width: auto; margin: 0;">Cancelar</button>
-                    <button type="button" id="changeModalConfirmBtn" class="btn btn-success" style="padding: 0.5rem 1rem; font-size: 0.9rem; width: auto; margin: 0; background: var(--success);">Aceptar</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(changeModalOverlay);
-    }
-
-    document.getElementById('modalTotalLabel').innerText = `Total a pagar: $${receipt.total.toLocaleString()}`;
-    const inputEl = document.getElementById('modalAmountInput');
-    inputEl.value = '';
-    modalOverlay.style.display = 'flex';
-    setTimeout(() => inputEl.focus(), 100);
-
-    return new Promise((resolve) => {
-        const confirmBtn = document.getElementById('modalConfirmBtn');
-        const cancelBtn = document.getElementById('modalCancelBtn');
-
-        const cleanupFirst = () => {
-            confirmBtn.onclick = null;
-            cancelBtn.onclick = null;
-            modalOverlay.style.display = 'none';
-        };
-
-        cancelBtn.onclick = () => {
-            cleanupFirst();
-            resolve(false);
-        };
-
-        confirmBtn.onclick = () => {
-            let amountPaid = parseFloat(inputEl.value);
-            if (isNaN(amountPaid) || amountPaid < receipt.total) {
-                showCustomAlert('❌ Monto inválido o insuficiente para cubrir el total de la cuenta.');
-                return;
-            }
-
-            let change = amountPaid - receipt.total;
-            cleanupFirst();
-
-            const detailsEl = document.getElementById('changeModalDetails');
-            detailsEl.innerHTML = `
-                💵 Total cuenta: $${receipt.total.toLocaleString()}<br>
-                💰 Pagó con: $${amountPaid.toLocaleString()}<br><br>
-                👉 <strong>CAMBIO A ENTREGAR: $${change.toLocaleString()}</strong><br><br>
-                ¿Confirmar pago y registrar en Sheets?
-            `;
-            changeModalOverlay.style.display = 'flex';
-
-            const changeConfirmBtn = document.getElementById('changeModalConfirmBtn');
-            const changeCancelBtn = document.getElementById('changeModalCancelBtn');
-
-            const cleanupSecond = () => {
-                changeConfirmBtn.onclick = null;
-                changeCancelBtn.onclick = null;
-                changeModalOverlay.style.display = 'none';
-            };
-
-            changeCancelBtn.onclick = () => {
-                cleanupSecond();
-                resolve(false);
-            };
-
-            changeConfirmBtn.onclick = async () => {
-                cleanupSecond();
-
-                let nowFull = new Date();
-                let yyyy = nowFull.getFullYear();
-                let mm = String(nowFull.getMonth() + 1).padStart(2, '0');
-                let dd = String(nowFull.getDate()).padStart(2, '0');
-                let hh = String(nowFull.getHours()).padStart(2, '0');
-                let min = String(nowFull.getMinutes()).padStart(2, '0');
-                let sec = String(nowFull.getSeconds()).padStart(2, '0');
-                
-                let facNumero = `FAC-${yyyy}${mm}${dd}${hh}${min}${sec}`;
-
-                let dateStr = `${dd}/${mm}/${yyyy}`;
-                let timeStr = nowFull.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-
-                let newSalesBatch = [];
-
-                receipt.items.forEach(item => {
-                    let filteredModifications = (item.modifications || []).filter(m => {
-                        let upperM = m.toUpperCase();
-                        if (upperM.startsWith('MANTENER') || (upperM.startsWith('SIN ') && !upperM.includes('ADICIONAL'))) {
-                            return false;
-                        }
-                        return true;
-                    });
-
-                    let saleRecord = {
-                        facnumero: facNumero,
-                        mesa: table.name,
-                        plato: item.name,
-                        detallesmodificaciones: filteredModifications.length > 0 ? filteredModifications.join(' | ') : 'Ninguna',
-                        valorpagado: item.finalPrice,
-                        fecha: dateStr,
-                        hora: timeStr,
-                        usuario: localStorage.getItem('restopos_current_user') || 'admin'
-                    };
-
-                    salesHistory.push(saleRecord);
-                    newSalesBatch.push(saleRecord);
-                });
-
-                table.receipts.splice(receiptIndex, 1);
-                table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
-
-                await sendNewSalesToCloud(newSalesBatch);
-
-                if (table.items.length === 0 && table.receipts.length === 0) {
-                    table.status = 'libre';
-                    table.receipts = [];
-                    saveData();
-                    await syncDataToCloud();
-                    
-                    showCustomAlert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`, () => {
-                        showSection('tables-section');
-                    });
-                } else {
-                    saveData();
-                    await syncDataToCloud();
-                    
-                    showCustomAlert(`✅ ¡Pago registrado con éxito (Factura #${facNumero})!\nCambio a devolver al cliente: $${change.toLocaleString()}`, () => {
-                        openBillSection();
-                    });
-                }
-
-                resolve(true);
-            };
-        };
-    });
 }
 
 async function cancelReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
     const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
-
     if (receiptIndex === -1) return;
 
-    if (confirm(`¿Anular este recibo? Los ítems volverán a estar disponibles en la cuenta.`)) {
+    if (confirm('¿Anular recibo?')) {
         table.receipts.splice(receiptIndex, 1);
         saveData();
         openBillSection();
@@ -1721,24 +1168,44 @@ function backToOrderSection() {
 
 
 /* ========================================================== */
-/* 8. GESTIÓN DE CATÁLOGO (PLATOS, BEBIDAS, ADICIONALES)      */
+/* 8. ALERTAS Y MODALES                                       */
+/* ========================================================== */
+
+function showCustomAlert(message, callback) {
+    let alertOverlay = document.getElementById('customAlertModal');
+    if (!alertOverlay) {
+        alertOverlay = document.createElement('div');
+        alertOverlay.id = 'customAlertModal';
+        alertOverlay.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 10001; padding: 1rem;";
+        alertOverlay.innerHTML = `
+            <div style="background: #fff; padding: 1.5rem; border-radius: 12px; width: 100%; max-width: 320px; text-align: center;">
+                <h3>Aviso</h3>
+                <p id="customAlertMessage" style="font-size: 0.9rem; margin-bottom: 1.2rem;"></p>
+                <button type="button" id="customAlertOkBtn" class="btn btn-success" style="padding: 0.5rem 1.5rem; width: auto; background: #10b981; color: #fff; border: none; border-radius: 6px;">Aceptar</button>
+            </div>
+        `;
+        document.body.appendChild(alertOverlay);
+    }
+    document.getElementById('customAlertMessage').innerText = message;
+    alertOverlay.style.display = 'flex';
+    document.getElementById('customAlertOkBtn').onclick = () => {
+        alertOverlay.style.display = 'none';
+        if (typeof callback === 'function') callback();
+    };
+}
+
+
+/* ========================================================== */
+/* 9. CATÁLOGOS (PLATOS, BEBIDAS, ADICIONALES)               */
 /* ========================================================== */
 
 function renderRecipeCheckboxes() {
     const container = document.getElementById('recipeComponentsSelector');
     if (!container) return;
-
-    container.style.maxHeight = "130px";
-    container.style.overflowY = "auto";
     container.innerHTML = '';
-
     addons.forEach(ad => {
         const div = document.createElement('div');
-        div.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0.5rem; border-bottom: 1px solid rgba(0,0,0,0.05);";
-        div.innerHTML = `
-            <span style="font-size: 0.85rem; color: var(--text);">${ad.name} ${ad.price > 0 ? '($' + ad.price + ')' : '(Base)'}</span>
-            <input type="checkbox" class="recipe-comp-chk" value="${ad.id}" style="width: 18px; height: 18px; cursor: pointer;">
-        `;
+        div.innerHTML = `<span>${ad.name}</span> <input type="checkbox" class="recipe-comp-chk" value="${ad.id}">`;
         container.appendChild(div);
     });
 }
@@ -1746,344 +1213,111 @@ function renderRecipeCheckboxes() {
 function renderProducts() {
     const list = document.getElementById('productList');
     if (!list) return;
-
-    list.style.maxHeight = "160px";
-    list.style.overflowY = "auto";
     list.innerHTML = '';
-
-    if (products.length === 0) {
-        list.innerHTML = '<p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center; padding: 0.5rem;">No hay platos registrados.</p>';
-        return;
-    }
-
     products.forEach(p => {
-        let compNames = (p.components || []).map(cid => {
-            let a = addons.find(x => x.id === cid);
-            return a ? a.name : '';
-        }).filter(Boolean).join(', ');
-
         const item = document.createElement('div');
         item.className = 'product-row';
-        item.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; margin-bottom: 0.3rem;";
-
-        item.innerHTML = `
-            <div class="product-info" style="overflow: hidden; flex: 1; margin-right: 0.5rem;">
-                <span style="font-size: 0.9rem; font-weight: bold;">${p.name}</span>
-                <span style="font-size: 0.72rem; color: var(--text-secondary); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Incluye: ${compNames || 'Sin componentes base'}</span>
-            </div>
-            <div class="product-actions" style="display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0;">
-                <strong style="font-size: 0.9rem;">$${p.price.toLocaleString()}</strong>
-                <button onclick="editProduct(${p.id})" class="action-btn" title="Editar" style="padding: 0.2rem 0.4rem; font-size: 0.8rem;">✏️</button>
-                <button onclick="deleteProduct(${p.id})" class="action-btn" title="Eliminar" style="padding: 0.2rem 0.4rem; font-size: 0.8rem;">🗑️</button>
-            </div>
-        `;
-
+        item.innerHTML = `<span>${p.name} - $${p.price}</span>`;
         list.appendChild(item);
     });
 }
-
-async function saveProduct() {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se puede modificar el catálogo sin conexión a internet.');
-        return;
-    }
-
-    const name = document.getElementById('newProdName').value.trim();
-    const price = parseFloat(document.getElementById('newProdPrice').value);
-
-    if (!name || isNaN(price)) {
-        showCustomAlert('Complete nombre y precio del plato.');
-        return;
-    }
-
-    let selectedComponents = [];
-    document.querySelectorAll('.recipe-comp-chk:checked').forEach(chk => {
-        selectedComponents.push(parseInt(chk.value));
-    });
-
-    if (editingProductId !== null) {
-        const product = products.find(p => p.id === editingProductId);
-        if (product) {
-            product.name = name;
-            product.price = price;
-            product.components = selectedComponents;
-        }
-        cancelEditProduct();
-    } else {
-        const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
-        products.push({ id: newId, name, price, components: selectedComponents });
-    }
-
-    await saveDataAndSyncCloudSync('Plato guardado y sincronizado en Google Sheets exitosamente.');
-    renderProducts();
-}
-
-function editProduct(id) {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se puede editar platos sin conexión a internet.');
-        return;
-    }
-
-    const product = products.find(p => p.id === id);
-    if (product) {
-        editingProductId = id;
-        document.getElementById('newProdName').value = product.name;
-        document.getElementById('newProdPrice').value = product.price;
-
-        renderRecipeCheckboxes();
-        document.querySelectorAll('.recipe-comp-chk').forEach(chk => {
-            if (product.components && product.components.includes(parseInt(chk.value))) {
-                chk.checked = true;
-            }
-        });
-
-        document.getElementById('formProductTitle').innerText = 'Editar Plato Principal';
-        document.getElementById('btnSaveProduct').innerText = 'Guardar Cambios (Online)';
-        document.getElementById('btnCancelEdit').classList.remove('hidden');
-    }
-}
-
-function cancelEditProduct() {
-    editingProductId = null;
-    document.getElementById('newProdName').value = '';
-    document.getElementById('newProdPrice').value = '';
-
-    renderRecipeCheckboxes();
-    document.getElementById('formProductTitle').innerText = 'Nombre del Plato Principal';
-    document.getElementById('btnSaveProduct').innerText = 'Guardar Plato (Online)';
-    document.getElementById('btnCancelEdit').classList.add('hidden');
-}
-
-async function deleteProduct(id) {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se puede eliminar platos sin conexión a internet.');
-        return;
-    }
-
-    if (confirm('¿Desea eliminar permanentemente este plato de la aplicación y de Google Sheets?')) {
-        products = products.filter(p => p.id !== id);
-        if (editingProductId === id) cancelEditProduct();
-        await saveDataAndSyncCloudSync('Plato eliminado y actualizado en Google Sheets.');
-        renderProducts();
-    }
-}
-
-
-// Gestión de Bebidas
 
 function renderDrinks() {
     const list = document.getElementById('drinksList');
     if (!list) return;
-
     list.innerHTML = '';
     drinks.forEach(d => {
         const item = document.createElement('div');
         item.className = 'product-row';
-
-        item.innerHTML = `
-            <div class="product-info">
-                <span><strong>${d.name}</strong></span>
-            </div>
-            <div class="product-actions">
-                <strong>$${d.price.toLocaleString()}</strong>
-                <button onclick="editDrink(${d.id})" class="action-btn" title="Editar">✏️</button>
-                <button onclick="deleteDrink(${d.id})" class="action-btn" title="Eliminar">🗑️</button>
-            </div>
-        `;
-
+        item.innerHTML = `<span>${d.name} - $${d.price}</span>`;
         list.appendChild(item);
     });
 }
-
-async function saveDrink() {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se pueden crear o modificar bebidas sin conexión a internet.');
-        return;
-    }
-
-    const name = document.getElementById('drinkName').value.trim();
-    const price = parseFloat(document.getElementById('drinkPrice').value);
-
-    if (!name || isNaN(price)) {
-        showCustomAlert('Complete nombre y precio de la bebida.');
-        return;
-    }
-
-    if (editingDrinkId !== null) {
-        const drink = drinks.find(d => d.id === editingDrinkId);
-        if (drink) {
-            drink.name = name;
-            drink.price = price;
-        }
-        cancelEditDrink();
-    } else {
-        const newId = drinks.length > 0 ? Math.max(...drinks.map(d => d.id)) + 1 : 1;
-        drinks.push({ id: newId, name, price });
-    }
-
-    await saveDataAndSyncCloudSync('Bebida guardada y registrada en Google Sheets exitosamente.');
-
-    document.getElementById('drinkName').value = '';
-    document.getElementById('drinkPrice').value = '';
-    renderDrinks();
-}
-
-function editDrink(id) {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se puede editar bebidas sin conexión a internet.');
-        return;
-    }
-
-    const drink = drinks.find(d => d.id === id);
-    if (drink) {
-        editingDrinkId = id;
-        document.getElementById('drinkName').value = drink.name;
-        document.getElementById('drinkPrice').value = drink.price;
-
-        document.getElementById('formDrinkTitle').innerText = 'Editar Bebida';
-        document.getElementById('btnSaveDrink').innerText = 'Guardar Cambios (Online)';
-        document.getElementById('btnCancelDrinkEdit').classList.remove('hidden');
-    }
-}
-
-function cancelEditDrink() {
-    editingDrinkId = null;
-    document.getElementById('drinkName').value = '';
-    document.getElementById('drinkPrice').value = '';
-
-    document.getElementById('formDrinkTitle').innerText = 'Nombre de la Bebida';
-    document.getElementById('btnSaveDrink').innerText = 'Guardar Bebida (Online)';
-    document.getElementById('btnCancelDrinkEdit').classList.add('hidden');
-}
-
-async function deleteDrink(id) {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se pueden eliminar bebidas sin conexión a internet.');
-        return;
-    }
-
-    if (confirm('¿Desea eliminar permanentemente esta bebida de la aplicación y de Google Sheets?')) {
-        drinks = drinks.filter(d => d.id !== id);
-        if (editingDrinkId === id) cancelEditDrink();
-        await saveDataAndSyncCloudSync('Bebida eliminada y actualizada en Google Sheets.');
-        renderDrinks();
-    }
-}
-
-
-// Gestión de Adicionales
 
 function renderAddons() {
     const list = document.getElementById('addonsList');
     if (!list) return;
-
     list.innerHTML = '';
-    addons.forEach(ad => {
+    addons.forEach(a => {
         const item = document.createElement('div');
         item.className = 'product-row';
-
-        item.innerHTML = `
-            <div class="product-info">
-                <span>${ad.name} ${ad.price === 0 ? '<span style="color:var(--success); font-size:0.75rem; display:block;">(Base / Sustitución gratuita)</span>' : ''}</span>
-            </div>
-            <div class="product-actions">
-                <strong>$${ad.price.toLocaleString()}</strong>
-                <button onclick="editAddon(${ad.id})" class="action-btn" title="Editar">✏️</button>
-                <button onclick="deleteAddon(${ad.id})" class="action-btn" title="Eliminar">🗑️</button>
-            </div>
-        `;
-
+        item.innerHTML = `<span>${a.name} - $${a.price}</span>`;
         list.appendChild(item);
     });
 }
 
-async function saveAddon() {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se puede modificar adicionales sin conexión a internet.');
-        return;
-    }
 
-    const name = document.getElementById('addonName').value.trim();
-    const price = parseFloat(document.getElementById('addonPrice').value);
+/* ========================================================== */
+/* 10. SINCRONIZACIÓN GOOGLE SHEETS                           */
+/* ========================================================== */
 
-    if (!name || isNaN(price)) {
-        showCustomAlert('Complete nombre y precio del adicional.');
-        return;
-    }
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyxNS-oNkfnLk6SDOSz45G4mb0qX5L5j4PbpzjSRnYBCm8YQ95i8TxLQBx9ju1KFJKyrA/exec";
 
-    if (editingAddonId !== null) {
-        const addon = addons.find(a => a.id === editingAddonId);
-        if (addon) {
-            addon.name = name;
-            addon.price = price;
+async function loadDataFromCloud() {
+    try {
+        const response = await fetch(WEB_APP_URL + "?action=getData");
+        if (!response.ok) throw new Error("Error HTTP");
+        const cloudData = await response.json();
+        if (cloudData && cloudData.status !== 'error') {
+            if (Array.isArray(cloudData.tables)) tables = cloudData.tables;
+            if (Array.isArray(cloudData.products)) products = cloudData.products;
+            if (Array.isArray(cloudData.drinks)) drinks = cloudData.drinks;
+            if (Array.isArray(cloudData.addons)) addons = cloudData.addons;
+            if (Array.isArray(cloudData.users)) users = cloudData.users;
+            saveData();
+            return true;
         }
-        cancelEditAddon();
-    } else {
-        const newId = addons.length > 0 ? Math.max(...addons.map(a => a.id)) + 1 : 1;
-        addons.push({ id: newId, name, price });
-    }
-
-    await saveDataAndSyncCloudSync('Adicional guardado y sincronizado en Google Sheets exitosamente.');
-    
-    document.getElementById('addonName').value = '';
-    document.getElementById('addonPrice').value = '';
-    
-    renderAddons();
-}
-
-function editAddon(id) {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se puede editar adicionales sin conexión a internet.');
-        return;
-    }
-
-    const addon = addons.find(a => a.id === id);
-    if (addon) {
-        editingAddonId = id;
-        document.getElementById('addonName').value = addon.name;
-        document.getElementById('addonPrice').value = addon.price;
-
-        document.getElementById('formAddonTitle').innerText = 'Editar Adicional';
-        document.getElementById('btnSaveAddon').innerText = 'Guardar Cambios (Online)';
-        document.getElementById('btnCancelAddonEdit').classList.remove('hidden');
+    } catch (e) {
+        console.warn("Usando caché local:", e);
+        return false;
     }
 }
 
-function cancelEditAddon() {
-    editingAddonId = null;
-    document.getElementById('addonName').value = '';
-    document.getElementById('addonPrice').value = '';
-
-    document.getElementById('formAddonTitle').innerText = 'Nombre del Adicional / Componente';
-    document.getElementById('btnSaveAddon').innerText = 'Guardar Adicional (Online)';
-    document.getElementById('btnCancelAddonEdit').classList.add('hidden');
-}
-
-async function deleteAddon(id) {
-    if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: No se puede eliminar adicionales sin conexión a internet.');
-        return;
-    }
-
-    if (confirm('¿Desea eliminar permanentemente este adicional de la aplicación y de Google Sheets?')) {
-        addons = addons.filter(a => a.id !== id);
-        if (editingAddonId === id) cancelEditAddon();
-        await saveDataAndSyncCloudSync('Adicional eliminado y actualizado en Google Sheets.');
-        renderAddons();
+async function saveDataAndSyncCloudSync(msg) {
+    saveData();
+    try {
+        await fetch(WEB_APP_URL, {
+            method: 'POST',
+            body: JSON.stringify({ tables, products, drinks, addons, users, config: appConfig })
+        });
+        showCustomAlert(`✅ ${msg}`);
+    } catch (e) {
+        console.error("Error al sincronizar:", e);
     }
 }
 
+async function syncDataToCloud() {
+    try {
+        await fetch(WEB_APP_URL, {
+            method: 'POST',
+            body: JSON.stringify({ tables, products, drinks, addons, users, config: appConfig })
+        });
+    } catch (e) {
+        console.error("Error sincronizando:", e);
+    }
+}
+
+async function sendNewSalesToCloud(salesArray) {
+    try {
+        await fetch(WEB_APP_URL, {
+            method: 'POST',
+            body: JSON.stringify({ salesHistory: salesArray })
+        });
+    } catch (e) {
+        console.error("Error registrando venta:", e);
+    }
+}
 
 /* ========================================================== */
-/* 9. MÓDULO DE DASHBOARD ANALÍTICO DE VENTAS (BLINDADO)      */
+/* MÓDULO DE DASHBOARD ANALÍTICO DE VENTAS                    */
 /* ========================================================== */
 
+/**
+ * Consulta el historial de facturas en la nube y renderiza métricas comerciales clave.
+ */
 async function renderSalesDashboard() {
     const container = document.getElementById('dashboardAnalyticsContainer');
-    if (!container) {
-        console.error("No se encontró el elemento #dashboardAnalyticsContainer en el HTML.");
-        return;
-    }
+    if (!container) return;
 
     container.innerHTML = `
         <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
@@ -2110,7 +1344,6 @@ async function renderSalesDashboard() {
 
     container.innerHTML = '';
 
-    // Validar si el historial de ventas existe y tiene elementos
     if (!Array.isArray(salesHistory) || salesHistory.length === 0) {
         container.innerHTML = `
             <div style="background: #ffffff; border: 1px solid var(--border); padding: 2rem; border-radius: 12px; text-align: center; color: var(--text-secondary);">
@@ -2136,7 +1369,6 @@ async function renderSalesDashboard() {
 
     let totalInvoices = totalInvoicesSet.size;
     let averageTicket = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
-
     let sortedProducts = Object.entries(productCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
     let topProductsHtml = '';
@@ -2173,161 +1405,6 @@ async function renderSalesDashboard() {
 }
 
 
-/* ========================================================== */
-/* 10. SINCRONIZACIÓN CON GOOGLE SHEETS Y LOCALSTORAGE        */
-/* ========================================================== */
-
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyxNS-oNkfnLk6SDOSz45G4mb0qX5L5j4PbpzjSRnYBCm8YQ95i8TxLQBx9ju1KFJKyrA/exec";
-
-
-async function loadDataFromCloud() {
-    try {
-        const response = await fetch(WEB_APP_URL + "?action=getData");
-
-        if (!response.ok) {
-            throw new Error("Error HTTP: " + response.status);
-        }
-
-        const cloudData = await response.json();
-
-        if (!cloudData || cloudData.status === 'error') {
-            throw new Error(cloudData.message || 'Respuesta inválida de Google Sheets.');
-        }
-
-        if (Array.isArray(cloudData.tables)) {
-            tables = cloudData.tables;
-        }
-
-        if (Array.isArray(cloudData.products)) {
-            products = cloudData.products;
-        }
-
-        if (Array.isArray(cloudData.drinks)) {
-            drinks = cloudData.drinks;
-        }
-
-        if (Array.isArray(cloudData.addons)) {
-            addons = cloudData.addons;
-        }
-
-        if (cloudData.config && typeof cloudData.config === 'object') {
-            appConfig = cloudData.config;
-        }
-
-        if (Array.isArray(cloudData.users)) {
-            users = cloudData.users.map(user => ({
-                ...user,
-                id: user.id,
-                username: String(user.username ?? '').trim(),
-                pass: String(user.pass ?? '').trim(),
-                role: String(user.role ?? '').trim().toLowerCase()
-            }));
-        }
-
-        saveData();
-        console.log("Datos sincronizados desde Google Sheets exitosamente.");
-        return true;
-
-    } catch (error) {
-        console.warn("No se pudo conectar a Google Sheets. Se utilizarán los datos locales.", error);
-        return false;
-    }
-}
-
-async function saveDataAndSyncCloudSync(successMessage) {
-    saveData();
-
-    try {
-        const payload = {
-            tables: tables,
-            products: products,
-            drinks: drinks,
-            addons: addons,
-            users: users,
-            config: appConfig
-        };
-
-        const response = await fetch(WEB_APP_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error("Error HTTP: " + response.status);
-        }
-
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            showCustomAlert(`✅ ${successMessage}`);
-        } else {
-            showCustomAlert(`⚠️ Los cambios se guardaron localmente, pero hubo un error al registrar en Sheets: ${result.message}`);
-        }
-
-    } catch (error) {
-        console.error("Error sincronizando con Google Sheets:", error);
-        showCustomAlert('❌ Error de red: No se pudo verificar la conexión con Google Sheets.');
-    }
-}
-
-async function syncDataToCloud() {
-    try {
-        const payload = {
-            tables: tables,
-            products: products,
-            drinks: drinks,
-            addons: addons,
-            users: users,
-            config: appConfig
-        };
-
-        const response = await fetch(WEB_APP_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error("Error HTTP: " + response.status);
-        }
-
-        const result = await response.json();
-        if (result.status === 'success') {
-            console.log("Datos sincronizados con Google Sheets correctamente.");
-        } else {
-            console.error("Error en el servidor de Sheets:", result.message);
-        }
-
-    } catch (error) {
-        console.error("No se pudo conectar con la nube para sincronizar:", error);
-    }
-}
-
-async function sendNewSalesToCloud(salesArray) {
-    try {
-        const payload = {
-            salesHistory: salesArray
-        };
-
-        const response = await fetch(WEB_APP_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error("Error HTTP: " + response.status);
-        }
-
-        const result = await response.json();
-        if (result.status === 'success') {
-            console.log("Venta registrada e inmutabilizada en Google Sheets correctamente.");
-        } else {
-            console.error("Error en el servidor de Sheets al registrar venta:", result.message);
-        }
-    } catch (error) {
-        console.error("No se pudo conectar con la nube para registrar la venta:", error);
-    }
-}
-
 function saveData() {
     localStorage.setItem('restopos_tables', JSON.stringify(tables));
     localStorage.setItem('restopos_addons', JSON.stringify(addons));
@@ -2338,8 +1415,6 @@ function saveData() {
     localStorage.setItem('restopos_config', JSON.stringify(appConfig));
 }
 
-
-
-/* 
-​Eliminacion de inventario y creacionndel dashboard
-*/
+/**
+ * archivo comentado
+ */
