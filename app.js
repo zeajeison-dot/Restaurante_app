@@ -918,10 +918,13 @@ function renderKitchenOrders() {
 
     const limitMinutes = parseInt(document.getElementById('kitchenTimerParam').value) || 15;
     const limitSeconds = limitMinutes * 60;
-    const alarmMinutes = parseInt(document.getElementById('kitchenAlarmParam')?.value) || 5;
-    const alarmSeconds = alarmMinutes * 60;
+    
+    // Ahora el umbral se lee como porcentaje (por defecto 25%)
+    const alarmPercent = parseInt(document.getElementById('kitchenAlarmParam')?.value) || 25;
+    const redThresholdSeconds = limitSeconds * (alarmPercent / 100);
+    const yellowThresholdSeconds = limitSeconds * 0.50; // 50% del tiempo límite
+    
     const now = Date.now();
-
     let activeBatches = [];
     let triggerAlarm = false;
 
@@ -953,10 +956,13 @@ function renderKitchenOrders() {
 
     activeBatches.sort((a, b) => a.sentAt - b.sentAt);
 
+    // Activar alarma sonora si alguna comanda entra en alerta roja (tiempo restante <= umbral %)
     activeBatches.forEach(batch => {
         const elapsedSecs = Math.floor((now - batch.sentAt) / 1000);
         const remainingSecs = limitSeconds - elapsedSecs;
-        if (remainingSecs <= alarmSeconds) triggerAlarm = true;
+        if (remainingSecs <= redThresholdSeconds) {
+            triggerAlarm = true;
+        }
     });
 
     if (triggerAlarm && (now - lastKitchenAlarmTime >= 30000)) {
@@ -982,9 +988,22 @@ function renderKitchenOrders() {
         const remSecs = absRemaining % 60;
         const timeFormatted = `${isExpired ? '-' : ''}${remMins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
 
-        let cardBg = isExpired ? '#fee2e2' : '#dcfce7';
-        let borderColor = isExpired ? '#ef4444' : '#22c55e';
-        let textColor = isExpired ? '#b91c1c' : '#15803d';
+        // Regla de colores por porcentaje de tiempo restante
+        let cardBg = '#dcfce7';      // Verde (más del 50% restante)
+        let borderColor = '#22c55e';
+        let textColor = '#15803d';
+
+        if (remainingSecs <= redThresholdSeconds) {
+            // Rojo: queda <= al % configurado (ej. 25%) o ya expiró
+            cardBg = '#fee2e2';
+            borderColor = '#ef4444';
+            textColor = '#b91c1c';
+        } else if (remainingSecs <= yellowThresholdSeconds) {
+            // Amarillo: ya pasó el 50% del tiempo pero aún no llega al umbral rojo
+            cardBg = '#fef9c3';
+            borderColor = '#eab308';
+            textColor = '#854d0e';
+        }
 
         const card = document.createElement('div');
         card.style.cssText = `background: ${cardBg}; border: 2px solid ${borderColor}; border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; justify-content: space-between;`;
@@ -1012,6 +1031,7 @@ function renderKitchenOrders() {
         container.appendChild(card);
     });
 }
+
 
 async function markBatchServed(tableId, batchId) {
     const table = tables.find(t => t.id === tableId);
