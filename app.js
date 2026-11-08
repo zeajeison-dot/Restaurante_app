@@ -5,52 +5,24 @@
  * ==========================================================
  */
 
-window.onload = async function() {
-    await loadDataFromCloud();
+/* ========================================================== */
+/* 1. VARIABLES GLOBALES Y ESTADO INICIAL VACÍO               */
+/* ========================================================== */
 
-    if (localStorage.getItem('restopos_logged') == 'true') {
-        const username = localStorage.getItem('restopos_current_user') || 'admin';
-        const role = localStorage.getItem('restopos_current_role') || 'admin';
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyfYKKkU5tyT6LxNcjcKZtc6jNTuL3PrlVt0TcyKuJMp1XcFrqcYUFv6lvCIGUFPsrliA/exec";
 
-        setupUserSession(username, role, false);
-    }
+// Inicializadas vacías para garantizar que toda la data provenga estrictamente de Google Sheets
+let tables = [];
+let users = [];
+let addons = [];
+let products = [];
+let drinks = [];
+let salesHistory = [];
+let appConfig = {
+    waiterAlarmInterval: 20,
+    waiterCanGenerateReceipt: true,
+    lastUpdated: Date.now()
 };
-
-let tables = JSON.parse(localStorage.getItem('restopos_tables')) || [
-    { id: 1, name: 'Mesa 1', status: 'libre', items: [], receipts: [] },
-    { id: 2, name: 'Mesa 2', status: 'libre', items: [], receipts: [] },
-    { id: 3, name: 'Mesa 3', status: 'libre', items: [], receipts: [] },
-    { id: 4, name: 'Mesa 4', status: 'libre', items: [], receipts: [] },
-    { id: 5, name: 'Mesa 5', status: 'libre', items: [], receipts: [] },
-    { id: 6, name: 'Mesa 6', status: 'libre', items: [], receipts: [] }
-];
-
-let users = JSON.parse(localStorage.getItem('restopos_users')) || [
-    { id: 1, username: 'admin', pass: '123', role: 'admin' },
-    { id: 2, username: 'mesero', pass: '123', role: 'mesero' },
-    { id: 3, username: 'cocina', pass: '123', role: 'cocinero' }
-];
-
-let addons = JSON.parse(localStorage.getItem('restopos_addons')) || [
-    { id: 1, name: 'Papas a la francesa', price: 0 },
-    { id: 2, name: 'Ensalada', price: 0 },
-    { id: 3, name: 'Plátano maduro', price: 0 },
-    { id: 4, name: 'Queso extra', price: 3000 },
-    { id: 5, name: 'Tocineta', price: 3000 }
-];
-
-let products = JSON.parse(localStorage.getItem('restopos_products')) || [
-    { id: 1, name: 'Costillas BBQ', price: 22000, components: [1, 2], category: 'principales', active: true }
-];
-
-let drinks = JSON.parse(localStorage.getItem('restopos_drinks')) || [
-    { id: 1, name: 'Gaseosa 400ml', price: 4000 },
-    { id: 2, name: 'Agua en botella', price: 3000 },
-    { id: 3, name: 'Limonada natural', price: 5000 }
-];
-
-let salesHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
-let appConfig = JSON.parse(localStorage.getItem('restopos_config')) || { waiterAlarmInterval: 20, waiterCanGenerateReceipt: true, lastUpdated: Date.now() };
 
 let currentTableId = null;
 let editingProductId = null;
@@ -59,16 +31,74 @@ let editingAddonId = null;
 let editingTableId = null;
 let editingUserId = null;
 let currentPlusCategory = 'sopas';
+
+// Controladores de intervalos en memoria
 let kitchenInterval = null;
-let tablesRefreshInterval = null; 
-let lastKitchenAlarmTime = 0; 
+let kitchenCloudPollInterval = null;
+let tablesRefreshInterval = null;
+let lastKitchenAlarmTime = 0;
 let lastWaiterAlarmTime = 0;
+
+/* ========================================================== */
+/* 1. INICIALIZACIÓN DE SESIÓN                                */
+/* ========================================================== */
+
+/**
+ * Inicializa la aplicación al cargar la ventana.
+ * Cómo lo realiza: Restaura la sesión activa si existe o precarga exclusivamente los usuarios.
+ * Consulta a Sheets: Llama a `loadUsersAndConfigFromCloud()` (Tablas: `Usuarios` y `Config`).
+ */
+window.onload = async function() {
+    if (localStorage.getItem('restopos_logged') === 'true') {
+        const username = localStorage.getItem('restopos_current_user') || 'admin';
+        const role = localStorage.getItem('restopos_current_role') || 'admin';
+        
+        await loadUsersAndConfigFromCloud();
+        setupUserSession(username, role, false);
+    } else {
+        await loadUsersAndConfigFromCloud();
+    }
+};
 
 
 /* ========================================================== */
 /* 2. AUTENTICACIÓN Y CONTROL DE VISTAS                       */
 /* ========================================================== */
 
+/**
+ * Descarga exclusivamente la tabla de Usuarios y Configuración desde la nube para el Login.
+ * Cómo lo realiza: Realiza un fetch al endpoint ligero `getUsersAndConfig`.
+ * Consulta a Sheets: Lee únicamente las tablas `Usuarios` y `Config`.
+ */
+async function loadUsersAndConfigFromCloud() {
+    try {
+        const response = await fetch(`${WEB_APP_URL}?action=getUsersAndConfig`);
+        if (!response.ok) throw new Error("Error HTTP al consultar usuarios");
+        const cloudData = await response.json();
+        
+        if (cloudData && cloudData.status !== 'error') {
+            if (Array.isArray(cloudData.users)) {
+                users = cloudData.users;
+                localStorage.setItem('restopos_users', JSON.stringify(users));
+            }
+            if (cloudData.config) {
+                appConfig = cloudData.config;
+                localStorage.setItem('restopos_config', JSON.stringify(appConfig));
+            }
+            return true;
+        }
+    } catch (e) {
+        console.warn("No se pudieron cargar usuarios de la nube, usando caché local:", e);
+        users = JSON.parse(localStorage.getItem('restopos_users')) || [];
+    }
+    return false;
+}
+
+/**
+ * Valida las credenciales ingresadas consultando estrictamente la tabla de usuarios.
+ * Cómo lo realiza: Consulta la nube mediante el endpoint ligero, valida el rol y usuario.
+ * Consulta a Sheets: Llama a `loadUsersAndConfigFromCloud()` (Tabla: `Usuarios`).
+ */
 async function login() {
     const userInput = document.getElementById('userInput').value.trim();
     const passInput = document.getElementById('passInput').value.trim();
@@ -78,12 +108,16 @@ async function login() {
         return;
     }
 
-    const cloudLoaded = await loadDataFromCloud();
+    showCustomAlert('🔄 Validando credenciales en Google Sheets...');
+    const cloudLoaded = await loadUsersAndConfigFromCloud();
 
-    let foundUser = users.find(u =>
+    const foundUser = users.find(u =>
         String(u.username).trim().toLowerCase() === userInput.toLowerCase() &&
         String(u.pass).trim() === passInput
     );
+
+    const alertOverlay = document.getElementById('customAlertModal');
+    if (alertOverlay) alertOverlay.style.display = 'none';
 
     if (foundUser) {
         localStorage.setItem('restopos_logged', 'true');
@@ -93,13 +127,18 @@ async function login() {
         setupUserSession(foundUser.username, foundUser.role, true);
     } else {
         if (!cloudLoaded && !navigator.onLine) {
-            showCustomAlert('No hay conexión a internet. No fue posible consultar los usuarios de Google Sheets.');
+            showCustomAlert('No hay conexión a internet. No fue posible consultar los usuarios.');
         } else {
             showCustomAlert('Usuario o contraseña incorrectos.');
         }
     }
 }
 
+/**
+ * Configura la interfaz gráfica y redirige a la vista inicial según el rol.
+ * Cómo lo realiza: Muestra el rol y nombre, y direcciona al módulo correspondiente.
+ * Consulta a Sheets: Ninguna directa.
+ */
 function setupUserSession(username, role, isNewLogin = false) {
     document.getElementById('login-view').classList.add('hidden');
     document.getElementById('welcome-msg').innerText = `Usuario: ${username}`;
@@ -130,8 +169,13 @@ function setupUserSession(username, role, isNewLogin = false) {
     }
 }
 
+/**
+ * Guarda la configuración de intervalos de alarma de mesero en Google Sheets.
+ * Cómo lo realiza: Valida el input en segundos y sincroniza con la nube.
+ * Consulta a Sheets: Modifica la tabla `Config` vía `saveDataAndSyncCloudSync()`.
+ */
 async function saveWaiterAlarmConfig() {
-    const val = parseInt(document.getElementById('waiterAlarmIntervalParam').value);
+    const val = parseInt(document.getElementById('waiterAlarmIntervalParam').value, 10);
     const canGen = document.getElementById('waiterCanGenerateReceiptParam')?.checked ?? true;
 
     if (isNaN(val) || val < 5) {
@@ -146,13 +190,18 @@ async function saveWaiterAlarmConfig() {
     await saveDataAndSyncCloudSync('Configuración y permisos guardados correctamente en Sheets.');
 }
 
+/**
+ * Dibuja las tarjetas del menú principal para el Administrador.
+ * Cómo lo realiza: Inserta dinámicamente las tarjetas de navegación en `#dashboardMenuGrid`.
+ * Consulta a Sheets: Ninguna.
+ */
 function renderDashboardMenu(role) {
     const grid = document.getElementById('dashboardMenuGrid');
     if (!grid) return;
 
     grid.innerHTML = '';
 
-    let menuCards = [
+    const menuCards = [
         { title: '📊 Dashboard de Ventas', desc: 'Analíticas y resultados comerciales', action: "showSection('dashboard-analytics-section')" },
         { title: '🪑 Mesas & Pedidos', desc: 'Control de salón', action: "showSection('tables-section')" },
         { title: '👨‍🍳 Módulo de Cocina', desc: 'Comandas en tiempo real', action: "showSection('kitchen-section')" },
@@ -167,33 +216,28 @@ function renderDashboardMenu(role) {
         const div = document.createElement('div');
         div.className = 'menu-card';
         div.setAttribute('onclick', card.action);
-
         div.innerHTML = `
             <h3>${card.title}</h3>
             <p style="font-size: 0.85rem; color: var(--text-secondary);">${card.desc}</p>
         `;
-
         grid.appendChild(div);
     });
 }
 
+/**
+ * Cierra la sesión activa y retorna a la vista de login.
+ * Cómo lo realiza: Borra las credenciales de localStorage y limpia las vistas.
+ * Consulta a Sheets: Ninguna.
+ */
 function logout() {
     localStorage.removeItem('restopos_logged');
     localStorage.removeItem('restopos_current_user');
     localStorage.removeItem('restopos_current_role');
 
     const sections = [
-        'dashboard-view',
-        'tables-section',
-        'kitchen-section',
-        'users-admin-section',
-        'tables-admin-section',
-        'order-section',
-        'bill-section',
-        'catalog-section',
-        'drinks-section',
-        'addons-section',
-        'dashboard-analytics-section'
+        'dashboard-view', 'tables-section', 'kitchen-section', 'users-admin-section',
+        'tables-admin-section', 'order-section', 'bill-section', 'catalog-section',
+        'drinks-section', 'addons-section', 'dashboard-analytics-section'
     ];
 
     sections.forEach(id => {
@@ -206,6 +250,15 @@ function logout() {
     document.getElementById('passInput').value = '';
 }
 
+/**
+ * Gestiona la navegación entre secciones aplicando control de acceso y limpiando intervalos.
+ * Cómo lo realiza: Valida permisos por rol, detiene cronómetros previos, muestra la vista solicitada
+ * y ejecuta la consulta de datos correspondiente al módulo.
+ * Consulta a Sheets:
+ * - `tables-section`: Consulta `getTablesAndProducts` (Mesas, Productos con Caché).
+ * - `kitchen-section`: Consulta `getData` y sondeo ligero de `Config`.
+ * - Otras secciones: Llama a `loadDataFromCloud()`.
+ */
 async function showSection(sectionId) {
     const role = localStorage.getItem('restopos_current_role') || 'admin';
 
@@ -214,7 +267,7 @@ async function showSection(sectionId) {
         return;
     }
 
-    if (role === 'mesero' && sectionId !== 'tables-section' && sectionId !== 'order-section' && sectionId !== 'bill-section') {
+    if (role === 'mesero' && !['tables-section', 'order-section', 'bill-section'].includes(sectionId)) {
         showCustomAlert('Acceso no autorizado para el rol de mesero.');
         return;
     }
@@ -223,21 +276,21 @@ async function showSection(sectionId) {
         showCustomAlert('Acceso no autorizado para el rol de cocinero.');
         return;
     }
+    // CORRECCIÓN: No descargar datos pesados si estamos en el menú principal o en mesas
+    if (!['dashboard-view', 'tables-section'].includes(sectionId)) {
+        await loadDataFromCloud();
+    }
 
-    await loadDataFromCloud();
+    // ✅ DEJA SOLO ESTE:
+    if (!['dashboard-view', 'tables-section'].includes(sectionId)) {
+        await loadDataFromCloud();
+    }
+
 
     const sections = [
-        'dashboard-view',
-        'tables-section',
-        'kitchen-section',
-        'users-admin-section',
-        'tables-admin-section',
-        'order-section',
-        'bill-section',
-        'catalog-section',
-        'drinks-section',
-        'addons-section',
-        'dashboard-analytics-section'
+        'dashboard-view', 'tables-section', 'kitchen-section', 'users-admin-section',
+        'tables-admin-section', 'order-section', 'bill-section', 'catalog-section',
+        'drinks-section', 'addons-section', 'dashboard-analytics-section'
     ];
 
     sections.forEach(id => {
@@ -249,14 +302,16 @@ async function showSection(sectionId) {
     if (target) target.classList.remove('hidden');
 
     if (kitchenInterval) { clearInterval(kitchenInterval); kitchenInterval = null; }
+    if (kitchenCloudPollInterval) { clearInterval(kitchenCloudPollInterval); kitchenCloudPollInterval = null; }
     if (tablesRefreshInterval) { clearInterval(tablesRefreshInterval); tablesRefreshInterval = null; }
 
-    const backBtns = document.querySelectorAll('.admin-back-btn');
-    backBtns.forEach(btn => {
+    document.querySelectorAll('.admin-back-btn').forEach(btn => {
         btn.style.display = (role === 'admin') ? 'block' : 'none';
     });
 
-    if (sectionId === 'tables-section') {
+    if (sectionId === 'dashboard-view') {
+        renderDashboardMenu(role);
+    } else if (sectionId === 'tables-section') {
         const headerBar = document.getElementById('tablesHeaderBar');
         const userTitle = document.getElementById('tablesUserTitle');
         const roleBadge = document.getElementById('tablesRoleBadge');
@@ -272,6 +327,23 @@ async function showSection(sectionId) {
             if (alarmCard) alarmCard.style.display = 'block';
         }
 
+        try {
+            const res = await fetch(`${WEB_APP_URL}?action=getTablesAndProducts`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.status === 'success') {
+                    if (Array.isArray(data.tables)) tables = data.tables;
+                    if (Array.isArray(data.products)) products = data.products;
+                    if (Array.isArray(data.drinks)) drinks = data.drinks;
+                    if (Array.isArray(data.addons)) addons = data.addons;
+                    if (data.config) appConfig = data.config;
+                    saveData();
+                }
+            }
+        } catch (e) {
+            console.warn("Usando datos locales para mesas:", e);
+        }
+
         renderTables();
 
         let isRefreshingTables = false;
@@ -281,9 +353,15 @@ async function showSection(sectionId) {
                 if (isRefreshingTables) return;
                 isRefreshingTables = true;
                 try {
-                    await loadDataFromCloud();
-                    renderTables();
-                    checkWaiterReadyAlarm();
+                    const res = await fetch(`${WEB_APP_URL}?action=getTablesAndProducts`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.status === 'success' && Array.isArray(data.tables)) {
+                            tables = data.tables;
+                            renderTables();
+                            checkWaiterReadyAlarm();
+                        }
+                    }
                 } catch (e) {
                     console.error("Error en sondeo de mesas:", e);
                 } finally {
@@ -295,20 +373,18 @@ async function showSection(sectionId) {
             }
         }, 10000);
 
-            } else if (sectionId === 'kitchen-section') {
+    } else if (sectionId === 'kitchen-section') {
         const kitchenSection = document.getElementById('kitchen-section');
         if (!kitchenSection) return;
 
         const timerConfigBox = document.getElementById('kitchenTimerConfigBox');
         if (timerConfigBox) timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
 
-        // Carga inicial completa al entrar a cocina
         await loadDataFromCloud();
         renderKitchenOrders();
 
         let localLastUpdated = appConfig.lastUpdated || 0;
 
-        // 1. Temporizador local: Actualiza la cuenta regresiva en pantalla CADA SEGUNDO sin tocar Google Sheets
         kitchenInterval = setInterval(() => {
             if (kitchenSection && !kitchenSection.classList.contains('hidden')) {
                 renderKitchenOrders();
@@ -318,22 +394,19 @@ async function showSection(sectionId) {
             }
         }, 1000);
 
-        // 2. Sondeo en segundo plano a la nube: Consulta únicamente el timestamp cada 15 segundos para buscar nuevos platos
         let isRefreshingKitchen = false;
-        const cloudPollInterval = setInterval(async () => {
+        kitchenCloudPollInterval = setInterval(async () => {
             if (kitchenSection && !kitchenSection.classList.contains('hidden')) {
                 if (isRefreshingKitchen) return;
                 isRefreshingKitchen = true;
                 try {
-                    const resCheck = await fetch(WEB_APP_URL + "?action=getLastUpdated");
+                    const resCheck = await fetch(`${WEB_APP_URL}?action=getLastUpdated`);
                     if (resCheck.ok) {
                         const checkData = await resCheck.json();
-                        if (checkData && checkData.status === 'success') {
-                            if (checkData.lastUpdated > localLastUpdated) {
-                                localLastUpdated = checkData.lastUpdated;
-                                await loadDataFromCloud(); // Descarga la nueva comanda solo si el mesero envió algo
-                                renderKitchenOrders();     
-                            }
+                        if (checkData && checkData.status === 'success' && checkData.lastUpdated > localLastUpdated) {
+                            localLastUpdated = checkData.lastUpdated;
+                            await loadDataFromCloud();
+                            renderKitchenOrders();
                         }
                     }
                 } catch (e) {
@@ -342,9 +415,10 @@ async function showSection(sectionId) {
                     isRefreshingKitchen = false;
                 }
             } else {
-                clearInterval(cloudPollInterval);
+                clearInterval(kitchenCloudPollInterval);
+                kitchenCloudPollInterval = null;
             }
-        }, 60000); // Consulta a la nube cada 60 segundos (cero impacto en cuotas)
+        }, 15000);
 
     } else if (sectionId === 'users-admin-section') {
         cancelEditUser();
@@ -367,10 +441,15 @@ async function showSection(sectionId) {
     }
 }
 
+/**
+ * Verifica platos listos en cocina para activar la alarma del mesero.
+ * Cómo lo realiza: Compara el tiempo transcurrido desde la última alerta.
+ * Consulta a Sheets: Ninguna.
+ */
 function checkWaiterReadyAlarm() {
     const now = Date.now();
-    let hasReadyTables = tables.some(t => t.items && t.items.some(i => i.sentToKitchen && i.served && !i.pickedUp));
-    
+    const hasReadyTables = tables.some(t => t.items && t.items.some(i => i.sentToKitchen && i.served && !i.pickedUp));
+
     if (hasReadyTables) {
         const intervalMs = (appConfig.waiterAlarmInterval || 20) * 1000;
         if (now - lastWaiterAlarmTime >= intervalMs) {
@@ -385,10 +464,16 @@ function checkWaiterReadyAlarm() {
 /* 3. GESTIÓN DE USUARIOS Y PERMISOS                          */
 /* ========================================================== */
 
+/**
+ * Renderiza la lista de usuarios en administración.
+ * Cómo lo realiza: Limpia `#usersList` e inserta los registros.
+ * Consulta a Sheets: Ninguna.
+ */
 function renderUsersAdmin() {
     const list = document.getElementById('usersList');
     if (!list) return;
     list.innerHTML = '';
+
     users.forEach(u => {
         const item = document.createElement('div');
         item.className = 'product-row';
@@ -406,6 +491,11 @@ function renderUsersAdmin() {
     });
 }
 
+/**
+ * Guarda o actualiza un usuario en la nube.
+ * Cómo lo realiza: Valida campos y sincroniza.
+ * Consulta a Sheets: Modifica la tabla `Usuarios` vía `saveDataAndSyncCloudSync()`.
+ */
 async function saveUser() {
     if (!navigator.onLine) {
         showCustomAlert('❌ Acción bloqueada: Sin conexión a internet.');
@@ -482,6 +572,11 @@ async function deleteUser(id) {
 /* 4. GESTIÓN Y ADMINISTRACIÓN DE MESAS                       */
 /* ========================================================== */
 
+/**
+ * Renderiza la cuadrícula de mesas en salón.
+ * Cómo lo realiza: Evalúa estados (libre, ocupada, alerta) y pinta las tarjetas.
+ * Consulta a Sheets: Ninguna.
+ */
 function renderTables() {
     const container = document.getElementById('tableGridContainer');
     if (!container) return;
@@ -489,14 +584,19 @@ function renderTables() {
 
     tables.forEach(t => {
         const div = document.createElement('div');
-        let hasReadyItems = t.items && t.items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
-        let hasInKitchenItems = t.items && t.items.some(item => item.sentToKitchen && !item.served);
+        const hasReadyItems = t.items && t.items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
+        const hasInKitchenItems = t.items && t.items.some(item => item.sentToKitchen && !item.served);
 
         let classNames = `table-item ${t.status}`;
         let statusText = t.status;
 
-        if (hasReadyItems) { classNames += ` table-item-alert`; statusText = '¡Listos en cocina!'; }
-        else if (hasInKitchenItems) { classNames = `table-item ocupada`; statusText = 'En cocina'; }
+        if (hasReadyItems) {
+            classNames += ` table-item-alert`;
+            statusText = '¡Listos en cocina!';
+        } else if (hasInKitchenItems) {
+            classNames = `table-item ocupada`;
+            statusText = 'En cocina';
+        }
 
         div.className = classNames;
         div.innerHTML = `${t.name}<br><span style="font-size:0.65rem; text-transform:uppercase;">${statusText}</span>`;
@@ -509,6 +609,7 @@ function renderTablesAdmin() {
     const list = document.getElementById('tablesAdminList');
     if (!list) return;
     list.innerHTML = '';
+
     tables.forEach(t => {
         const item = document.createElement('div');
         item.className = 'product-row';
@@ -583,6 +684,11 @@ async function deleteTable(id) {
 /* 5. PEDIDOS Y COMANDAS                                      */
 /* ========================================================== */
 
+/**
+ * Abre la sección de pedidos para una mesa.
+ * Cómo lo realiza: Sincroniza desde la nube y prepara la interfaz de comandas.
+ * Consulta a Sheets: Llama a `loadDataFromCloud()`.
+ */
 async function openTableOrder(id) {
     currentTableId = id;
     await loadDataFromCloud();
@@ -613,7 +719,6 @@ async function openTableOrder(id) {
     renderPlusOrderItems();
 }
 
-
 async function markTablePickedUp() {
     const table = tables.find(t => t.id === currentTableId);
     if (!table) return;
@@ -629,14 +734,9 @@ async function markTablePickedUp() {
     renderPlusOrderItems();
 }
 
-
-/* ========================================================== */
-/* FILTRADO ROBUSTO DEL CATÁLOGO POR CATEGORÍA Y ESTADO       */
-/* ========================================================== */
-
 function normalizeCategory(cat) {
     if (!cat) return 'principales';
-    let c = String(cat).toLowerCase().trim();
+    const c = String(cat).toLowerCase().trim();
     if (c.includes('sopa') || c.includes('entrada')) return 'sopas';
     if (c.includes('principal') || c.includes('plato')) return 'principales';
     if (c.includes('bebida') || c.includes('jugo')) return 'bebidas';
@@ -647,11 +747,15 @@ function normalizeCategory(cat) {
 function isProductActive(p) {
     if (p.active === undefined || p.active === null) return true;
     if (typeof p.active === 'boolean') return p.active;
-    let str = String(p.active).toLowerCase().trim();
-    if (str === 'false' || str === 'inactivo' || str === '0' || str === 'no') return false;
-    return true;
+    const str = String(p.active).toLowerCase().trim();
+    return !['false', 'inactivo', '0', 'no'].includes(str);
 }
 
+/**
+ * Filtra los productos unificados de la tabla `Productos` según su categoría y estado activo.
+ * Cómo lo realiza: Filtra el arreglo global `products` según su categoría normalizada.
+ * Consulta a Sheets: Ninguna (usa el catálogo cargado en memoria).
+ */
 function filterPlusCategory(category, event) {
     currentPlusCategory = category;
 
@@ -674,17 +778,10 @@ function filterPlusCategory(category, event) {
 
     const targetCat = normalizeCategory(category);
 
-    let itemsToDisplay = [];
-    if (targetCat === 'bebidas') {
-        itemsToDisplay = drinks.map(d => ({ id: 'drink_' + d.id, name: d.name, price: d.price, category: 'bebidas', active: true }));
-    } else if (targetCat === 'adicionales') {
-        itemsToDisplay = addons.map(a => ({ id: 'addon_' + a.id, name: a.name, price: a.price, category: 'adicionales', active: true }));
-    } else {
-        itemsToDisplay = products.filter(p => {
-            const prodCat = normalizeCategory(p.category);
-            return prodCat === targetCat && isProductActive(p);
-        });
-    }
+    const itemsToDisplay = products.filter(p => {
+        const prodCat = normalizeCategory(p.category);
+        return prodCat === targetCat && isProductActive(p);
+    });
 
     if (itemsToDisplay.length === 0) {
         catalogGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; font-size: 0.8rem; color: var(--text-secondary); padding: 1rem;">No hay productos activos en esta categoría.</div>';
@@ -694,10 +791,7 @@ function filterPlusCategory(category, event) {
     itemsToDisplay.forEach(item => {
         const btn = document.createElement('div');
         btn.style.cssText = "background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem; display: flex; flex-direction: column; justify-content: space-between; align-items: center; cursor: pointer; text-align: center; width: 110px; height: 55px; box-sizing: border-box;";
-        
-        let itemId = String(item.id).startsWith('drink_') || String(item.id).startsWith('addon_') 
-            ? item.id 
-            : 'prod_' + item.id;
+        const itemId = 'prod_' + item.id;
 
         btn.innerHTML = `
             <span style="font-size: 0.7rem; font-weight: bold; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.1;">${item.name}</span>
@@ -713,31 +807,15 @@ function addProductDirectlyToOrder(itemIdentifier) {
     const table = tables.find(t => t.id === currentTableId);
     if (!table) return;
 
-    let name = '';
-    let finalPrice = 0;
-    let productId = 0;
-
-    if (String(itemIdentifier).startsWith('drink_')) {
-        let id = parseInt(itemIdentifier.replace('drink_', ''));
-        let drink = drinks.find(d => d.id === id);
-        if (drink) { name = drink.name; finalPrice = drink.price; productId = drink.id; }
-    } else if (String(itemIdentifier).startsWith('addon_')) {
-        let id = parseInt(itemIdentifier.replace('addon_', ''));
-        let addon = addons.find(a => a.id === id);
-        if (addon) { name = addon.name; finalPrice = addon.price; productId = addon.id; }
-    } else {
-        let id = parseInt(String(itemIdentifier).replace('prod_', ''));
-        let prod = products.find(p => p.id === id);
-        if (prod) { name = prod.name; finalPrice = prod.price; productId = prod.id; }
-    }
-
-    if (!name) return;
+    const id = parseInt(String(itemIdentifier).replace('prod_', '').replace('drink_', '').replace('addon_', ''), 10);
+    const prod = products.find(p => p.id === id);
+    if (!prod) return;
 
     const orderItemData = {
         uid: '_' + Math.random().toString(36).substr(2, 9),
-        productId: productId,
-        name: name,
-        finalPrice: finalPrice,
+        productId: prod.id,
+        name: prod.name,
+        finalPrice: prod.price,
         modifications: [],
         observation: '',
         kitchenChecked: false,
@@ -771,9 +849,9 @@ function renderPlusOrderItems() {
             const row = document.createElement('div');
             row.style.cssText = "display: grid; grid-template-columns: 35px 2.2fr 2.5fr 40px; padding: 0.35rem 0.2rem; border-bottom: 1px solid var(--border); align-items: center; font-size: 0.8rem;";
 
-            let isSentOrBilled = item.sentToKitchen || item.billed;
-            let isCheckedAttr = (item.sentToKitchen || item.kitchenChecked) ? 'checked' : '';
-            let disabledAttr = isSentOrBilled ? 'disabled' : '';
+            const isSentOrBilled = item.sentToKitchen || item.billed;
+            const isCheckedAttr = (item.sentToKitchen || item.kitchenChecked) ? 'checked' : '';
+            const disabledAttr = isSentOrBilled ? 'disabled' : '';
 
             let statusBadge = '';
             if (item.billed) {
@@ -874,7 +952,7 @@ async function sendOrderToKitchen() {
         return;
     }
 
-    let itemsToSend = table.items.filter(item => !item.sentToKitchen && item.kitchenChecked);
+    const itemsToSend = table.items.filter(item => !item.sentToKitchen && item.kitchenChecked);
 
     if (itemsToSend.length === 0) {
         showCustomAlert('⚠️ Por favor seleccione con el checkbox al menos un plato nuevo para enviar a cocina.');
@@ -894,8 +972,6 @@ async function sendOrderToKitchen() {
     });
 
     table.status = 'ocupada';
-    
-    // Actualizar el timestamp global para notificar instantáneamente al módulo de cocina
     appConfig.lastUpdated = now;
 
     renderPlusOrderItems();
@@ -911,38 +987,40 @@ async function sendOrderToKitchen() {
     showSection('tables-section');
 }
 
+/**
+ * Renderiza comandas en pantalla de cocina con alertas de color según porcentaje y umbral.
+ * Cómo lo realiza: Agrupa por lotes y calcula umbrales porcentuales.
+ * Consulta a Sheets: Ninguna.
+ */
 function renderKitchenOrders() {
     const container = document.getElementById('kitchenOrdersContainer');
     if (!container) return;
     container.innerHTML = '';
 
-    const limitMinutes = parseInt(document.getElementById('kitchenTimerParam').value) || 15;
+    const limitMinutes = parseInt(document.getElementById('kitchenTimerParam').value, 10) || 15;
     const limitSeconds = limitMinutes * 60;
-    
-    // Ahora el umbral se lee como porcentaje (por defecto 25%)
-    const alarmPercent = parseInt(document.getElementById('kitchenAlarmParam')?.value) || 25;
+
+    const alarmPercent = parseInt(document.getElementById('kitchenAlarmParam')?.value, 10) || 25;
     const redThresholdSeconds = limitSeconds * (alarmPercent / 100);
-    const yellowThresholdSeconds = limitSeconds * 0.50; // 50% del tiempo límite
-    
+    const yellowThresholdSeconds = limitSeconds * 0.50;
+
     const now = Date.now();
-    let activeBatches = [];
+    const activeBatches = [];
     let triggerAlarm = false;
 
     tables.forEach(table => {
         const activeItems = table.items.filter(item => item.sentToKitchen && !item.served);
-        
+
         if (activeItems.length > 0) {
-            let batchesMap = {};
+            const batchesMap = {};
             activeItems.forEach(item => {
-                let batchKey = item.sentAt || now;
-                if (!batchesMap[batchKey]) {
-                    batchesMap[batchKey] = [];
-                }
+                const batchKey = item.sentAt || now;
+                if (!batchesMap[batchKey]) batchesMap[batchKey] = [];
                 batchesMap[batchKey].push(item);
             });
 
             Object.keys(batchesMap).forEach(batchKey => {
-                let batchTime = parseInt(batchKey);
+                const batchTime = parseInt(batchKey, 10);
                 activeBatches.push({
                     tableId: table.id,
                     tableName: table.name,
@@ -956,7 +1034,6 @@ function renderKitchenOrders() {
 
     activeBatches.sort((a, b) => a.sentAt - b.sentAt);
 
-    // Activar alarma sonora si alguna comanda entra en alerta roja (tiempo restante <= umbral %)
     activeBatches.forEach(batch => {
         const elapsedSecs = Math.floor((now - batch.sentAt) / 1000);
         const remainingSecs = limitSeconds - elapsedSecs;
@@ -988,18 +1065,15 @@ function renderKitchenOrders() {
         const remSecs = absRemaining % 60;
         const timeFormatted = `${isExpired ? '-' : ''}${remMins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
 
-        // Regla de colores por porcentaje de tiempo restante
-        let cardBg = '#dcfce7';      // Verde (más del 50% restante)
+        let cardBg = '#dcfce7';
         let borderColor = '#22c55e';
         let textColor = '#15803d';
 
         if (remainingSecs <= redThresholdSeconds) {
-            // Rojo: queda <= al % configurado (ej. 25%) o ya expiró
             cardBg = '#fee2e2';
             borderColor = '#ef4444';
             textColor = '#b91c1c';
         } else if (remainingSecs <= yellowThresholdSeconds) {
-            // Amarillo: ya pasó el 50% del tiempo pero aún no llega al umbral rojo
             cardBg = '#fef9c3';
             borderColor = '#eab308';
             textColor = '#854d0e';
@@ -1021,7 +1095,7 @@ function renderKitchenOrders() {
         card.innerHTML = `
             <div>
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${borderColor}; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
-                    <h3 style="margin: 0; font-size: 1.1rem;">${batch.tableName} <span style="font-size:0.75rem; color:var(--text-secondary);">(Lote #${new Date(batch.batchId).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})})</span></h3>
+                    <h3 style="margin: 0; font-size: 1.1rem;">${batch.tableName} <span style="font-size:0.75rem; color:var(--text-secondary);">(Lote #${new Date(batch.batchId).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})</span></h3>
                     <span style="font-size: 0.85rem; background: #fff; color: ${textColor}; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: bold;">⏱️ ${timeFormatted}</span>
                 </div>
                 <div>${itemsHtml}</div>
@@ -1031,7 +1105,6 @@ function renderKitchenOrders() {
         container.appendChild(card);
     });
 }
-
 
 async function markBatchServed(tableId, batchId) {
     const table = tables.find(t => t.id === tableId);
@@ -1099,11 +1172,13 @@ function calculatePartialTotal() {
 
 async function generateReceipt() {
     const table = tables.find(t => t.id === currentTableId);
-    let receiptItems = [], receiptItemUids = [], partialTotal = 0;
+    const receiptItems = [];
+    const receiptItemUids = [];
+    let partialTotal = 0;
 
     document.querySelectorAll('.bill-item-chk:checked').forEach(chk => {
-        let idx = parseInt(chk.value);
-        let item = table.items[idx];
+        const idx = parseInt(chk.value, 10);
+        const item = table.items[idx];
         partialTotal += item.finalPrice;
         receiptItems.push({ ...item });
         receiptItemUids.push(item.uid);
@@ -1162,17 +1237,22 @@ function renderReceiptsManager() {
     container.innerHTML = html;
 }
 
+/**
+ * Registra el pago del recibo y guarda la venta en Google Sheets.
+ * Cómo lo realiza: Inserta filas en la tabla `Facturas` y actualiza estados de mesa.
+ * Consulta a Sheets: Inserta en `Facturas` vía `sendNewSalesToCloud()`.
+ */
 async function confirmPayReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
     const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
     if (receiptIndex === -1) return;
 
-    let receipt = table.receipts[receiptIndex];
+    const receipt = table.receipts[receiptIndex];
     if (confirm(`¿Cobrar recibo por valor de $${receipt.total.toLocaleString()}?`)) {
-        let nowFull = new Date();
-        let facNumero = `FAC-${nowFull.getFullYear()}${String(nowFull.getMonth()+1).padStart(2,'0')}${String(nowFull.getDate()).padStart(2,'0')}${String(nowFull.getHours()).padStart(2,'0')}${String(nowFull.getMinutes()).padStart(2,'0')}`;
+        const nowFull = new Date();
+        const facNumero = `FAC-${nowFull.getFullYear()}${String(nowFull.getMonth() + 1).padStart(2, '0')}${String(nowFull.getDate()).padStart(2, '0')}${String(nowFull.getHours()).padStart(2, '0')}${String(nowFull.getMinutes()).padStart(2, '0')}`;
 
-        let newSalesBatch = [];
+        const newSalesBatch = [];
         receipt.items.forEach(item => {
             newSalesBatch.push({
                 facnumero: facNumero,
@@ -1270,18 +1350,18 @@ function renderRecipeCheckboxes() {
 }
 
 function formatProductPriceInput(input) {
-    let rawValue = input.value.replace(/\D/g, '');
+    const rawValue = input.value.replace(/\D/g, '');
     if (!rawValue) {
         input.value = '';
         return;
     }
-    let numericValue = parseInt(rawValue, 10);
+    const numericValue = parseInt(rawValue, 10);
     input.value = `$ ${numericValue.toLocaleString('es-CO')}`;
 }
 
 function getCleanPriceValue(formattedString) {
     if (!formattedString) return 0;
-    let cleanStr = String(formattedString).replace(/\D/g, '');
+    const cleanStr = String(formattedString).replace(/\D/g, '');
     return parseInt(cleanStr, 10) || 0;
 }
 
@@ -1295,19 +1375,19 @@ function renderProducts() {
         return;
     }
 
+    const categoryLabels = {
+        principales: 'Plato Principal',
+        sopas: 'Sopas y Entradas',
+        bebidas: 'Bebida',
+        adicionales: 'Adicional'
+    };
+
     products.forEach(p => {
         const item = document.createElement('div');
         item.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0.4rem; border-bottom: 1px solid var(--border); font-size: 0.85rem;";
-        
-        const categoryLabels = {
-            principales: 'Plato Principal',
-            sopas: 'Sopas y Entradas',
-            bebidas: 'Bebida',
-            adicionales: 'Adicional'
-        };
-        const catName = categoryLabels[p.category] || 'Plato Principal';
 
-        const activeBadge = p.active !== false 
+        const catName = categoryLabels[p.category] || 'Plato Principal';
+        const activeBadge = p.active !== false
             ? `<span style="font-size: 0.65rem; background: #dcfce7; color: #15803d; padding: 0.1rem 0.35rem; border-radius: 4px; font-weight: bold; margin-left: 6px;">Activo</span>`
             : `<span style="font-size: 0.65rem; background: #f1f5f9; color: #64748b; padding: 0.1rem 0.35rem; border-radius: 4px; font-weight: bold; margin-left: 6px;">Inactivo</span>`;
 
@@ -1345,7 +1425,7 @@ async function saveProduct() {
     const priceInput = document.getElementById('newProdPrice');
     const categorySelect = document.getElementById('newProdCategory');
     const activeToggle = document.getElementById('newProdActive');
-    
+
     const name = nameInput.value.trim();
     const price = getCleanPriceValue(priceInput.value);
     const category = categorySelect.value;
@@ -1367,13 +1447,7 @@ async function saveProduct() {
         cancelEditProduct();
     } else {
         const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
-        products.push({ 
-            id: newId, 
-            name: name, 
-            price: price, 
-            category: category, 
-            active: active 
-        });
+        products.push({ id: newId, name, price, category, active });
     }
 
     appConfig.lastUpdated = Date.now();
@@ -1389,7 +1463,7 @@ function editProduct(id) {
         document.getElementById('newProdName').value = prod.name;
         document.getElementById('newProdPrice').value = `$ ${prod.price.toLocaleString('es-CO')}`;
         document.getElementById('newProdCategory').value = prod.category || 'principales';
-        
+
         const activeToggle = document.getElementById('newProdActive');
         const statusLabel = document.getElementById('prodActiveStatusLabel');
         activeToggle.checked = prod.active !== false;
@@ -1408,7 +1482,7 @@ function cancelEditProduct() {
     document.getElementById('newProdName').value = '';
     document.getElementById('newProdPrice').value = '';
     document.getElementById('newProdCategory').value = 'principales';
-    
+
     const activeToggle = document.getElementById('newProdActive');
     const statusLabel = document.getElementById('prodActiveStatusLabel');
     activeToggle.checked = true;
@@ -1457,16 +1531,27 @@ function renderAddons() {
     });
 }
 
+function cancelEditDrink() {
+    editingDrinkId = null;
+}
+
+function cancelEditAddon() {
+    editingAddonId = null;
+}
+
 
 /* ========================================================== */
-/* 10. SINCRONIZACIÓN GOOGLE SHEETS                           */
+/* 10. SINCRONIZACIÓN CON GOOGLE SHEETS                       */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyG0KBTAvQrywpQLrN_fjZENE4gjEXrETR0LdZdJihq4tKtXF8zLz6gjTwlTopeT-Vbfw/exec";
-
+/**
+ * Descarga todos los datos operativos desde Google Apps Script.
+ * Cómo lo realiza: Ejecuta una petición GET con `action=getData`.
+ * Consulta a Sheets: Lee las tablas `Mesas`, `Productos`, `Bebidas`, `Adicionales`, `Usuarios` y `Config`.
+ */
 async function loadDataFromCloud() {
     try {
-        const response = await fetch(WEB_APP_URL + "?action=getData");
+        const response = await fetch(`${WEB_APP_URL}?action=getData`);
         if (!response.ok) throw new Error("Error HTTP");
         const cloudData = await response.json();
         if (cloudData && cloudData.status !== 'error') {
@@ -1475,9 +1560,7 @@ async function loadDataFromCloud() {
             if (Array.isArray(cloudData.drinks)) drinks = cloudData.drinks;
             if (Array.isArray(cloudData.addons)) addons = cloudData.addons;
             if (Array.isArray(cloudData.users)) users = cloudData.users;
-            if (cloudData.config) {
-                appConfig = cloudData.config;
-            }
+            if (cloudData.config) appConfig = cloudData.config;
             saveData();
             return true;
         }
@@ -1522,34 +1605,75 @@ async function sendNewSalesToCloud(salesArray) {
     }
 }
 
+function saveData() {
+    localStorage.setItem('restopos_tables', JSON.stringify(tables));
+    localStorage.setItem('restopos_addons', JSON.stringify(addons));
+    localStorage.setItem('restopos_products', JSON.stringify(products));
+    localStorage.setItem('restopos_drinks', JSON.stringify(drinks));
+    localStorage.setItem('restopos_sales_history', JSON.stringify(salesHistory));
+    localStorage.setItem('restopos_users', JSON.stringify(users));
+    localStorage.setItem('restopos_config', JSON.stringify(appConfig));
+}
+
+
 /* ========================================================== */
-/* MÓDULO DE DASHBOARD ANALÍTICO DE VENTAS                    */
+/* 11. MÓDULO DE DASHBOARD ANALÍTICO DE VENTAS                */
 /* ========================================================== */
 
+/**
+ * Consulta las ventas filtradas por fecha en Google Sheets y renderiza métricas.
+ * Cómo lo realiza: Ejecuta un fetch con los parámetros `startDate` y `endDate`.
+ * Consulta a Sheets: Lee y filtra la tabla `Facturas`.
+ */
 async function renderSalesDashboard() {
     const container = document.getElementById('dashboardAnalyticsContainer');
     if (!container) return;
 
+    let filterBar = document.getElementById('dashboardDateFilterBar');
+    if (!filterBar) {
+        filterBar = document.createElement('div');
+        filterBar.id = 'dashboardDateFilterBar';
+        filterBar.style.cssText = "display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; background: #fff; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;";
+
+        const todayIso = new Date().toISOString().split('T')[0];
+        filterBar.innerHTML = `
+            <div style="font-size: 0.8rem; font-weight: bold; width: 100%;">Filtrar por Rango de Fechas:</div>
+            <div style="flex: 1; min-width: 120px;">
+                <label style="font-size: 0.7rem; color: var(--text-secondary); display:block;">Desde:</label>
+                <input type="date" id="dashStartDate" value="${todayIso}" style="width: 100%; padding: 0.3rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px;">
+            </div>
+            <div style="flex: 1; min-width: 120px;">
+                <label style="font-size: 0.7rem; color: var(--text-secondary); display:block;">Hasta:</label>
+                <input type="date" id="dashEndDate" value="${todayIso}" style="width: 100%; padding: 0.3rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px;">
+            </div>
+            <div style="align-self: flex-end;">
+                <button class="btn btn-success" onclick="renderSalesDashboard()" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; background: var(--primary); color: #fff; border:none; border-radius:4px; cursor:pointer;">Aplicar Filtro</button>
+            </div>
+        `;
+        container.parentNode.insertBefore(filterBar, container);
+    }
+
+    const startDate = document.getElementById('dashStartDate')?.value || "";
+    const endDate = document.getElementById('dashEndDate')?.value || "";
+
     container.innerHTML = `
         <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-            <p>🔄 Consultando historial de facturas en la nube...</p>
+            <p>🔄 Consultando facturas filtradas en la nube...</p>
         </div>
     `;
 
     try {
-        const response = await fetch(WEB_APP_URL + "?action=getDashboardData");
+        const response = await fetch(`${WEB_APP_URL}?action=getDashboardDataFiltered&startDate=${startDate}&endDate=${endDate}`);
         if (!response.ok) throw new Error("Error HTTP: " + response.status);
-        
-        const result = await response.json();
 
+        const result = await response.json();
         if (result.status === 'success' && Array.isArray(result.salesHistory)) {
             salesHistory = result.salesHistory;
-            localStorage.setItem('restopos_sales_history', JSON.stringify(salesHistory));
         } else {
             throw new Error(result.message || "Respuesta inválida del servidor.");
         }
     } catch (e) {
-        console.warn("No se pudo actualizar el historial desde la nube, usando caché local.", e);
+        console.warn("No se pudo consultar el servidor, usando caché local.", e);
         salesHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
     }
 
@@ -1558,29 +1682,29 @@ async function renderSalesDashboard() {
     if (!Array.isArray(salesHistory) || salesHistory.length === 0) {
         container.innerHTML = `
             <div style="background: #ffffff; border: 1px solid var(--border); padding: 2rem; border-radius: 12px; text-align: center; color: var(--text-secondary);">
-                <h3 style="font-size: 1rem; margin-bottom: 0.5rem; color: var(--text);">Sin datos de ventas registrados</h3>
-                <p style="font-size: 0.85rem;">Asegúrate de que la hoja se llama "Facturas" en tu Google Sheet o comienza a cobrar cuentas para generar registros.</p>
+                <h3 style="font-size: 1rem; margin-bottom: 0.5rem; color: var(--text);">Sin datos de ventas en este rango</h3>
+                <p style="font-size: 0.85rem;">No se encontraron facturas entre ${startDate} y ${endDate}.</p>
             </div>
         `;
         return;
     }
 
     let totalRevenue = 0;
-    let totalInvoicesSet = new Set();
-    let productCounts = {};
+    const totalInvoicesSet = new Set();
+    const productCounts = {};
 
     salesHistory.forEach(sale => {
-        let price = parseFloat(sale.valorpagado) || 0;
+        const price = parseFloat(sale.valorpagado) || 0;
         totalRevenue += price;
         if (sale.facnumero) totalInvoicesSet.add(sale.facnumero);
 
-        let plato = sale.plato || 'Producto General';
+        const plato = sale.plato || 'Producto General';
         productCounts[plato] = (productCounts[plato] || 0) + 1;
     });
 
-    let totalInvoices = totalInvoicesSet.size;
-    let averageTicket = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
-    let sortedProducts = Object.entries(productCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const totalInvoices = totalInvoicesSet.size;
+    const averageTicket = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+    const sortedProducts = Object.entries(productCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
     let topProductsHtml = '';
     sortedProducts.forEach(([prod, count]) => {
@@ -1613,14 +1737,4 @@ async function renderSalesDashboard() {
             ${topProductsHtml}
         </div>
     `;
-}
-
-function saveData() {
-    localStorage.setItem('restopos_tables', JSON.stringify(tables));
-    localStorage.setItem('restopos_addons', JSON.stringify(addons));
-    localStorage.setItem('restopos_products', JSON.stringify(products));
-    localStorage.setItem('restopos_drinks', JSON.stringify(drinks));
-    localStorage.setItem('restopos_sales_history', JSON.stringify(salesHistory));
-    localStorage.setItem('restopos_users', JSON.stringify(users));
-    localStorage.setItem('restopos_config', JSON.stringify(appConfig));
 }
