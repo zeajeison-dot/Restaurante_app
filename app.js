@@ -277,10 +277,6 @@ async function showSection(sectionId) {
         return;
     }
     // CORRECCIÓN: No descargar datos pesados si estamos en el menú principal o en mesas
-    if (!['dashboard-view', 'tables-section'].includes(sectionId)) {
-        await loadDataFromCloud();
-    }
-
     // ✅ DEJA SOLO ESTE:
     if (!['dashboard-view', 'tables-section'].includes(sectionId)) {
         await loadDataFromCloud();
@@ -1647,11 +1643,19 @@ async function renderSalesDashboard() {
                 <input type="date" id="dashEndDate" value="${todayIso}" style="width: 100%; padding: 0.3rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px;">
             </div>
             <div style="align-self: flex-end;">
-                <button class="btn btn-success" onclick="renderSalesDashboard()" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; background: var(--primary); color: #fff; border:none; border-radius:4px; cursor:pointer;">Aplicar Filtro</button>
+                <button class="btn btn-success" onclick="fetchAndRenderSalesData()" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; background: var(--primary); color: #fff; border:none; border-radius:4px; cursor:pointer;">Aplicar Filtro</button>
             </div>
         `;
         container.parentNode.insertBefore(filterBar, container);
+        
+        // Carga los datos por primera vez al entrar al módulo
+        await fetchAndRenderSalesData();
     }
+}
+
+async function fetchAndRenderSalesData() {
+    const container = document.getElementById('dashboardAnalyticsContainer');
+    if (!container) return;
 
     const startDate = document.getElementById('dashStartDate')?.value || "";
     const endDate = document.getElementById('dashEndDate')?.value || "";
@@ -1672,7 +1676,7 @@ async function renderSalesDashboard() {
         } else {
             throw new Error(result.message || "Respuesta inválida del servidor.");
         }
-    } catch (e) {
+    }	catch (e) {
         console.warn("No se pudo consultar el servidor, usando caché local.", e);
         salesHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
     }
@@ -1738,3 +1742,4 @@ async function renderSalesDashboard() {
         </div>
     `;
 }
+
