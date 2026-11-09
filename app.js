@@ -9,7 +9,7 @@
 /* 1. VARIABLES GLOBALES Y ESTADO INICIAL VACÍO               */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyfYKKkU5tyT6LxNcjcKZtc6jNTuL3PrlVt0TcyKuJMp1XcFrqcYUFv6lvCIGUFPsrliA/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxSDyMXU41yM4rIVTHu8MW13L-CUpF28xLWLSR4jY6NCxlErbQNrmzoCoeNVcWzCIv8og/exec";
 
 // Inicializadas vacías para garantizar que toda la data provenga estrictamente de Google Sheets
 let tables = [];
@@ -257,6 +257,7 @@ function logout() {
  * - `kitchen-section`: Consulta `getData` y sondeo ligero de `Config`.
  * - Otras secciones: Llama a `loadDataFromCloud()`.
  */
+
 async function showSection(sectionId) {
     const role = localStorage.getItem('restopos_current_role') || 'admin';
 
@@ -274,26 +275,17 @@ async function showSection(sectionId) {
         showCustomAlert('Acceso no autorizado para el rol de cocinero.');
         return;
     }
-    // CORRECCIÓN: No descargar datos pesados si estamos en el menú principal o en mesas
-    // ✅ DEJA SOLO ESTE:
-    /*
-    if (!['dashboard-view', 'tables-section'].includes(sectionId)) {
-        await loadDataFromCloud();
-    }
-    */
-        // CORRECCIÓN: No descargar datos pesados en el menú principal, mesas ni en el dashboard analítico
-    if (!['dashboard-view', 'tables-section', 'dashboard-analytics-section'].includes(sectionId)) {
+
+    // CORRECCIÓN: No descargar datos pesados en el menú principal, mesas, dashboard analítico ni catálogo
+    if (!['dashboard-view', 'tables-section', 'dashboard-analytics-section', 'catalog-section'].includes(sectionId)) {
         await loadDataFromCloud();
     }
 
-
-
-        const sections = [
+    const sections = [
         'dashboard-view', 'tables-section', 'kitchen-section', 'users-admin-section',
         'tables-admin-section', 'order-section', 'bill-section', 'catalog-section',
         'dashboard-analytics-section'
     ];
-
 
     sections.forEach(id => {
         const el = document.getElementById(id);
@@ -431,17 +423,27 @@ async function showSection(sectionId) {
     } else if (sectionId === 'catalog-section') {
         cancelEditProduct();
         renderRecipeCheckboxes();
+        
+        // Consulta ligera exclusiva para la pestaña Productos
+        try {
+            const res = await fetch(`${WEB_APP_URL}?action=getProducts`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.status === 'success' && Array.isArray(data.products)) {
+                    products = data.products;
+                    saveData();
+                }
+            }
+        } catch (e) {
+            console.warn("Usando datos locales para el catálogo:", e);
+        }
+
         renderProducts();
-    } else if (sectionId === 'drinks-section') {
-        cancelEditDrink();
-        renderDrinks();
-    } else if (sectionId === 'addons-section') {
-        cancelEditAddon();
-        renderAddons();
     } else if (sectionId === 'dashboard-analytics-section') {
         renderSalesDashboard();
     }
 }
+
 
 /**
  * Verifica platos listos en cocina para activar la alarma del mesero.
