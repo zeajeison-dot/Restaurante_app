@@ -207,9 +207,7 @@ function renderDashboardMenu(role) {
         { title: '👨‍🍳 Módulo de Cocina', desc: 'Comandas en tiempo real', action: "showSection('kitchen-section')" },
         { title: '👥 Gestión de Usuarios', desc: 'Crear usuarios y permisos', action: "showSection('users-admin-section')" },
         { title: '⚙️ Gestionar Mesas', desc: 'Crear / Editar mesas', action: "showSection('tables-admin-section')" },
-        { title: '🍔 Catálogo de Platos', desc: 'Platos y recetas', action: "showSection('catalog-section')" },
-        { title: '🥤 Bebidas', desc: 'Gestión de bebidas', action: "showSection('drinks-section')" },
-        { title: '➕ Adicionales', desc: 'Extras con/sin costo', action: "showSection('addons-section')" }
+        { title: '🍔 Catálogo de Platos', desc: 'Platos, bebidas y adicionales', action: "showSection('catalog-section')" }
     ];
 
     menuCards.forEach(card => {
@@ -234,10 +232,10 @@ function logout() {
     localStorage.removeItem('restopos_current_user');
     localStorage.removeItem('restopos_current_role');
 
-    const sections = [
+        const sections = [
         'dashboard-view', 'tables-section', 'kitchen-section', 'users-admin-section',
         'tables-admin-section', 'order-section', 'bill-section', 'catalog-section',
-        'drinks-section', 'addons-section', 'dashboard-analytics-section'
+        'dashboard-analytics-section'
     ];
 
     sections.forEach(id => {
@@ -290,11 +288,12 @@ async function showSection(sectionId) {
 
 
 
-    const sections = [
+        const sections = [
         'dashboard-view', 'tables-section', 'kitchen-section', 'users-admin-section',
         'tables-admin-section', 'order-section', 'bill-section', 'catalog-section',
-        'drinks-section', 'addons-section', 'dashboard-analytics-section'
+        'dashboard-analytics-section'
     ];
+
 
     sections.forEach(id => {
         const el = document.getElementById(id);
@@ -1679,7 +1678,9 @@ async function renderSalesDashboard() {
     `;
 }
 
-
+/**
+ * Consulta las facturas filtradas en Google Sheets y renderiza métricas, gráfica y Top Productos.
+ */
 async function fetchAndRenderSalesData() {
     const container = document.getElementById('dashboardAnalyticsContainer');
     if (!container) return;
@@ -1747,6 +1748,12 @@ async function fetchAndRenderSalesData() {
         `;
     });
 
+    // Detectar si el rango es mensual (> 10 días) o semanal para elegir el tipo de gráfica
+    const diffTime = Math.abs(new Date(endDate) - new Date(startDate));
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const chartViewType = diffDays > 10 ? 'month' : 'week';
+    const salesChartHtml = renderSalesChart(salesHistory, chartViewType);
+
     container.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
             <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
@@ -1763,6 +1770,8 @@ async function fetchAndRenderSalesData() {
             </div>
         </div>
 
+        ${salesChartHtml}
+
         <div style="background: #ffffff; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem;">
             <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text);">🏆 Top Productos Más Vendidos</h4>
             ${topProductsHtml}
@@ -1770,94 +1779,169 @@ async function fetchAndRenderSalesData() {
     `;
 }
 
+/**
+ * Renderiza el gráfico de analíticas (Semanal o Mensual) con diseño SVG nativo.
+ */
+function renderSalesChart(salesData, viewType = 'week') {
+    if (!Array.isArray(salesData)) salesData = [];
+    if (viewType === 'week') {
+        return generateWeeklyChartHtml(salesData);
+    } else {
+        return generateMonthlyComparisonChartHtml(salesData);
+    }
+}
 
-async function fetchAndRenderSalesData() {
-    const container = document.getElementById('dashboardAnalyticsContainer');
-    if (!container) return;
+/**
+ * Genera la gráfica de Ventas de la Semana (Lunes a Domingo).
+ */
+function generateWeeklyChartHtml(sales) {
+    const days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+    const currentWeekTotals = [0, 0, 0, 0, 0, 0, 0];
 
-    const startDate = document.getElementById('dashStartDate')?.value || "";
-    const endDate = document.getElementById('dashEndDate')?.value || "";
-
-    container.innerHTML = `
-        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-            <p>🔄 Consultando facturas filtradas en la nube...</p>
-        </div>
-    `;
-
-    try {
-        const response = await fetch(`${WEB_APP_URL}?action=getDashboardDataFiltered&startDate=${startDate}&endDate=${endDate}`);
-        if (!response.ok) throw new Error("Error HTTP: " + response.status);
-
-        const result = await response.json();
-        if (result.status === 'success' && Array.isArray(result.salesHistory)) {
-            salesHistory = result.salesHistory;
+    sales.forEach(s => {
+        if (!s.fecha) return;
+        let dateObj;
+        if (String(s.fecha).includes('/')) {
+            const parts = String(s.fecha).split('/');
+            dateObj = new Date(parts[2], parts[1] - 1, parts[0]);
         } else {
-            throw new Error(result.message || "Respuesta inválida del servidor.");
+            dateObj = new Date(s.fecha);
         }
-    }	catch (e) {
-        console.warn("No se pudo consultar el servidor, usando caché local.", e);
-        salesHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
-    }
+        if (isNaN(dateObj)) return;
 
-    container.innerHTML = '';
+        let dayIndex = dateObj.getDay() - 1;
+        if (dayIndex === -1) dayIndex = 6; // Domingo
 
-    if (!Array.isArray(salesHistory) || salesHistory.length === 0) {
-        container.innerHTML = `
-            <div style="background: #ffffff; border: 1px solid var(--border); padding: 2rem; border-radius: 12px; text-align: center; color: var(--text-secondary);">
-                <h3 style="font-size: 1rem; margin-bottom: 0.5rem; color: var(--text);">Sin datos de ventas en este rango</h3>
-                <p style="font-size: 0.85rem;">No se encontraron facturas entre ${startDate} y ${endDate}.</p>
-            </div>
-        `;
-        return;
-    }
-
-    let totalRevenue = 0;
-    const totalInvoicesSet = new Set();
-    const productCounts = {};
-
-    salesHistory.forEach(sale => {
-        const price = parseFloat(sale.valorpagado) || 0;
-        totalRevenue += price;
-        if (sale.facnumero) totalInvoicesSet.add(sale.facnumero);
-
-        const plato = sale.plato || 'Producto General';
-        productCounts[plato] = (productCounts[plato] || 0) + 1;
+        currentWeekTotals[dayIndex] += parseFloat(s.valorpagado) || 0;
     });
 
-    const totalInvoices = totalInvoicesSet.size;
-    const averageTicket = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
-    const sortedProducts = Object.entries(productCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const maxVal = Math.max(...currentWeekTotals, 100000);
+    const chartHeight = 140;
+    const chartWidth = 600;
+    const stepX = chartWidth / (days.length - 1);
 
-    let topProductsHtml = '';
-    sortedProducts.forEach(([prod, count]) => {
-        topProductsHtml += `
-            <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px dashed var(--border); font-size: 0.85rem;">
-                <span>${prod}</span>
-                <strong>${count} vendidos</strong>
-            </div>
-        `;
+    let points = '';
+    let polylineArea = `0,${chartHeight} `;
+    let pointsCirclesHtml = '';
+    let xLabelsHtml = '';
+
+    currentWeekTotals.forEach((val, i) => {
+        const x = i * stepX;
+        const y = chartHeight - (val / maxVal) * (chartHeight - 20);
+        points += `${x},${y} `;
+        polylineArea += `${x},${y} `;
+        pointsCirclesHtml += `<circle cx="${x}" cy="${y}" r="4" fill="#ea580c" stroke="#fff" stroke-width="2"/>`;
+        xLabelsHtml += `<text x="${x}" y="${chartHeight + 20}" font-size="11" fill="#64748b" text-anchor="middle">${days[i]}</text>`;
     });
+    polylineArea += `${chartWidth},${chartHeight}`;
 
-    container.innerHTML = `
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
-            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
-                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">VENTA TOTAL</span>
-                <strong style="font-size: 1.1rem; color: var(--primary);">$${Math.round(totalRevenue).toLocaleString()}</strong>
+    return `
+        <div style="background: #ffffff; border: 1px solid var(--border); padding: 1.25rem; border-radius: 12px; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 1.1rem;">📊</span>
+                    <h3 style="font-size: 1rem; font-weight: bold; color: var(--text); margin: 0;">Ventas de la semana</h3>
+                </div>
+                <div style="background: #d1fae5; color: #065f46; padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: bold;">
+                    Lun - Dom
+                </div>
             </div>
-            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
-                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">TICKET PROMEDIO</span>
-                <strong style="font-size: 1.1rem; color: var(--success);">$${Math.round(averageTicket).toLocaleString()}</strong>
-            </div>
-            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
-                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">TOTAL FACTURAS</span>
-                <strong style="font-size: 1.1rem; color: var(--text);">${totalInvoices}</strong>
-            </div>
-        </div>
 
-        <div style="background: #ffffff; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem;">
-            <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text);">🏆 Top Productos Más Vendidos</h4>
-            ${topProductsHtml}
+            <div style="position: relative; width: 100%; overflow-x: auto;">
+                <svg viewBox="0 0 ${chartWidth} ${chartHeight + 35}" style="width: 100%; height: auto; overflow: visible;">
+                    <defs>
+                        <linearGradient id="orangeGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#fdba74" stop-opacity="0.4"/>
+                            <stop offset="100%" stop-color="#fdba74" stop-opacity="0.0"/>
+                        </linearGradient>
+                    </defs>
+                    <line x1="0" y1="0" x2="${chartWidth}" y2="0" stroke="#f1f5f9" stroke-width="1"/>
+                    <line x1="0" y1="${chartHeight/2}" x2="${chartWidth}" y2="${chartHeight/2}" stroke="#f1f5f9" stroke-width="1"/>
+                    <line x1="0" y1="${chartHeight}" x2="${chartWidth}" y2="${chartHeight}" stroke="#e2e8f0" stroke-width="1"/>
+                    <polygon points="${polylineArea}" fill="url(#orangeGradient)" />
+                    <polyline fill="none" stroke="#ea580c" stroke-width="2.5" points="${points}" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${pointsCirclesHtml}
+                    ${xLabelsHtml}
+                </svg>
+            </div>
         </div>
     `;
 }
 
+/**
+ * Genera la gráfica de comparación semana a semana para el mes (Lun - Dom por semana).
+ */
+function generateMonthlyComparisonChartHtml(sales) {
+    const weeksData = [0, 0, 0, 0, 0];
+    const weekLabels = ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5'];
+
+    sales.forEach(s => {
+        if (!s.fecha) return;
+        let dateObj;
+        if (String(s.fecha).includes('/')) {
+            const parts = String(s.fecha).split('/');
+            dateObj = new Date(parts[2], parts[1] - 1, parts[0]);
+        } else {
+            dateObj = new Date(s.fecha);
+        }
+        if (isNaN(dateObj)) return;
+
+        const dayOfMonth = dateObj.getDate();
+        const weekIndex = Math.floor((dayOfMonth - 1) / 7);
+        if (weekIndex >= 0 && weekIndex < 5) {
+            weeksData[weekIndex] += parseFloat(s.valorpagado) || 0;
+        }
+    });
+
+    const maxVal = Math.max(...weeksData, 100000);
+    const chartHeight = 140;
+    const chartWidth = 600;
+    const stepX = chartWidth / (weekLabels.length - 1);
+
+    let points = '';
+    let polylineArea = `0,${chartHeight} `;
+    let pointsCirclesHtml = '';
+    let xLabelsHtml = '';
+
+    weeksData.forEach((val, i) => {
+        const x = i * stepX;
+        const y = chartHeight - (val / maxVal) * (chartHeight - 20);
+        points += `${x},${y} `;
+        polylineArea += `${x},${y} `;
+        pointsCirclesHtml += `<circle cx="${x}" cy="${y}" r="5" fill="#2563eb" stroke="#fff" stroke-width="2"/>`;
+        xLabelsHtml += `<text x="${x}" y="${chartHeight + 20}" font-size="11" fill="#64748b" text-anchor="middle">${weekLabels[i]} (Lun-Dom)</text>`;
+    });
+    polylineArea += `${chartWidth},${chartHeight}`;
+
+    return `
+        <div style="background: #ffffff; border: 1px solid var(--border); padding: 1.25rem; border-radius: 12px; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 1.1rem;">📈</span>
+                    <h3 style="font-size: 1rem; font-weight: bold; color: var(--text); margin: 0;">Comparativa Mensual (Semana a Semana)</h3>
+                </div>
+                <div style="background: #dbeafe; color: #1e40af; padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: bold;">
+                    Ciclo Lunes a Domingo
+                </div>
+            </div>
+
+            <div style="position: relative; width: 100%; overflow-x: auto;">
+                <svg viewBox="0 0 ${chartWidth} ${chartHeight + 35}" style="width: 100%; height: auto; overflow: visible;">
+                    <defs>
+                        <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#93c5fd" stop-opacity="0.4"/>
+                            <stop offset="100%" stop-color="#93c5fd" stop-opacity="0.0"/>
+                        </linearGradient>
+                    </defs>
+                    <line x1="0" y1="0" x2="${chartWidth}" y2="0" stroke="#f1f5f9" stroke-width="1"/>
+                    <line x1="0" y1="${chartHeight/2}" x2="${chartWidth}" y2="${chartHeight/2}" stroke="#f1f5f9" stroke-width="1"/>
+                    <line x1="0" y1="${chartHeight}" x2="${chartWidth}" y2="${chartHeight}" stroke="#e2e8f0" stroke-width="1"/>
+                    <polygon points="${polylineArea}" fill="url(#blueGradient)" />
+                    <polyline fill="none" stroke="#2563eb" stroke-width="2.5" points="${points}" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${pointsCirclesHtml}
+                    ${xLabelsHtml}
+                </svg>
+            </div>
+        </div>
+    `;
+}
