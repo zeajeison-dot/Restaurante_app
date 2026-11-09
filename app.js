@@ -278,9 +278,16 @@ async function showSection(sectionId) {
     }
     // CORRECCIÓN: No descargar datos pesados si estamos en el menú principal o en mesas
     // ✅ DEJA SOLO ESTE:
+    /*
     if (!['dashboard-view', 'tables-section'].includes(sectionId)) {
         await loadDataFromCloud();
     }
+    */
+        // CORRECCIÓN: No descargar datos pesados en el menú principal, mesas ni en el dashboard analítico
+    if (!['dashboard-view', 'tables-section', 'dashboard-analytics-section'].includes(sectionId)) {
+        await loadDataFromCloud();
+    }
+
 
 
     const sections = [
@@ -1617,9 +1624,9 @@ function saveData() {
 /* ========================================================== */
 
 /**
- * Consulta las ventas filtradas por fecha en Google Sheets y renderiza métricas.
- * Cómo lo realiza: Ejecuta un fetch con los parámetros `startDate` y `endDate`.
- * Consulta a Sheets: Lee y filtra la tabla `Facturas`.
+ * Renderiza el módulo de Dashboard de Ventas con filtros manuales por fecha.
+ * Cómo lo realiza: Calcula automáticamente la fecha de hoy (Sistema) y la fecha de hace 8 días,
+ * colocándolas por defecto en los inputs sin realizar consultas automáticas hasta presionar "Aplicar Filtro".
  */
 async function renderSalesDashboard() {
     const container = document.getElementById('dashboardAnalyticsContainer');
@@ -1631,27 +1638,138 @@ async function renderSalesDashboard() {
         filterBar.id = 'dashboardDateFilterBar';
         filterBar.style.cssText = "display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; background: #fff; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;";
 
-        const todayIso = new Date().toISOString().split('T')[0];
+        // Obtener la fecha actual del sistema en formato YYYY-MM-DD
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const todayIso = `${yyyy}-${mm}-${dd}`;
+
+        // Calcular 8 días antes de hoy basándose en la fecha del sistema
+        const startDateObj = new Date();
+        startDateObj.setDate(today.getDate() - 8);
+        const startYyyy = startDateObj.getFullYear();
+        const startMm = String(startDateObj.getMonth() + 1).padStart(2, '0');
+        const startDd = String(startDateObj.getDate()).padStart(2, '0');
+        const startDateIso = `${startYyyy}-${startMm}-${startDd}`;
+
         filterBar.innerHTML = `
             <div style="font-size: 0.8rem; font-weight: bold; width: 100%;">Filtrar por Rango de Fechas:</div>
             <div style="flex: 1; min-width: 120px;">
                 <label style="font-size: 0.7rem; color: var(--text-secondary); display:block;">Desde:</label>
-                <input type="date" id="dashStartDate" value="${todayIso}" style="width: 100%; padding: 0.3rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px;">
+                <input type="date" id="dashStartDate" value="${startDateIso}" style="width: 100%; padding: 0.3rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px;">
             </div>
             <div style="flex: 1; min-width: 120px;">
                 <label style="font-size: 0.7rem; color: var(--text-secondary); display:block;">Hasta:</label>
                 <input type="date" id="dashEndDate" value="${todayIso}" style="width: 100%; padding: 0.3rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px;">
             </div>
             <div style="align-self: flex-end;">
-                <button class="btn btn-success" onclick="fetchAndRenderSalesData()" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; background: var(--primary); color: #fff; border:none; border-radius:4px; cursor:pointer;">Aplicar Filtro</button>
+                <button class="btn btn-success" onclick="fetchAndRenderSalesData()" style="padding: 0.35rem 0.75rem; font-size: 0.80rem; background: var(--primary); color: #fff; border:none; border-radius:4px; cursor:pointer;">Aplicar Filtro</button>
             </div>
         `;
         container.parentNode.insertBefore(filterBar, container);
-        
-        // Carga los datos por primera vez al entrar al módulo
-        await fetchAndRenderSalesData();
     }
+
+    // Panel en espera limpio sin llamadas automáticas a la nube
+    container.innerHTML = `
+        <div style="background: #ffffff; border: 1px solid var(--border); padding: 2.5rem; border-radius: 12px; text-align: center; color: var(--text-secondary);">
+            <h3 style="font-size: 1rem; margin-bottom: 0.5rem; color: var(--text);">Panel de Analíticas en Espera</h3>
+            <p style="font-size: 0.85rem;">El rango inicial está configurado a 8 días. Presione <strong>"Aplicar Filtro"</strong> para consultar las ventas.</p>
+        </div>
+    `;
 }
+
+
+async function fetchAndRenderSalesData() {
+    const container = document.getElementById('dashboardAnalyticsContainer');
+    if (!container) return;
+
+    const startDate = document.getElementById('dashStartDate')?.value || "";
+    const endDate = document.getElementById('dashEndDate')?.value || "";
+
+    container.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <p>🔄 Consultando facturas filtradas en la nube...</p>
+        </div>
+    `;
+
+    try {
+        const response = await fetch(`${WEB_APP_URL}?action=getDashboardDataFiltered&startDate=${startDate}&endDate=${endDate}`);
+        if (!response.ok) throw new Error("Error HTTP: " + response.status);
+
+        const result = await response.json();
+        if (result.status === 'success' && Array.isArray(result.salesHistory)) {
+            salesHistory = result.salesHistory;
+        } else {
+            throw new Error(result.message || "Respuesta inválida del servidor.");
+        }
+    } catch (e) {
+        console.warn("No se pudo consultar el servidor, usando caché local.", e);
+        salesHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
+    }
+
+    container.innerHTML = '';
+
+    if (!Array.isArray(salesHistory) || salesHistory.length === 0) {
+        container.innerHTML = `
+            <div style="background: #ffffff; border: 1px solid var(--border); padding: 2rem; border-radius: 12px; text-align: center; color: var(--text-secondary);">
+                <h3 style="font-size: 1rem; margin-bottom: 0.5rem; color: var(--text);">Sin datos de ventas en este rango</h3>
+                <p style="font-size: 0.85rem;">No se encontraron facturas entre ${startDate} y ${endDate}.</p>
+            </div>
+        `;
+        return;
+    }
+
+    let totalRevenue = 0;
+    const totalInvoicesSet = new Set();
+    const productCounts = {};
+
+    salesHistory.forEach(sale => {
+        const price = parseFloat(sale.valorpagado) || 0;
+        totalRevenue += price;
+        if (sale.facnumero) totalInvoicesSet.add(sale.facnumero);
+
+        const plato = sale.plato || 'Producto General';
+        productCounts[plato] = (productCounts[plato] || 0) + 1;
+    });
+
+    const totalInvoices = totalInvoicesSet.size;
+    const averageTicket = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+    const sortedProducts = Object.entries(productCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    let topProductsHtml = '';
+    sortedProducts.forEach(([prod, count]) => {
+        topProductsHtml += `
+            <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px dashed var(--border); font-size: 0.85rem;">
+                <span>${prod}</span>
+                <strong>${count} vendidos</strong>
+            </div>
+        `;
+    });
+
+    container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">VENTA TOTAL</span>
+                <strong style="font-size: 1.1rem; color: var(--primary);">$${Math.round(totalRevenue).toLocaleString()}</strong>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">TICKET PROMEDIO</span>
+                <strong style="font-size: 1.1rem; color: var(--success);">$${Math.round(averageTicket).toLocaleString()}</strong>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">TOTAL FACTURAS</span>
+                <strong style="font-size: 1.1rem; color: var(--text);">${totalInvoices}</strong>
+            </div>
+        </div>
+
+        <div style="background: #ffffff; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem;">
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text);">🏆 Top Productos Más Vendidos</h4>
+            ${topProductsHtml}
+        </div>
+    `;
+}
+
 
 async function fetchAndRenderSalesData() {
     const container = document.getElementById('dashboardAnalyticsContainer');
