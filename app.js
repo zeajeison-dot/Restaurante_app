@@ -9,7 +9,7 @@
 /* 1. VARIABLES GLOBALES Y ESTADO INICIAL VACÍO               */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxSDyMXU41yM4rIVTHu8MW13L-CUpF28xLWLSR4jY6NCxlErbQNrmzoCoeNVcWzCIv8og/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwRGdEjCW5p1py7dX1dvToX_w3RxEAxkG5sAFYrmr9TD-Rbvvfa_iiWSMsl9YvFo9T0-A/exec";
 
 // Inicializadas vacías para garantizar que toda la data provenga estrictamente de Google Sheets
 let tables = [];
@@ -276,8 +276,8 @@ async function showSection(sectionId) {
         return;
     }
 
-    // CORRECCIÓN: No descargar datos pesados en el menú principal, mesas, dashboard analítico ni catálogo
-    if (!['dashboard-view', 'tables-section', 'dashboard-analytics-section', 'catalog-section'].includes(sectionId)) {
+        // CORRECCIÓN: No descargar datos pesados en el menú principal, mesas, dashboard analítico, catálogo ni pedidos
+    if (!['dashboard-view', 'tables-section', 'dashboard-analytics-section', 'catalog-section', 'tables-admin-section', 'order-section'].includes(sectionId)) {
         await loadDataFromCloud();
     }
 
@@ -321,17 +321,16 @@ async function showSection(sectionId) {
             if (alarmCard) alarmCard.style.display = 'block';
         }
 
+        // Carga inicial: consulta exclusiva de mesas (sin productos pesados)
         try {
-            const res = await fetch(`${WEB_APP_URL}?action=getTablesAndProducts`);
+            const res = await fetch(`${WEB_APP_URL}?action=getTables`);
             if (res.ok) {
                 const data = await res.json();
                 if (data.status === 'success') {
-                    if (Array.isArray(data.tables)) tables = data.tables;
-                    if (Array.isArray(data.products)) products = data.products;
-                    if (Array.isArray(data.drinks)) drinks = data.drinks;
-                    if (Array.isArray(data.addons)) addons = data.addons;
-                    if (data.config) appConfig = data.config;
-                    saveData();
+                    if (Array.isArray(data.tables)) {
+                        tables = data.tables;
+                        saveData();
+                    }
                 }
             }
         } catch (e) {
@@ -340,6 +339,7 @@ async function showSection(sectionId) {
 
         renderTables();
 
+        // Sondeo automático cada 60 segundos consultando EXCLUSIVAMENTE mesas
         let isRefreshingTables = false;
         tablesRefreshInterval = setInterval(async () => {
             const tablesSec = document.getElementById('tables-section');
@@ -347,7 +347,7 @@ async function showSection(sectionId) {
                 if (isRefreshingTables) return;
                 isRefreshingTables = true;
                 try {
-                    const res = await fetch(`${WEB_APP_URL}?action=getTablesAndProducts`);
+                    const res = await fetch(`${WEB_APP_URL}?action=getTables`);
                     if (res.ok) {
                         const data = await res.json();
                         if (data && data.status === 'success' && Array.isArray(data.tables)) {
@@ -365,7 +365,26 @@ async function showSection(sectionId) {
                 clearInterval(tablesRefreshInterval);
                 tablesRefreshInterval = null;
             }
-        }, 10000);
+        }, 60000); // Actualiza cada 60 segundos exactos
+
+    } else if (sectionId === 'tables-admin-section') {
+        cancelEditTable();
+        
+        // Consulta ligera exclusiva para la pestaña Mesas
+        try {
+            const res = await fetch(`${WEB_APP_URL}?action=getTables`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.status === 'success' && Array.isArray(data.tables)) {
+                    tables = data.tables;
+                    saveData();
+                }
+            }
+        } catch (e) {
+            console.warn("Usando datos locales para administración de mesas:", e);
+        }
+
+        renderTablesAdmin();
 
     } else if (sectionId === 'kitchen-section') {
         const kitchenSection = document.getElementById('kitchen-section');
@@ -417,9 +436,6 @@ async function showSection(sectionId) {
     } else if (sectionId === 'users-admin-section') {
         cancelEditUser();
         renderUsersAdmin();
-    } else if (sectionId === 'tables-admin-section') {
-        cancelEditTable();
-        renderTablesAdmin();
     } else if (sectionId === 'catalog-section') {
         cancelEditProduct();
         renderRecipeCheckboxes();
@@ -581,18 +597,44 @@ async function deleteUser(id) {
  * Cómo lo realiza: Evalúa estados (libre, ocupada, alerta) y pinta las tarjetas.
  * Consulta a Sheets: Ninguna.
  */
+/**
+ * Renderiza la cuadrícula de mesas en salón de forma segura y robusta.
+ */
 function renderTables() {
     const container = document.getElementById('tableGridContainer');
     if (!container) return;
     container.innerHTML = '';
 
-    tables.forEach(t => {
-        const div = document.createElement('div');
-        const hasReadyItems = t.items && t.items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
-        const hasInKitchenItems = t.items && t.items.some(item => item.sentToKitchen && !item.served);
+    // Asegurar que tables sea un arreglo válido
+    if (!Array.isArray(tables)) {
+        tables = [];
+    }
 
-        let classNames = `table-item ${t.status}`;
-        let statusText = t.status;
+    if (tables.length === 0) {
+        container.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 1.5rem; font-size: 0.85rem;">No hay mesas configuradas.</div>';
+        return;
+    }
+
+    tables.forEach(t => {
+        // Parsear items y receipts por si vienen como string desde Google Sheets
+        let items = t.items;
+        if (typeof items === 'string') {
+            try { items = JSON.parse(items); } catch(e) { items = []; }
+        }
+        if (!Array.isArray(items)) items = [];
+
+        let receipts = t.receipts;
+        if (typeof receipts === 'string') {
+            try { receipts = JSON.parse(receipts); } catch(e) { receipts = []; }
+        }
+        if (!Array.isArray(receipts)) receipts = [];
+
+        const div = document.createElement('div');
+        const hasReadyItems = items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
+        const hasInKitchenItems = items.some(item => item.sentToKitchen && !item.served);
+
+        let classNames = `table-item ${t.status || 'libre'}`;
+        let statusText = t.status || 'libre';
 
         if (hasReadyItems) {
             classNames += ` table-item-alert`;
@@ -603,7 +645,7 @@ function renderTables() {
         }
 
         div.className = classNames;
-        div.innerHTML = `${t.name}<br><span style="font-size:0.65rem; text-transform:uppercase;">${statusText}</span>`;
+        div.innerHTML = `${t.name || 'Mesa'}<br><span style="font-size:0.65rem; text-transform:uppercase;">${statusText}</span>`;
         div.onclick = () => openTableOrder(t.id);
         container.appendChild(div);
     });
@@ -632,6 +674,11 @@ function renderTablesAdmin() {
 }
 
 async function saveNewTable() {
+    if (!navigator.onLine) {
+        showCustomAlert('❌ Acción bloqueada: Debe estar conectado a internet para crear o modificar mesas.');
+        return;
+    }
+
     const nameInput = document.getElementById('newTableName');
     const name = nameInput.value.trim();
     if (!name) { showCustomAlert('Ingrese el nombre de la mesa.'); return; }
@@ -641,17 +688,21 @@ async function saveNewTable() {
         if (table) table.name = name;
         cancelEditTable();
     } else {
-        const newId = tables.length > 0 ? Math.max(...tables.map(t => t.id)) + 1 : 1;
+        const newId = tables.length > 0 ? Math.max(...tables.map(t => Number(t.id) || 0)) + 1 : 1;
         tables.push({ id: newId, name: name, status: 'libre', items: [], receipts: [] });
     }
 
     appConfig.lastUpdated = Date.now();
-    await saveDataAndSyncCloudSync('Mesa guardada exitosamente.');
+    await saveDataAndSyncCloudSync('Mesa guardada y sincronizada exitosamente en Google Sheets.');
     nameInput.value = '';
     renderTablesAdmin();
 }
 
 function editTable(id) {
+    if (!navigator.onLine) {
+        showCustomAlert('❌ Acción bloqueada: No hay conexión a internet para editar mesas.');
+        return;
+    }
     const table = tables.find(t => t.id === id);
     if (table) {
         editingTableId = id;
@@ -668,17 +719,24 @@ function cancelEditTable() {
 }
 
 async function deleteTable(id) {
+    if (!navigator.onLine) {
+        showCustomAlert('❌ Acción bloqueada: Debe estar conectado a internet para eliminar mesas.');
+        return;
+    }
+
     const table = tables.find(t => t.id === id);
     if (!table) return;
+    
     if (table.status === 'ocupada' || (table.items && table.items.length > 0)) {
         showCustomAlert('No se puede eliminar una mesa ocupada.');
         return;
     }
+
     if (confirm(`¿Eliminar ${table.name}?`)) {
         tables = tables.filter(t => t.id !== id);
         if (editingTableId === id) cancelEditTable();
         appConfig.lastUpdated = Date.now();
-        await saveDataAndSyncCloudSync('Mesa eliminada.');
+        await saveDataAndSyncCloudSync('Mesa eliminada de Google Sheets.');
         renderTablesAdmin();
     }
 }
@@ -695,33 +753,61 @@ async function deleteTable(id) {
  */
 async function openTableOrder(id) {
     currentTableId = id;
-    await loadDataFromCloud();
+
+    // 1. Carga ligera y segura con validación de red
+    try {
+        const [resTables, resProducts] = await Promise.all([
+            fetch(`${WEB_APP_URL}?action=getTables`).catch(err => null),
+            fetch(`${WEB_APP_URL}?action=getProducts`).catch(err => null)
+        ]);
+
+        if (resTables && resTables.ok) {
+            const dataT = await resTables.json();
+            if (dataT && dataT.status === 'success' && Array.isArray(dataT.tables)) {
+                tables = dataT.tables;
+            }
+        }
+
+        if (resProducts && resProducts.ok) {
+            const dataP = await resProducts.json();
+            if (dataP && dataP.status === 'success' && Array.isArray(dataP.products)) {
+                products = dataP.products;
+            }
+        }
+
+        saveData();
+    } catch (e) {
+        console.warn("Usando datos locales para la orden de mesa:", e);
+    }
 
     const table = tables.find(t => t.id === id);
     if (!table) return;
-    if (!table.receipts) table.receipts = [];
 
-    table.items.forEach(item => {
-        if (!item.uid) item.uid = '_' + Math.random().toString(36).substr(2, 9);
-    });
-
-    document.getElementById('tables-section').classList.add('hidden');
-    document.getElementById('order-section').classList.remove('hidden');
-
-    const orderTitleEl = document.getElementById('order-title');
-    if (orderTitleEl) {
-        orderTitleEl.innerText = `Pedido - ${table.name}`;
+    // Asegurar que items y receipts sean arreglos válidos
+    if (typeof table.items === 'string') {
+        try { table.items = JSON.parse(table.items); } catch (e) { table.items = []; }
     }
+    if (!Array.isArray(table.items)) table.items = [];
 
-    const readyBanner = document.getElementById('readyForPickupBanner');
-    const hasReadyItems = table.items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
-    if (readyBanner) {
-        readyBanner.style.display = hasReadyItems ? 'block' : 'none';
+    if (typeof table.receipts === 'string') {
+        try { table.receipts = JSON.parse(table.receipts); } catch (e) { table.receipts = []; }
     }
+    if (!Array.isArray(table.receipts)) table.receipts = [];
 
+    // 2. Mostrar la sección de pedidos en pantalla
+    await showSection('order-section');
+    
+    const titleEl = document.getElementById('orderTableTitle');
+    if (titleEl) titleEl.innerText = `Pedido - ${table.name}`;
+
+    // 3. Cargar la categoría inicial y los ítems
     filterPlusCategory('sopas');
     renderPlusOrderItems();
 }
+
+
+
+
 
 async function markTablePickedUp() {
     const table = tables.find(t => t.id === currentTableId);
@@ -770,7 +856,7 @@ function filterPlusCategory(category, event) {
 
     if (event && event.currentTarget) {
         event.currentTarget.style.background = '#e2e8f0';
-        event.currentTarget.classList.add('active-cat');
+        event.currentTarget.classList.add('active-cat'); // 👈 CORREGIDO: Usar event.currentTarget
     } else {
         const firstBtn = document.querySelector('.plus-cat-btn');
         if (firstBtn) firstBtn.style.background = '#e2e8f0';
@@ -892,7 +978,16 @@ function renderPlusOrderItems() {
 
     const orderTotalEl = document.getElementById('orderTotal');
     if (orderTotalEl) orderTotalEl.innerText = `$ ${total.toLocaleString()}`;
+
+    // 💡 NUEVO: Controlar automáticamente si se muestra u oculta el banner de "Marcar como Recogido"
+    const hasReadyItems = table.items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
+    let readyBanner = document.getElementById('readyForPickupBanner');
+    
+    if (readyBanner) {
+        readyBanner.style.display = hasReadyItems ? 'block' : 'none';
+    }
 }
+
 
 function updateItemKitchenCheck(index, isChecked) {
     const table = tables.find(t => t.id === currentTableId);
@@ -1655,14 +1750,14 @@ async function renderSalesDashboard() {
         const startDateIso = `${startYyyy}-${startMm}-${startDd}`;
 
         filterBar.innerHTML = `
-            <div style="font-size: 0.8rem; font-weight: bold; width: 100%;">Filtrar por Rango de Fechas:</div>
+            <div style="font-size: 0.8rem; font-weight: bold; width: 90%;">Filtrar por Rango de Fechas:</div>
             <div style="flex: 1; min-width: 120px;">
                 <label style="font-size: 0.7rem; color: var(--text-secondary); display:block;">Desde:</label>
-                <input type="date" id="dashStartDate" value="${startDateIso}" style="width: 100%; padding: 0.3rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px;">
+                <input type="date" id="dashStartDate" value="${startDateIso}" style="width: 90%; padding: 0.3rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px;">
             </div>
             <div style="flex: 1; min-width: 120px;">
                 <label style="font-size: 0.7rem; color: var(--text-secondary); display:block;">Hasta:</label>
-                <input type="date" id="dashEndDate" value="${todayIso}" style="width: 100%; padding: 0.3rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px;">
+                <input type="date" id="dashEndDate" value="${todayIso}" style="width: 90%; padding: 0.3rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px;">
             </div>
             <div style="align-self: flex-end;">
                 <button class="btn btn-success" onclick="fetchAndRenderSalesData()" style="padding: 0.35rem 0.75rem; font-size: 0.80rem; background: var(--primary); color: #fff; border:none; border-radius:4px; cursor:pointer;">Aplicar Filtro</button>
@@ -1782,16 +1877,13 @@ async function fetchAndRenderSalesData() {
 }
 
 /**
- * Renderiza el gráfico de analíticas (Semanal o Mensual) con diseño SVG nativo.
+ * Renderiza el gráfico de analíticas de ventas diarias en formato de barras.
  */
-function renderSalesChart(salesData, viewType = 'week') {
+function renderSalesChart(salesData) {
     if (!Array.isArray(salesData)) salesData = [];
-    if (viewType === 'week') {
-        return generateWeeklyChartHtml(salesData);
-    } else {
-        return generateMonthlyComparisonChartHtml(salesData);
-    }
+    return generateDailySalesChartHtml(salesData);
 }
+
 
 /**
  * Genera la gráfica de Ventas de la Semana (Lunes a Domingo).
@@ -1850,7 +1942,7 @@ function generateWeeklyChartHtml(sales) {
             </div>
 
             <div style="position: relative; width: 100%; overflow-x: auto;">
-                <svg viewBox="0 0 ${chartWidth} ${chartHeight + 35}" style="width: 100%; height: auto; overflow: visible;">
+                <svg viewBox="0 -15 ${chartWidth} ${chartHeight + 35}" style="width: 100%; height: auto; overflow: visible;">
                     <defs>
                         <linearGradient id="orangeGradient" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stop-color="#fdba74" stop-opacity="0.4"/>
@@ -1871,11 +1963,17 @@ function generateWeeklyChartHtml(sales) {
 }
 
 /**
- * Genera la gráfica de comparación semana a semana para el mes (Lun - Dom por semana).
+ * Genera la gráfica de "Ventas de la semana" (Lunes a Domingo) en formato de barras.
  */
-function generateMonthlyComparisonChartHtml(sales) {
-    const weeksData = [0, 0, 0, 0, 0];
-    const weekLabels = ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5'];
+/**
+ * Genera la gráfica de evolución diaria de ventas en formato de barras,
+ * filtrando exactamente por los días del rango de fechas seleccionado.
+ */
+/**
+ * Genera la gráfica de barras de ventas diarias con el estilo exacto de la gráfica 2.
+ */
+function generateDailySalesChartHtml(sales) {
+    const dailyDataMap = {};
 
     sales.forEach(s => {
         if (!s.fecha) return;
@@ -1888,60 +1986,99 @@ function generateMonthlyComparisonChartHtml(sales) {
         }
         if (isNaN(dateObj)) return;
 
-        const dayOfMonth = dateObj.getDate();
-        const weekIndex = Math.floor((dayOfMonth - 1) / 7);
-        if (weekIndex >= 0 && weekIndex < 5) {
-            weeksData[weekIndex] += parseFloat(s.valorpagado) || 0;
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const dateKey = `${year}-${month}-${day}`;
+
+        const labelFormatted = `${day} ${['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][dateObj.getMonth()]}`;
+
+        if (!dailyDataMap[dateKey]) {
+            dailyDataMap[dateKey] = { label: labelFormatted, total: 0 };
         }
+        dailyDataMap[dateKey].total += parseFloat(s.valorpagado) || 0;
     });
 
-    const maxVal = Math.max(...weeksData, 100000);
-    const chartHeight = 140;
-    const chartWidth = 600;
-    const stepX = chartWidth / (weekLabels.length - 1);
+    const sortedKeys = Object.keys(dailyDataMap).sort();
+    const chartLabels = sortedKeys.map(k => dailyDataMap[k].label);
+    const chartValues = sortedKeys.map(k => dailyDataMap[k].total);
 
-    let points = '';
-    let polylineArea = `0,${chartHeight} `;
-    let pointsCirclesHtml = '';
+    if (chartValues.length === 0) {
+        return `
+            <div style="background: #ffffff; border: 1px solid var(--border); padding: 1.25rem; border-radius: 12px; margin-bottom: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.85rem;">
+                📊 <strong>Ventas Diarias</strong><br>No hay registros en el rango de fechas seleccionado.
+            </div>
+        `;
+    }
+
+    const maxDataVal = Math.max(...chartValues, 100000);
+    const topVal = Math.ceil(maxDataVal / 250000) * 250000 || 1000000;
+    
+    const chartHeight = 160;
+    const chartWidth = Math.max(650, chartLabels.length * 55); 
+    const paddingLeft = 100; // 👈 Aumentado para dar espacio a los números y al texto vertical
+    const paddingBottom = 60; 
+    const paddingRight = 20;
+    const usableWidth = chartWidth - paddingLeft - paddingRight;
+    const slotWidth = chartLabels.length > 0 ? usableWidth / chartLabels.length : usableWidth;
+    const barWidth = Math.max(12, Math.min(slotWidth * 0.6, 32));
+
+    let barsHtml = '';
     let xLabelsHtml = '';
 
-    weeksData.forEach((val, i) => {
-        const x = i * stepX;
-        const y = chartHeight - (val / maxVal) * (chartHeight - 20);
-        points += `${x},${y} `;
-        polylineArea += `${x},${y} `;
-        pointsCirclesHtml += `<circle cx="${x}" cy="${y}" r="5" fill="#2563eb" stroke="#fff" stroke-width="2"/>`;
-        xLabelsHtml += `<text x="${x}" y="${chartHeight + 20}" font-size="11" fill="#64748b" text-anchor="middle">${weekLabels[i]} (Lun-Dom)</text>`;
+    chartValues.forEach((val, i) => {
+        const xCenter = paddingLeft + (i * slotWidth) + (slotWidth / 2);
+        const x = xCenter - (barWidth / 2);
+        const barHeight = (val / topVal) * chartHeight;
+        const y = chartHeight - barHeight;
+
+        barsHtml += `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="#1e40af" rx="2" ry="2"/>`;
+
+        xLabelsHtml += `
+            <text x="${xCenter}" y="${chartHeight + 15}" font-size="10" fill="#334155" font-weight="500" text-anchor="end" transform="rotate(-35, ${xCenter}, ${chartHeight + 15})">
+                ${chartLabels[i]}
+            </text>
+        `;
     });
-    polylineArea += `${chartWidth},${chartHeight}`;
+
+    let yAxisLabelsHtml = '';
+    const steps = 4;
+    for (let i = 0; i <= steps; i++) {
+        const yCoord = (chartHeight / steps) * i;
+        const valLabel = topVal - (topVal / steps) * i;
+        
+        let formattedVal = Math.round(valLabel).toLocaleString();
+
+        if (i < steps) {
+            yAxisLabelsHtml += `<line x1="${paddingLeft}" y1="${yCoord}" x2="${chartWidth - paddingRight}" y2="${yCoord}" stroke="#e2e8f0" stroke-width="1"/>`;
+        }
+        // Alineado a la izquierda del área de dibujo
+        yAxisLabelsHtml += `<text x="${paddingLeft - 12}" y="${yCoord + 4}" font-size="10" fill="#64748b" text-anchor="end">${formattedVal}</text>`;
+    }
 
     return `
         <div style="background: #ffffff; border: 1px solid var(--border); padding: 1.25rem; border-radius: 12px; margin-bottom: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span style="font-size: 1.1rem;">📈</span>
-                    <h3 style="font-size: 1rem; font-weight: bold; color: var(--text); margin: 0;">Comparativa Mensual (Semana a Semana)</h3>
+                    <span style="font-size: 1.1rem;">📊</span>
+                    <h3 style="font-size: 1rem; font-weight: bold; color: var(--text); margin: 0;">Ventas Diarias</h3>
                 </div>
                 <div style="background: #dbeafe; color: #1e40af; padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: bold;">
-                    Ciclo Lunes a Domingo
+                    Día a Día
                 </div>
             </div>
 
             <div style="position: relative; width: 100%; overflow-x: auto;">
-                <svg viewBox="0 0 ${chartWidth} ${chartHeight + 35}" style="width: 100%; height: auto; overflow: visible;">
-                    <defs>
-                        <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="#93c5fd" stop-opacity="0.4"/>
-                            <stop offset="100%" stop-color="#93c5fd" stop-opacity="0.0"/>
-                        </linearGradient>
-                    </defs>
-                    <line x1="0" y1="0" x2="${chartWidth}" y2="0" stroke="#f1f5f9" stroke-width="1"/>
-                    <line x1="0" y1="${chartHeight/2}" x2="${chartWidth}" y2="${chartHeight/2}" stroke="#f1f5f9" stroke-width="1"/>
-                    <line x1="0" y1="${chartHeight}" x2="${chartWidth}" y2="${chartHeight}" stroke="#e2e8f0" stroke-width="1"/>
-                    <polygon points="${polylineArea}" fill="url(#blueGradient)" />
-                    <polyline fill="none" stroke="#2563eb" stroke-width="2.5" points="${points}" stroke-linecap="round" stroke-linejoin="round"/>
-                    ${pointsCirclesHtml}
-                    ${xLabelsHtml}
+                <svg viewBox="0 -15 ${chartWidth} ${chartHeight + paddingBottom}" style="width: 100%; height: auto; overflow: visible;">
+                    ${yAxisLabelsHtml}
+
+                    <line x1="${paddingLeft}" y1="${chartHeight}" x2="${chartWidth - paddingRight}" y2="${chartHeight}" stroke="#94a3b8" stroke-width="1.5"/>
+                    
+                    ${barsHtml}
+                    ${xLabelsHtml}      
+                    
+                    <!-- Etiqueta lateral centrada de forma segura -->
+                    <text x="22" y="${chartHeight / 2}" font-size="11" fill="#475569" font-weight="bold" text-anchor="middle" transform="rotate(-90, 22, ${chartHeight / 2})">Ingresos Totales ($)</text>
                 </svg>
             </div>
         </div>

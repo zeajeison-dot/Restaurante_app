@@ -86,8 +86,6 @@ function getTablesAndProductsData() {
     status: "success",
     tables: getSheetData("Mesas"), // Las mesas cambian de estado constantemente, se leen directo
     products: getCachedSheetData("Productos"),
-    drinks: getCachedSheetData("Bebidas"),
-    addons: getCachedSheetData("Adicionales"),
     config: getConfigData()
   };
 }
@@ -97,21 +95,22 @@ function getTablesAndProductsData() {
  */
 function getCachedSheetData(sheetName) {
   var cache = CacheService.getScriptCache();
-  var cached = cache.get("sheet_" + sheetName);
+  var cacheKey = "sheet_" + sheetName;
+  var cached = cache.get(cacheKey);
   
-  if (cached) {
-    try {
-      return JSON.parse(cached);
-    } catch (e) {}
+  if (cached != null) {
+    return JSON.parse(cached); // Devuelve los datos desde la caché si aún están vigentes
   }
-
-  var data = getSheetData(sheetName);
-  try {
-    cache.put("sheet_" + sheetName, JSON.stringify(data), CACHE_EXPIRATION_SEC);
-  } catch (e) {}
-
+  
+  // Si no está en caché o ya expiró, lee directamente de la hoja de Google Sheets
+  var data = getSheetData(sheetName); 
+  
+  // ⏱️ Guarda en caché configurado estrictamente por 15 minutos (900 segundos)
+  cache.put(cacheKey, JSON.stringify(data), 900); 
+  
   return data;
 }
+
 
 /**
  * Consulta el historial de facturas filtrado por rango de fechas (dd/MM/yyyy).
