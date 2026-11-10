@@ -305,7 +305,7 @@ async function showSection(sectionId) {
 
     if (sectionId === 'dashboard-view') {
         renderDashboardMenu(role);
-    } else if (sectionId === 'tables-section') {
+    }   else if (sectionId === 'tables-section') {
         const headerBar = document.getElementById('tablesHeaderBar');
         const userTitle = document.getElementById('tablesUserTitle');
         const roleBadge = document.getElementById('tablesRoleBadge');
@@ -338,6 +338,10 @@ async function showSection(sectionId) {
         }
 
         renderTables();
+        
+        // ⬇️ AGREGAN AQUÍ LA LÍNEA NUEVA: ⬇️
+        checkWaiterReadyAlarm();
+
 
         // Sondeo automático cada 60 segundos consultando EXCLUSIVAMENTE mesas
         let isRefreshingTables = false;
@@ -468,7 +472,15 @@ async function showSection(sectionId) {
  */
 function checkWaiterReadyAlarm() {
     const now = Date.now();
-    const hasReadyTables = tables.some(t => t.items && t.items.some(i => i.sentToKitchen && i.served && !i.pickedUp));
+    const tablesArray = Array.isArray(tables) ? tables : [];
+
+    const hasReadyTables = tablesArray.some(t => {
+        let items = t.items;
+        if (typeof items === 'string') {
+            try { items = JSON.parse(items); } catch (e) { items = []; }
+        }
+        return Array.isArray(items) && items.some(i => i.sentToKitchen && i.served && !i.pickedUp);
+    });
 
     if (hasReadyTables) {
         const intervalMs = (appConfig.waiterAlarmInterval || 20) * 1000;
@@ -478,6 +490,8 @@ function checkWaiterReadyAlarm() {
         }
     }
 }
+
+
 
 
 /* ========================================================== */
