@@ -39,6 +39,8 @@ body {
     padding: 1.5rem;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
     margin-bottom: 1rem;
+    height: auto !important;
+    min-height: auto;
 }
 
 .hidden {
@@ -118,19 +120,21 @@ body {
 }
 
 /* ========================================== */
-/* CUADRÍCULA DE MESAS (TAMAÑO UNIFORME)      */
+/* CUADRÍCULA DE MESAS ADAPTABLE              */
 /* ========================================== */
-.table-grid {
+.table-grid, 
+#tableGridContainer {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-    max-height: 50vh;
-    overflow-y: auto;
-    padding: 0.25rem;
+    gap: 0.75rem;
+    max-height: none !important; /* Elimina la restricción de altura anterior */
+    overflow-y: visible !important; /* Elimina el scroll interno */
+    padding: 0.5rem 0;
+    height: auto;
 }
 
 .table-item {
-    aspect-ratio: 1 / 1; /* Garantiza que todas las tarjetas sean cuadradas y del mismo tamaño exacto */
+    aspect-ratio: 1 / 1; /* Mantiene las tarjetas perfectamente cuadradas */
     border-radius: 10px;
     display: flex;
     flex-direction: column;

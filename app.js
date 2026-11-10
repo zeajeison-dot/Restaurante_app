@@ -344,6 +344,7 @@ async function showSection(sectionId) {
 
 
         // Sondeo automático cada 60 segundos consultando EXCLUSIVAMENTE mesas
+        // Sondeo automático cada 60 segundos consultando EXCLUSIVAMENTE mesas
         let isRefreshingTables = false;
         tablesRefreshInterval = setInterval(async () => {
             const tablesSec = document.getElementById('tables-section');
@@ -352,7 +353,7 @@ async function showSection(sectionId) {
                 isRefreshingTables = true;
                 try {
                     const res = await fetch(`${WEB_APP_URL}?action=getTables`);
-                    if (res.ok) {
+                    if (res && res.ok) {
                         const data = await res.json();
                         if (data && data.status === 'success' && Array.isArray(data.tables)) {
                             tables = data.tables;
@@ -361,7 +362,8 @@ async function showSection(sectionId) {
                         }
                     }
                 } catch (e) {
-                    console.error("Error en sondeo de mesas:", e);
+                    // Silenciamos el error de red temporal en segundo plano para no saturar la consola
+                    console.warn("Sondeo en segundo plano pausado por red lenta o sin conexión.");
                 } finally {
                     isRefreshingTables = false;
                 }
@@ -369,7 +371,7 @@ async function showSection(sectionId) {
                 clearInterval(tablesRefreshInterval);
                 tablesRefreshInterval = null;
             }
-        }, 60000); // Actualiza cada 60 segundos exactos
+        }, 60000);
 
     } else if (sectionId === 'tables-admin-section') {
         cancelEditTable();
