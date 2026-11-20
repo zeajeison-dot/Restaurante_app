@@ -9,7 +9,9 @@
 /* 1. VARIABLES GLOBALES Y ESTADO INICIAL VACÍO               */
 /* ========================================================== */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwRGdEjCW5p1py7dX1dvToX_w3RxEAxkG5sAFYrmr9TD-Rbvvfa_iiWSMsl9YvFo9T0-A/exec";
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzhezTR3M0sdvL83xWy8EwUrHfIpmG841DT0kd85rzuYaCB4iauIvDNoON8xIdjW93XmA/exec";
+//const WEB_APP_URL = "https://script.google.com/macros/s/TU_ID/exec?action=getLastUpdated";
+
 
 // Inicializadas vacías para garantizar que toda la data provenga estrictamente de Google Sheets
 let tables = [];
@@ -276,10 +278,16 @@ async function showSection(sectionId) {
         return;
     }
 
-        // CORRECCIÓN: No descargar datos pesados en el menú principal, mesas, dashboard analítico, catálogo ni pedidos
-    if (!['dashboard-view', 'tables-section', 'dashboard-analytics-section', 'catalog-section', 'tables-admin-section', 'order-section'].includes(sectionId)) {
-        await loadDataFromCloud();
-    }
+        // CORRECCIÓN: No descargar datos pesados en el menú principal, mesas, dashboard analítico, catálogo ni pedidos, comandas tampoco
+    if (![
+    'dashboard-view',
+    'tables-section',
+    'dashboard-analytics-section',
+    'catalog-section',
+    'tables-admin-section',
+    'order-section',
+    'kitchen-section'].includes(sectionId)) {
+    await loadDataFromCloud();}
 
     const sections = [
         'dashboard-view', 'tables-section', 'kitchen-section', 'users-admin-section',
@@ -392,52 +400,154 @@ async function showSection(sectionId) {
 
         renderTablesAdmin();
 
-    } else if (sectionId === 'kitchen-section') {
-        const kitchenSection = document.getElementById('kitchen-section');
-        if (!kitchenSection) return;
+    
+} else if (sectionId === 'kitchen-section') {
+    const kitchenSection = document.getElementById('kitchen-section');
+    if (!kitchenSection) return;
 
-        const timerConfigBox = document.getElementById('kitchenTimerConfigBox');
-        if (timerConfigBox) timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
+    const timerConfigBox = document.getElementById('kitchenTimerConfigBox');
 
-        await loadDataFromCloud();
-        renderKitchenOrders();
+    if (timerConfigBox) {
+        timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
+    }
 
-        let localLastUpdated = appConfig.lastUpdated || 0;
+    // Carga inicial: descargar exclusivamente las mesas y comandas.
+    let localLastUpdated = Number(appConfig.lastUpdated) || 0;
 
-        kitchenInterval = setInterval(() => {
-            if (kitchenSection && !kitchenSection.classList.contains('hidden')) {
-                renderKitchenOrders();
-            } else {
-                clearInterval(kitchenInterval);
-                kitchenInterval = null;
+    try {
+        const res = await fetch(`${WEB_APP_URL}?action=getTables`);
+
+        if (!res.ok) {
+            throw new Error('Error HTTP: ' + res.status);
+        }
+
+        const data = await res.json();
+
+        if (
+            data &&
+            data.status === 'success' &&
+            Array.isArray(data.tables)
+        ) {
+            tables = data.tables;
+
+            if (Number.isFinite(Number(data.lastUpdated))) {
+                localLastUpdated = Number(data.lastUpdated);
+                appConfig.lastUpdated = localLastUpdated;
             }
-        }, 1000);
 
-        let isRefreshingKitchen = false;
-        kitchenCloudPollInterval = setInterval(async () => {
-            if (kitchenSection && !kitchenSection.classList.contains('hidden')) {
-                if (isRefreshingKitchen) return;
-                isRefreshingKitchen = true;
-                try {
-                    const resCheck = await fetch(`${WEB_APP_URL}?action=getLastUpdated`);
-                    if (resCheck.ok) {
-                        const checkData = await resCheck.json();
-                        if (checkData && checkData.status === 'success' && checkData.lastUpdated > localLastUpdated) {
-                            localLastUpdated = checkData.lastUpdated;
-                            await loadDataFromCloud();
-                            renderKitchenOrders();
-                        }
-                    }
-                } catch (e) {
-                    console.error("Error en sondeo ligero de cocina:", e);
-                } finally {
-                    isRefreshingKitchen = false;
+            saveData();
+        } else {
+            throw new Error('Respuesta inválida al consultar las mesas.');
+        }
+
+    } catch (e) {
+        console.warn(
+            'RESTOPOS: usando comandas locales en cocina:',
+            e
+        );
+    }
+
+    renderKitchenOrders();
+
+    // Actualización visual local cada segundo.
+    kitchenInterval = setInterval(() => {
+        if (
+            kitchenSection &&
+            !kitchenSection.classList.contains('hidden')
+        ) {
+            renderKitchenOrders();
+        } else {
+            clearInterval(kitchenInterval);
+            kitchenInterval = null;
+        }
+    }, 1000);
+
+    // Consultar versión de datos cada 15 segundos.
+    let isRefreshingKitchen = false;
+
+    kitchenCloudPollInterval = setInterval(async () => {
+
+        if (
+            kitchenSection &&
+            !kitchenSection.classList.contains('hidden')
+        ) {
+
+            if (isRefreshingKitchen) return;
+
+            isRefreshingKitchen = true;
+
+            try {
+                const resCheck = await fetch(
+                    `${WEB_APP_URL}?action=getLastUpdated`
+                );
+
+                if (!resCheck.ok) {
+                    throw new Error('Error consultando la versión.');
                 }
-            } else {
-                clearInterval(kitchenCloudPollInterval);
-                kitchenCloudPollInterval = null;
+
+                const checkData = await resCheck.json();
+
+                if (
+                    checkData &&
+                    checkData.status === 'success' &&
+                    Number(checkData.lastUpdated) > localLastUpdated
+                ) {
+
+                    // Si hay cambios, descargar solamente las mesas.
+                    const resTables = await fetch(
+                        `${WEB_APP_URL}?action=getTables`
+                    );
+
+                    if (!resTables.ok) {
+                        throw new Error('Error descargando las mesas.');
+                    }
+
+                    const tablesData = await resTables.json();
+
+                    if (
+                        tablesData &&
+                        tablesData.status === 'success' &&
+                        Array.isArray(tablesData.tables)
+                    ) {
+
+                        tables = tablesData.tables;
+
+                        const newVersion = Number(tablesData.lastUpdated);
+
+                        localLastUpdated = Number.isFinite(newVersion)
+                            ? newVersion
+                            : Number(checkData.lastUpdated);
+
+                        appConfig.lastUpdated = localLastUpdated;
+
+                        saveData();
+
+                        renderKitchenOrders();
+
+                        console.log(
+                            'RESTOPOS: cocina actualizada correctamente.',
+                            'Versión:',
+                            localLastUpdated
+                        );
+                    }
+                }
+
+            } catch (e) {
+                console.warn(
+                    'RESTOPOS: error actualizando comandas de cocina:',
+                    e
+                );
+            } finally {
+                isRefreshingKitchen = false;
             }
-        }, 15000);
+
+        } else {
+            clearInterval(kitchenCloudPollInterval);
+            kitchenCloudPollInterval = null;
+        }
+
+    }, 15000);
+
 
     } else if (sectionId === 'users-admin-section') {
         cancelEditUser();
@@ -767,10 +877,11 @@ async function deleteTable(id) {
  * Cómo lo realiza: Sincroniza desde la nube y prepara la interfaz de comandas.
  * Consulta a Sheets: Llama a `loadDataFromCloud()`.
  */
+
 async function openTableOrder(id) {
     currentTableId = id;
 
-    // 1. Carga ligera y segura con validación de red
+    // 1. Descargar mesas y productos desde la nube
     try {
         const [resTables, resProducts] = await Promise.all([
             fetch(`${WEB_APP_URL}?action=getTables`).catch(err => null),
@@ -779,6 +890,7 @@ async function openTableOrder(id) {
 
         if (resTables && resTables.ok) {
             const dataT = await resTables.json();
+
             if (dataT && dataT.status === 'success' && Array.isArray(dataT.tables)) {
                 tables = dataT.tables;
             }
@@ -786,40 +898,69 @@ async function openTableOrder(id) {
 
         if (resProducts && resProducts.ok) {
             const dataP = await resProducts.json();
+
             if (dataP && dataP.status === 'success' && Array.isArray(dataP.products)) {
                 products = dataP.products;
             }
         }
 
         saveData();
+
     } catch (e) {
         console.warn("Usando datos locales para la orden de mesa:", e);
     }
 
-    const table = tables.find(t => t.id === id);
-    if (!table) return;
+    // 2. Buscar la mesa después de sincronizar
+    let table = tables.find(t => String(t.id) === String(id));
 
-    // Asegurar que items y receipts sean arreglos válidos
-    if (typeof table.items === 'string') {
-        try { table.items = JSON.parse(table.items); } catch (e) { table.items = []; }
+    if (!table) {
+        showCustomAlert('No se encontró la mesa seleccionada.');
+        return;
     }
+
+    // 3. Asegurar que items y receipts sean arreglos válidos
+    if (typeof table.items === 'string') {
+        try {
+            table.items = JSON.parse(table.items);
+        } catch (e) {
+            table.items = [];
+        }
+    }
+
     if (!Array.isArray(table.items)) table.items = [];
 
     if (typeof table.receipts === 'string') {
-        try { table.receipts = JSON.parse(table.receipts); } catch (e) { table.receipts = []; }
+        try {
+            table.receipts = JSON.parse(table.receipts);
+        } catch (e) {
+            table.receipts = [];
+        }
     }
+
     if (!Array.isArray(table.receipts)) table.receipts = [];
 
-    // 2. Mostrar la sección de pedidos en pantalla
+    // 4. Mostrar la sección de pedidos
     await showSection('order-section');
-    
-    const titleEl = document.getElementById('orderTableTitle');
-    if (titleEl) titleEl.innerText = `Pedido - ${table.name}`;
 
-    // 3. Cargar la categoría inicial y los ítems
+    // Volver a buscar la mesa por si showSection actualizó los datos
+    table = tables.find(t => String(t.id) === String(id));
+
+    if (!table) return;
+
+    // 5. Mostrar el nombre y número de mesa en el encabezado
+    const title = `Pedido - ${table.name}`;
+
+    const orderTitle = document.getElementById('order-title');
+    const titleEl = document.getElementById('orderTableTitle');
+
+    if (orderTitle) orderTitle.textContent = title;
+    if (titleEl) titleEl.textContent = title;
+
+    // 6. Cargar categoría inicial y productos de la comanda
     filterPlusCategory('sopas');
     renderPlusOrderItems();
 }
+
 
 
 
@@ -862,6 +1003,8 @@ function isProductActive(p) {
  * Cómo lo realiza: Filtra el arreglo global `products` según su categoría normalizada.
  * Consulta a Sheets: Ninguna (usa el catálogo cargado en memoria).
  */
+
+
 function filterPlusCategory(category, event) {
     currentPlusCategory = category;
 
@@ -872,7 +1015,7 @@ function filterPlusCategory(category, event) {
 
     if (event && event.currentTarget) {
         event.currentTarget.style.background = '#e2e8f0';
-        event.currentTarget.classList.add('active-cat'); // 👈 CORREGIDO: Usar event.currentTarget
+        event.currentTarget.classList.add('active-cat');
     } else {
         const firstBtn = document.querySelector('.plus-cat-btn');
         if (firstBtn) firstBtn.style.background = '#e2e8f0';
@@ -880,6 +1023,7 @@ function filterPlusCategory(category, event) {
 
     const catalogGrid = document.getElementById('plusCatalogGrid');
     if (!catalogGrid) return;
+
     catalogGrid.innerHTML = '';
 
     const targetCat = normalizeCategory(category);
@@ -890,24 +1034,101 @@ function filterPlusCategory(category, event) {
     });
 
     if (itemsToDisplay.length === 0) {
-        catalogGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; font-size: 0.8rem; color: var(--text-secondary); padding: 1rem;">No hay productos activos en esta categoría.</div>';
+        catalogGrid.innerHTML = `
+            <div style="
+                grid-column: 1 / -1;
+                text-align: center;
+                font-size: 0.8rem;
+                color: var(--text-secondary);
+                padding: 1rem;
+            ">
+                No hay productos activos en esta categoría.
+            </div>
+        `;
         return;
     }
 
+    // Configurar el catálogo para desplazamiento horizontal
+    catalogGrid.style.display = 'grid';
+    catalogGrid.style.gridTemplateRows = 'repeat(2, 55px)';
+    catalogGrid.style.gridTemplateColumns = 'none';
+    catalogGrid.style.gridAutoFlow = 'column';
+    catalogGrid.style.gap = '8px';
+
+    catalogGrid.style.width = '100%';
+    catalogGrid.style.height = '126px';
+    catalogGrid.style.maxHeight = '126px';
+    catalogGrid.style.boxSizing = 'border-box';
+
+    catalogGrid.style.overflowX = 'auto';
+    catalogGrid.style.overflowY = 'hidden';
+    catalogGrid.style.padding = '4px';
+    catalogGrid.style.webkitOverflowScrolling = 'touch';
+    catalogGrid.style.touchAction = 'pan-x';
+    catalogGrid.style.justifyContent = 'start';
+    catalogGrid.style.alignContent = 'start';
+
+    // Calcular el ancho de cada columna según el espacio disponible
+    const availableWidth = catalogGrid.clientWidth - 8;
+    const columnWidth = Math.floor((availableWidth - 16) / 3);
+
+    catalogGrid.style.gridAutoColumns = `${columnWidth}px`;
+
+    // Crear los botones de platos
     itemsToDisplay.forEach(item => {
         const btn = document.createElement('div');
-        btn.style.cssText = "background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem; display: flex; flex-direction: column; justify-content: space-between; align-items: center; cursor: pointer; text-align: center; width: 110px; height: 55px; box-sizing: border-box;";
+
+        btn.style.cssText = `
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.4rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            text-align: center;
+            width: 100%;
+            min-width: 0;
+            height: 55px;
+            box-sizing: border-box;
+            overflow: hidden;
+        `;
+
         const itemId = 'prod_' + item.id;
 
         btn.innerHTML = `
-            <span style="font-size: 0.7rem; font-weight: bold; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.1;">${item.name}</span>
-            <span style="font-size: 0.7rem; color: var(--primary); font-weight: bold;">$${(item.price || 0).toLocaleString()}</span>
+            <span style="
+                font-size: 0.7rem;
+                font-weight: bold;
+                color: var(--text);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                line-height: 1.1;
+                width: 100%;
+            ">${item.name}</span>
+
+            <span style="
+                font-size: 0.7rem;
+                color: var(--primary);
+                font-weight: bold;
+            ">$${(Number(item.price) || 0).toLocaleString()}</span>
         `;
 
         btn.onclick = () => addProductDirectlyToOrder(itemId);
+
         catalogGrid.appendChild(btn);
     });
+
+    // Comenzar mostrando los primeros platos
+    catalogGrid.scrollLeft = 0;
 }
+
+
 
 function addProductDirectlyToOrder(itemIdentifier) {
     const table = tables.find(t => t.id === currentTableId);
@@ -1221,51 +1442,199 @@ function renderKitchenOrders() {
     });
 }
 
+
 async function markBatchServed(tableId, batchId) {
     const table = tables.find(t => t.id === tableId);
     if (!table) return;
 
-    if (confirm(`¿Marcar este lote de la ${table.name} como servido?`)) {
-        table.items.forEach(item => {
-            if (item.sentToKitchen && item.sentAt === batchId) {
-                item.served = true;
-                item.pickedUp = false;
-            }
-        });
-        appConfig.lastUpdated = Date.now();
-        renderKitchenOrders();
-        await syncDataToCloud();
+    // Crear ventana de confirmación.
+    let modal = document.getElementById('serveBatchModal');
+
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'serveBatchModal';
+
+        modal.style.cssText = `
+            position:fixed;
+            inset:0;
+            background:rgba(0,0,0,0.6);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            z-index:10002;
+            padding:1rem;
+        `;
+
+        modal.innerHTML = `
+            <div style="
+                background:#fff;
+                color:#1e293b;
+                padding:1.5rem;
+                border-radius:12px;
+                width:100%;
+                max-width:320px;
+                text-align:center;
+                box-shadow:0 10px 30px rgba(0,0,0,0.2);
+            ">
+                <h3 style="margin-top:0;">Atender comanda</h3>
+
+                <p id="serveBatchMessage"
+                   style="font-size:0.9rem;">
+                </p>
+
+                <div style="
+                    display:flex;
+                    gap:0.6rem;
+                    margin-top:1.2rem;
+                ">
+                    <button id="serveBatchCancel"
+                        class="btn"
+                        style="
+                            flex:1;
+                            background:#e2e8f0;
+                            color:#1e293b;
+                        ">
+                        Cancelar
+                    </button>
+
+                    <button id="serveBatchConfirm"
+                        class="btn btn-success"
+                        style="flex:1;">
+                        Sí, atender
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
     }
+
+    document.getElementById('serveBatchMessage').textContent =
+        `¿Marcar este lote de la ${table.name} como servido?`;
+
+    const confirmButton =
+        document.getElementById('serveBatchConfirm');
+
+    const cancelButton =
+        document.getElementById('serveBatchCancel');
+
+    modal.style.display = 'flex';
+
+    cancelButton.onclick = () => {
+        modal.style.display = 'none';
+    };
+
+    confirmButton.onclick = async () => {
+        confirmButton.disabled = true;
+        confirmButton.textContent = 'Procesando...';
+
+        try {
+            // Marcar los productos del lote como servidos.
+            table.items.forEach(item => {
+                if (
+                    item.sentToKitchen &&
+                    item.sentAt === batchId
+                ) {
+                    item.served = true;
+                    item.pickedUp = false;
+                }
+            });
+
+            appConfig.lastUpdated = Date.now();
+
+            // Actualizar la pantalla de cocina.
+            renderKitchenOrders();
+
+            // Sincronizar con Google Sheets.
+            await syncDataToCloud();
+
+            modal.style.display = 'none';
+
+            showCustomAlert(
+                'Comanda atendida correctamente.'
+            );
+
+        } catch (error) {
+            console.error(
+                'Error al atender la comanda:',
+                error
+            );
+
+            modal.style.display = 'none';
+
+            showCustomAlert(
+                'No se pudo sincronizar la comanda. Verifique la conexión.'
+            );
+
+        } finally {
+            confirmButton.disabled = false;
+            confirmButton.textContent = 'Sí, atender';
+        }
+    };
 }
+
 
 
 /* ========================================================== */
 /* 7. CUENTAS Y FACTURACIÓN                                   */
 /* ========================================================== */
 
+
+
 function openBillSection() {
     const table = tables.find(t => t.id === currentTableId);
+
     if (!table || table.items.length === 0) {
         showCustomAlert('Esta mesa no tiene pedidos activos.');
         return;
     }
 
     if (!table.receipts) table.receipts = [];
-    document.getElementById('bill-title').innerText = `Cuenta - ${table.name}`;
+
+    document.getElementById('bill-title').innerText =
+        `Cuenta - ${table.name}`;
+
     const list = document.getElementById('billItemsList');
     if (!list) return;
 
     list.innerHTML = '';
+
     table.items.forEach((item, index) => {
+        const isBilled = item.billed === true;
+
         const div = document.createElement('div');
         div.className = 'order-item';
+
+        if (isBilled) {
+            div.style.opacity = '0.55';
+            div.style.background = '#e2e8f0';
+        }
+
         div.innerHTML = `
-            <label class="checkbox-label" style="flex: 1;">
-                <input type="checkbox" class="bill-item-chk" value="${index}" data-price="${item.finalPrice}" onchange="calculatePartialTotal()">
-                <span><strong>${item.name}</strong> ${item.observation ? '(' + item.observation + ')' : ''}</span>
+            <label class="checkbox-label" style="flex: 1; min-width: 0;">
+                <input
+                    type="checkbox"
+                    class="bill-item-chk"
+                    value="${index}"
+                    data-price="${item.finalPrice}"
+                    onchange="calculatePartialTotal()"
+                    ${isBilled ? 'disabled' : ''}
+                >
+
+                <span style="display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
+                    <strong>${item.name}</strong>
+
+                    ${isBilled
+                        ? '<span style="color:#dc2626; font-size:0.72rem; font-weight:bold; white-space:nowrap;">✓ FACTURADO</span>'
+                        : ''}
+                </span>
             </label>
-            <strong>$${item.finalPrice.toLocaleString()}</strong>
+
+            <strong style="white-space:nowrap;">
+                $${Number(item.finalPrice).toLocaleString('es-CO')}
+            </strong>
         `;
+
         list.appendChild(div);
     });
 
@@ -1276,6 +1645,8 @@ function openBillSection() {
     document.getElementById('bill-section').classList.remove('hidden');
 }
 
+
+
 function calculatePartialTotal() {
     let partialTotal = 0;
     document.querySelectorAll('.bill-item-chk:checked').forEach(chk => {
@@ -1285,135 +1656,832 @@ function calculatePartialTotal() {
     if (selectedTotalEl) selectedTotalEl.innerText = `$ ${Math.round(partialTotal).toLocaleString()}`;
 }
 
+
 async function generateReceipt() {
     const table = tables.find(t => t.id === currentTableId);
-    const receiptItems = [];
-    const receiptItemUids = [];
-    let partialTotal = 0;
 
-    document.querySelectorAll('.bill-item-chk:checked').forEach(chk => {
-        const idx = parseInt(chk.value, 10);
-        const item = table.items[idx];
-        partialTotal += item.finalPrice;
-        receiptItems.push({ ...item });
-        receiptItemUids.push(item.uid);
-        item.billed = true;
-    });
+    if (!table) {
+        showCustomAlert('No se encontró la mesa.');
+        return;
+    }
 
-    if (receiptItems.length === 0) {
+    if (!table.receipts) table.receipts = [];
+
+    const selectedCheckboxes = Array.from(
+        document.querySelectorAll('.bill-item-chk:checked')
+    );
+
+    if (selectedCheckboxes.length === 0) {
         showCustomAlert('Seleccione al menos un ítem.');
         return;
     }
 
-    table.receipts.push({
-        id: Date.now(),
-        items: receiptItems,
-        itemUids: receiptItemUids,
-        total: Math.round(partialTotal),
-        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    });
+    const selectedIndexes = selectedCheckboxes.map(chk =>
+        parseInt(chk.value, 10)
+    );
 
-    appConfig.lastUpdated = Date.now();
-    await syncDataToCloud();
-    openBillSection();
+    // Validar que ningún producto ya esté facturado.
+    const validIndexes = selectedIndexes.filter(index =>
+        table.items[index] &&
+        table.items[index].billed !== true
+    );
+
+    if (validIndexes.length !== selectedIndexes.length) {
+        showCustomAlert(
+            'Uno o más productos ya fueron facturados. Actualice la cuenta.'
+        );
+        openBillSection();
+        return;
+    }
+
+    const generateButton = document.querySelector(
+        '#bill-section button[onclick="generateReceipt()"]'
+    );
+
+    if (generateButton) {
+        if (generateButton.disabled) return;
+        generateButton.disabled = true;
+        generateButton.textContent = 'Procesando recibo...';
+    }
+
+    const receiptId = Date.now();
+    const previousBilledStates = validIndexes.map(index => ({
+        index,
+        billed: table.items[index].billed
+    }));
+
+    try {
+        let partialTotal = 0;
+        const receiptItems = [];
+        const receiptItemUids = [];
+
+        validIndexes.forEach(index => {
+            const item = table.items[index];
+
+            item.billed = true;
+
+            partialTotal += Number(item.finalPrice) || 0;
+
+            receiptItems.push({ ...item });
+            receiptItemUids.push(item.uid);
+        });
+
+        const newReceipt = {
+            id: receiptId,
+            items: receiptItems,
+            itemUids: receiptItemUids,
+            total: Math.round(partialTotal),
+            date: new Date().toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+            })
+        };
+
+        table.receipts.push(newReceipt);
+
+        appConfig.lastUpdated = Date.now();
+
+        // Guardar y esperar confirmación de Google Sheets.
+        await syncDataToCloud();
+
+        showCustomAlert('Recibo generado correctamente.');
+
+        // Actualizar la pantalla: los productos facturados
+        // aparecerán deshabilitados.
+        openBillSection();
+
+    } catch (error) {
+        console.error('Error al generar recibo:', error);
+
+        // Revertir el estado de los productos.
+        previousBilledStates.forEach(previous => {
+            table.items[previous.index].billed = previous.billed;
+        });
+
+        // Eliminar el recibo que no pudo sincronizarse.
+        table.receipts = table.receipts.filter(
+            receipt => receipt.id !== receiptId
+        );
+
+        saveData();
+
+        showCustomAlert(
+            'No se pudo confirmar el recibo en Google Sheets. ' +
+            'Los productos siguen disponibles para facturar.'
+        );
+
+        openBillSection();
+
+    } finally {
+        if (generateButton) {
+            generateButton.disabled = false;
+            generateButton.textContent =
+                '📄 Generar Recibo (Bloquear Ítems)';
+        }
+    }
 }
+
+
 
 function renderReceiptsManager() {
     const table = tables.find(t => t.id === currentTableId);
+    if (!table) return;
+
     let container = document.getElementById('receiptsManagerContainer');
 
     if (!container) {
         container = document.createElement('div');
         container.id = 'receiptsManagerContainer';
-        container.style.cssText = "margin-top: 1rem; border-top: 2px dashed var(--border); padding-top: 0.75rem;";
+        container.style.cssText =
+            "margin-top:1rem;border-top:2px dashed var(--border);padding-top:0.75rem;";
+
         const billItemsList = document.getElementById('billItemsList');
-        if (billItemsList && billItemsList.nextSibling) {
-            document.getElementById('bill-section').insertBefore(container, billItemsList.nextSibling);
+
+        if (billItemsList) {
+            billItemsList.insertAdjacentElement('afterend', container);
         }
     }
 
     if (!table.receipts || table.receipts.length === 0) {
-        container.innerHTML = '<p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">No hay recibos.</p>';
+        container.innerHTML =
+            '<p style="font-size:0.85rem;color:var(--text-secondary);text-align:center;">No hay recibos.</p>';
         return;
     }
 
-    let html = `<h4>Recibos Generados:</h4>`;
+    let html = '<h4>Recibos Generados:</h4>';
+
     table.receipts.forEach((rc, rIdx) => {
         html += `
-            <div style="background: #f1f5f9; padding: 0.5rem; border-radius: 6px; margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
-                <div><strong>Recibo #${rIdx + 1}</strong> - $${rc.total.toLocaleString()}</div>
-                <div style="display: flex; gap: 0.3rem;">
-                    <button class="btn btn-success" style="padding: 0.2rem 0.4rem; font-size: 0.75rem; width: auto;" onclick="confirmPayReceipt(${rc.id})">Pagar</button>
-                    <button class="btn btn-danger" style="padding: 0.2rem 0.4rem; font-size: 0.75rem; width: auto;" onclick="cancelReceipt(${rc.id})">Anular</button>
+            <div style="
+                background:#f1f5f9;
+                padding:0.6rem;
+                border-radius:6px;
+                margin-bottom:0.5rem;
+                display:flex;
+                flex-wrap:wrap;
+                justify-content:space-between;
+                align-items:center;
+                gap:0.5rem;
+                font-size:0.85rem;
+            ">
+                <div>
+                    <strong>Recibo #${rIdx + 1}</strong>
+                    - $${Number(rc.total || 0).toLocaleString('es-CO')}
+                </div>
+
+                <div style="display:flex;flex-wrap:wrap;gap:0.3rem;">
+                    <button
+                        class="btn"
+                        style="padding:0.25rem 0.45rem;font-size:0.75rem;width:auto;"
+                        onclick="printReceipt(${Number(rc.id)})">
+                        🖨️ Imprimir
+                    </button>
+
+                    <button
+                        class="btn btn-success"
+                        style="padding:0.25rem 0.45rem;font-size:0.75rem;width:auto;"
+                        onclick="confirmPayReceipt(${Number(rc.id)})">
+                        Pagar
+                    </button>
+
+                    <button
+                        class="btn btn-danger"
+                        style="padding:0.25rem 0.45rem;font-size:0.75rem;width:auto;"
+                        onclick="cancelReceipt(${Number(rc.id)})">
+                        Anular
+                    </button>
                 </div>
             </div>
         `;
     });
+
     container.innerHTML = html;
 }
+
+/*Funcion de impresion
+La impresión muestra un producto por renglón, su precio y el total. 
+No utiliza observation ni modifications.
+*/
+
+
+function printReceipt(receiptId) {
+    const table = tables.find(t => t.id === currentTableId);
+
+    if (!table || !table.receipts) {
+        showCustomAlert('No se encontró la cuenta.');
+        return;
+    }
+
+    const receipt = table.receipts.find(
+        r => Number(r.id) === Number(receiptId)
+    );
+
+    if (!receipt) {
+        showCustomAlert('No se encontró el recibo.');
+        return;
+    }
+
+    const printWindow = window.open('', '_blank');
+
+    if (!printWindow) {
+        showCustomAlert(
+            'El navegador bloqueó la impresión. Permite las ventanas emergentes para esta aplicación.'
+        );
+        return;
+    }
+
+    const formatMoney = value =>
+        '$ ' + Number(value || 0).toLocaleString('es-CO');
+
+    const escapeHTML = value =>
+        String(value ?? '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[char]));
+
+    const productsHTML = (receipt.items || []).map(item => `
+        <tr>
+            <td>${escapeHTML(item.name)}</td>
+            <td class="price">${formatMoney(item.finalPrice)}</td>
+        </tr>
+    `).join('');
+
+    const receiptDate = receipt.date || new Date().toLocaleString('es-CO');
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Recibo ${receipt.id}</title>
+
+            <style>
+                * {
+                    box-sizing: border-box;
+                }
+
+                body {
+                    font-family: Arial, sans-serif;
+                    color: #111;
+                    width: 100%;
+                    max-width: 380px;
+                    margin: 0 auto;
+                    padding: 18px;
+                }
+
+                .header {
+                    text-align: center;
+                    border-bottom: 1px dashed #333;
+                    padding-bottom: 12px;
+                    margin-bottom: 12px;
+                }
+
+                h2 {
+                    margin: 0 0 5px;
+                }
+
+                p {
+                    margin: 5px 0;
+                    font-size: 13px;
+                }
+
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 15px;
+                }
+
+                td {
+                    padding: 9px 2px;
+                    border-bottom: 1px dashed #ccc;
+                    font-size: 13px;
+                }
+
+                .price {
+                    text-align: right;
+                    white-space: nowrap;
+                }
+
+                .total {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 18px;
+                    font-weight: bold;
+                    border-top: 2px solid #111;
+                    padding-top: 12px;
+                    margin-top: 12px;
+                }
+
+                .footer {
+                    text-align: center;
+                    margin-top: 25px;
+                    font-size: 12px;
+                }
+
+                @media print {
+                    body {
+                        max-width: 100%;
+                        padding: 5px;
+                    }
+                }
+            </style>
+        </head>
+
+        <body>
+            <div class="header">
+                <h2>RICO SAZÓN</h2>
+                <p>Recibo de pago</p>
+                <p><strong>${escapeHTML(table.name)}</strong></p>
+                <p>Recibo #${escapeHTML(receipt.id)}</p>
+                <p>${escapeHTML(receiptDate)}</p>
+            </div>
+
+            <table>
+                <tbody>
+                    ${productsHTML}
+                </tbody>
+            </table>
+
+            <div class="total">
+                <span>TOTAL</span>
+                <span>${formatMoney(receipt.total)}</span>
+            </div>
+
+            <div class="footer">
+                <p>¡Gracias por su compra!</p>
+            </div>
+
+            <script>
+                window.onload = function() {
+                    window.focus();
+                    window.print();
+                };
+            <\/script>
+        </body>
+        </html>
+    `);
+
+    printWindow.document.close();
+}
+
+
+
+
 
 /**
  * Registra el pago del recibo y guarda la venta en Google Sheets.
  * Cómo lo realiza: Inserta filas en la tabla `Facturas` y actualiza estados de mesa.
  * Consulta a Sheets: Inserta en `Facturas` vía `sendNewSalesToCloud()`.
+ * La siguiente versión conserva el registro de ventas y elimina 
+ * los productos pagados de la cuenta.
+También evita depender exclusivamente de receipt.itemUids, 
+porque recupera los UID desde los productos guardados en el 
+recibo cuando sea necesario.
  */
+
+
 async function confirmPayReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
-    const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
-    if (receiptIndex === -1) return;
 
-    const receipt = table.receipts[receiptIndex];
-    if (confirm(`¿Cobrar recibo por valor de $${receipt.total.toLocaleString()}?`)) {
+    if (!table || !table.receipts) return;
+
+    const receipt = table.receipts.find(
+        r => Number(r.id) === Number(receiptId)
+    );
+
+    if (!receipt) return;
+
+    const total = Math.round(Number(receipt.total) || 0);
+
+    // Crear ventana de cobro.
+    let modal = document.getElementById('payReceiptModal');
+
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'payReceiptModal';
+
+        modal.style.cssText = `
+            position:fixed;
+            inset:0;
+            background:rgba(0,0,0,0.6);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            z-index:10002;
+            padding:1rem;
+        `;
+
+        modal.innerHTML = `
+            <div style="
+                background:#fff;
+                color:#1e293b;
+                padding:1.5rem;
+                border-radius:12px;
+                width:100%;
+                max-width:350px;
+                text-align:center;
+                box-shadow:0 10px 30px rgba(0,0,0,0.2);
+            ">
+
+                <h3 style="margin-top:0;">Cobrar recibo</h3>
+
+                <p style="font-size:0.9rem;color:#64748b;">
+                    Total de la factura
+                </p>
+
+                <h2 id="payReceiptTotal"
+                    style="margin:5px 0 20px;color:#0f172a;">
+                </h2>
+
+                <label style="
+                    display:block;
+                    text-align:left;
+                    font-weight:bold;
+                    margin-bottom:7px;
+                ">
+                    Dinero recibido
+                </label>
+
+                <input
+                    id="payReceiptAmount"
+                    type="number"
+                    inputmode="numeric"
+                    min="0"
+                    step="1"
+                    placeholder="Ingrese el monto"
+                    style="
+                        width:100%;
+                        padding:13px;
+                        border:1px solid #cbd5e1;
+                        border-radius:8px;
+                        font-size:1.2rem;
+                        box-sizing:border-box;
+                        color:#1e293b;
+                        background:#fff;
+                    "
+                >
+
+                <div style="
+                    background:#f1f5f9;
+                    border-radius:8px;
+                    padding:12px;
+                    margin-top:15px;
+                ">
+                    <p style="margin:0;color:#64748b;font-size:0.85rem;">
+                        CAMBIO PARA EL CLIENTE
+                    </p>
+
+                    <h2 id="payReceiptChange"
+                        style="margin:7px 0;color:#16a34a;">
+                        $0
+                    </h2>
+                </div>
+
+                <p id="payReceiptError"
+                    style="
+                        color:#dc2626;
+                        font-size:0.85rem;
+                        min-height:18px;
+                    ">
+                </p>
+
+                <div style="
+                    display:flex;
+                    gap:8px;
+                    margin-top:15px;
+                ">
+                    <button id="payReceiptCancel"
+                        class="btn"
+                        style="
+                            flex:1;
+                            background:#e2e8f0;
+                            color:#1e293b;
+                        ">
+                        Cancelar
+                    </button>
+
+                    <button id="payReceiptConfirm"
+                        class="btn btn-success"
+                        style="flex:1;">
+                        Confirmar pago
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+    }
+
+    const amountInput = document.getElementById('payReceiptAmount');
+    const changeDisplay = document.getElementById('payReceiptChange');
+    const errorDisplay = document.getElementById('payReceiptError');
+    const confirmButton = document.getElementById('payReceiptConfirm');
+
+    const formatMoney = value =>
+        '$ ' + Number(value || 0).toLocaleString('es-CO');
+
+    document.getElementById('payReceiptTotal').textContent =
+        formatMoney(total);
+
+    amountInput.value = '';
+    changeDisplay.textContent = formatMoney(0);
+    errorDisplay.textContent = '';
+    confirmButton.disabled = false;
+    confirmButton.textContent = 'Confirmar pago';
+
+    modal.style.display = 'flex';
+
+    // Calcular el cambio automáticamente.
+    amountInput.oninput = () => {
+        const received = Math.floor(Number(amountInput.value) || 0);
+        const change = Math.max(0, received - total);
+
+        changeDisplay.textContent = formatMoney(change);
+
+        if (received < total) {
+            errorDisplay.textContent =
+                'El dinero recibido no alcanza para cubrir la factura.';
+        } else {
+            errorDisplay.textContent = '';
+        }
+    };
+
+    document.getElementById('payReceiptCancel').onclick = () => {
+        modal.style.display = 'none';
+    };
+
+    confirmButton.onclick = async () => {
+        const received = Math.floor(Number(amountInput.value) || 0);
+
+        if (!Number.isSafeInteger(received) || received < total) {
+            errorDisplay.textContent =
+                'Ingrese un monto igual o superior al total.';
+            amountInput.focus();
+            return;
+        }
+
+        // Evitar doble confirmación.
+        confirmButton.disabled = true;
+        confirmButton.textContent = 'Procesando...';
+
+        const currentTable = tables.find(
+            t => t.id === currentTableId
+        );
+
+        if (!currentTable || !currentTable.receipts) {
+            modal.style.display = 'none';
+            showCustomAlert('No se encontró la cuenta.');
+            return;
+        }
+
+        const receiptIndex = currentTable.receipts.findIndex(
+            r => Number(r.id) === Number(receiptId)
+        );
+
+        if (receiptIndex === -1) {
+            modal.style.display = 'none';
+            showCustomAlert('El recibo ya no está disponible.');
+            return;
+        }
+
+        const currentReceipt = currentTable.receipts[receiptIndex];
+
         const nowFull = new Date();
-        const facNumero = `FAC-${nowFull.getFullYear()}${String(nowFull.getMonth() + 1).padStart(2, '0')}${String(nowFull.getDate()).padStart(2, '0')}${String(nowFull.getHours()).padStart(2, '0')}${String(nowFull.getMinutes()).padStart(2, '0')}`;
+
+        const facNumero =
+            `FAC-${nowFull.getFullYear()}` +
+            `${String(nowFull.getMonth() + 1).padStart(2, '0')}` +
+            `${String(nowFull.getDate()).padStart(2, '0')}` +
+            `${String(nowFull.getHours()).padStart(2, '0')}` +
+            `${String(nowFull.getMinutes()).padStart(2, '0')}`;
 
         const newSalesBatch = [];
-        receipt.items.forEach(item => {
+
+        (currentReceipt.items || []).forEach(item => {
             newSalesBatch.push({
                 facnumero: facNumero,
-                mesa: table.name,
+                mesa: currentTable.name,
                 plato: item.name,
                 detallesmodificaciones: item.observation || 'Ninguna',
                 valorpagado: item.finalPrice,
-                fecha: new Date().toLocaleDateString(),
-                hora: new Date().toLocaleTimeString(),
+                fecha: nowFull.toLocaleDateString(),
+                hora: nowFull.toLocaleTimeString(),
                 usuario: localStorage.getItem('restopos_current_user') || 'admin'
             });
         });
 
-        salesHistory.push(...newSalesBatch);
-        table.receipts.splice(receiptIndex, 1);
-        table.items = table.items.filter(item => !receipt.itemUids.includes(item.uid));
+        const itemUids = currentReceipt.itemUids?.length
+            ? currentReceipt.itemUids
+            : (currentReceipt.items || [])
+                .map(item => item.uid)
+                .filter(Boolean);
 
-        appConfig.lastUpdated = Date.now();
-        await sendNewSalesToCloud(newSalesBatch);
+        try {
+            // Primero registrar las ventas.
+            await sendNewSalesToCloud(newSalesBatch);
 
-        if (table.items.length === 0 && table.receipts.length === 0) {
-            table.status = 'libre';
+            salesHistory.push(...newSalesBatch);
+
+            // Eliminar recibo pagado.
+            currentTable.receipts.splice(receiptIndex, 1);
+
+            // Retirar los productos pagados de la cuenta.
+            currentTable.items = currentTable.items.filter(
+                item => !itemUids.includes(item.uid)
+            );
+
+            appConfig.lastUpdated = Date.now();
+
             saveData();
+
             await syncDataToCloud();
-            showCustomAlert('✅ ¡Pago registrado con éxito!', () => showSection('tables-section'));
-        } else {
-            saveData();
-            await syncDataToCloud();
-            openBillSection();
+
+            modal.style.display = 'none';
+
+            const change = received - total;
+
+            if (
+                currentTable.items.length === 0 &&
+                currentTable.receipts.length === 0
+            ) {
+                currentTable.status = 'libre';
+
+                saveData();
+                await syncDataToCloud();
+
+                showCustomAlert(
+                    `¡Pago registrado correctamente! Cambio: ${formatMoney(change)}`,
+                    () => showSection('tables-section')
+                );
+
+            } else {
+                showCustomAlert(
+                    `¡Pago registrado correctamente! Cambio: ${formatMoney(change)}`
+                );
+
+                openBillSection();
+            }
+
+        } catch (error) {
+            console.error('Error registrando el pago:', error);
+
+            modal.style.display = 'none';
+
+            showCustomAlert(
+                'Ocurrió un error al registrar el pago. Verifique la hoja Facturas antes de volver a cobrar.'
+            );
+
+        } finally {
+            confirmButton.disabled = false;
+            confirmButton.textContent = 'Confirmar pago';
         }
-    }
+    };
+
+    amountInput.focus();
 }
+
+
+
+
 
 async function cancelReceipt(receiptId) {
     const table = tables.find(t => t.id === currentTableId);
-    const receiptIndex = table.receipts.findIndex(r => r.id === receiptId);
+
+    if (!table || !table.receipts) return;
+
+    const receiptIndex = table.receipts.findIndex(
+        r => Number(r.id) === Number(receiptId)
+    );
+
     if (receiptIndex === -1) return;
 
-    if (confirm('¿Anular recibo?')) {
-        table.receipts.splice(receiptIndex, 1);
-        appConfig.lastUpdated = Date.now();
-        saveData();
-        openBillSection();
-        await syncDataToCloud();
+    // Crear ventana de confirmación con diseño de RESTOPOS.
+    let modal = document.getElementById('cancelReceiptModal');
+
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'cancelReceiptModal';
+
+        modal.style.cssText = `
+            position:fixed;
+            inset:0;
+            background:rgba(0,0,0,0.6);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            z-index:10002;
+            padding:1rem;
+        `;
+
+        modal.innerHTML = `
+            <div style="
+                background:#fff;
+                color:#1e293b;
+                padding:1.5rem;
+                border-radius:12px;
+                width:100%;
+                max-width:320px;
+                text-align:center;
+            ">
+                <h3 style="margin-top:0;">Anular recibo</h3>
+
+                <p style="font-size:0.9rem;">
+                    ¿Desea anular este recibo?
+                    Los productos volverán a estar disponibles
+                    para facturar.
+                </p>
+
+                <div style="display:flex;gap:0.6rem;margin-top:1.2rem;">
+                    <button id="cancelReceiptNo"
+                        class="btn"
+                        style="flex:1;background:#e2e8f0;color:#1e293b;">
+                        Cancelar
+                    </button>
+
+                    <button id="cancelReceiptYes"
+                        class="btn btn-danger"
+                        style="flex:1;">
+                        Sí, anular
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
     }
+
+    modal.style.display = 'flex';
+
+    document.getElementById('cancelReceiptNo').onclick = () => {
+        modal.style.display = 'none';
+    };
+
+    document.getElementById('cancelReceiptYes').onclick = async () => {
+        modal.style.display = 'none';
+
+        const receipt = table.receipts[receiptIndex];
+
+        const itemUids = receipt.itemUids?.length
+            ? receipt.itemUids
+            : (receipt.items || [])
+                .map(item => item.uid)
+                .filter(Boolean);
+
+        const previousStates = table.items.map(item => ({
+            uid: item.uid,
+            billed: item.billed
+        }));
+
+        try {
+            table.items.forEach(item => {
+                if (itemUids.includes(item.uid)) {
+                    item.billed = false;
+                }
+            });
+
+            table.receipts.splice(receiptIndex, 1);
+
+            appConfig.lastUpdated = Date.now();
+
+            await syncDataToCloud();
+
+            showCustomAlert(
+                'Recibo anulado correctamente. Los productos están disponibles nuevamente.'
+            );
+
+            openBillSection();
+
+        } catch (error) {
+            console.error('Error anulando recibo:', error);
+
+            previousStates.forEach(previous => {
+                const item = table.items.find(
+                    current => current.uid === previous.uid
+                );
+
+                if (item) {
+                    item.billed = previous.billed;
+                }
+            });
+
+            table.receipts.push(receipt);
+
+            saveData();
+
+            showCustomAlert(
+                'No se pudo anular el recibo. Verifique la conexión.'
+            );
+
+            openBillSection();
+        }
+    };
 }
+
+
 
 function backToOrderSection() {
     document.getElementById('bill-section').classList.add('hidden');
@@ -1698,16 +2766,90 @@ async function saveDataAndSyncCloudSync(msg) {
     }
 }
 
+
 async function syncDataToCloud() {
     try {
-        await fetch(WEB_APP_URL, {
+        // Guardar primero una copia local de los datos.
+        saveData();
+
+        // Preparar los datos que se enviarán a Google Sheets.
+        const payload = {
+            tables: tables,
+            products: products,
+            drinks: drinks,
+            addons: addons,
+            users: users,
+            config: appConfig
+        };
+
+        const response = await fetch(WEB_APP_URL, {
             method: 'POST',
-            body: JSON.stringify({ tables, products, drinks, addons, users, config: appConfig })
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8'
+            },
+            body: JSON.stringify(payload)
         });
-    } catch (e) {
-        console.error("Error sincronizando:", e);
+
+        // Comprobar el estado de la petición HTTP.
+        if (!response.ok) {
+            throw new Error(
+                'Error HTTP al sincronizar: ' + response.status
+            );
+        }
+
+        // Leer y validar la respuesta de Apps Script.
+        const responseText = await response.text();
+
+        let result;
+
+        try {
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            throw new Error(
+                'Google Apps Script devolvió una respuesta no válida.'
+            );
+        }
+
+        // Apps Script puede responder HTTP 200 aunque exista un error.
+        if (!result || result.status !== 'success') {
+            throw new Error(
+                result && result.message
+                    ? result.message
+                    : 'Google Sheets no confirmó el guardado.'
+            );
+        }
+
+        // Actualizar la versión local con la versión confirmada por la nube.
+        if (
+            result.lastUpdated !== undefined &&
+            Number.isFinite(Number(result.lastUpdated))
+        ) {
+            appConfig.lastUpdated = Number(result.lastUpdated);
+        }
+
+        // Guardar nuevamente los datos y la versión confirmada.
+        saveData();
+
+        console.log(
+            'RESTOPOS: sincronización confirmada.',
+            'Versión:',
+            appConfig.lastUpdated
+        );
+
+        return result;
+
+    } catch (error) {
+        console.error(
+            'RESTOPOS: error de sincronización:',
+            error
+        );
+
+        // Importante: comunicar el error a la función que llamó
+        // a syncDataToCloud(), para que no muestre un éxito falso.
+        throw error;
     }
 }
+
 
 async function sendNewSalesToCloud(salesArray) {
     try {

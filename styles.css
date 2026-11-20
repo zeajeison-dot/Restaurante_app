@@ -217,3 +217,178 @@ body {
     font-size: 0.9rem;
     cursor: pointer;
 }
+
+/* ==========================================
+   RESTOPOS - RESTAURAR TARJETA DE PEDIDOS
+========================================== */
+
+#order-section {
+    background: var(--card-bg);
+    border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box;
+}
+
+/* Evitar que los elementos internos excedan la tarjeta */
+#order-section * {
+    box-sizing: border-box;
+}
+
+/* Evitar que se pierdan los bordes redondeados */
+#order-section .order-items-panel {
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+/* Fondo del área de pedidos */
+#plusOrderItemsList {
+    background: #ffffff;
+}
+
+/* Evitar desplazamiento horizontal */
+#order-section {
+    overflow-x: hidden;
+}
+
+
+/* ==========================================
+   RESTOPOS - FACTURACIÓN
+   APROVECHAMIENTO DE TODA LA PANTALLA
+========================================== */
+
+/* Evitar que la tarjeta quede centrada verticalmente */
+body:has(#bill-section:not(.hidden)) {
+    align-items: flex-start !important;
+    justify-content: center !important;
+    min-height: 100dvh !important;
+    overflow: hidden !important;
+}
+
+/* Contenedor principal */
+.container:has(#bill-section:not(.hidden)) {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 0.5rem;
+    box-sizing: border-box;
+}
+
+/* Tarjeta de facturación */
+#bill-section:not(.hidden) {
+    display: flex !important;
+    flex-direction: column !important;
+
+    width: 100% !important;
+    flex: 1 1 auto !important;
+
+    height: calc(100dvh - 1rem) !important;
+    max-height: calc(100dvh - 1rem) !important;
+
+    min-height: 0 !important;
+
+    margin: 0 auto !important;
+    padding: 1rem !important;
+
+    box-sizing: border-box !important;
+
+    overflow: hidden !important;
+}
+
+/* Encabezado */
+#bill-section > h2 {
+    flex: 0 0 auto;
+    margin-bottom: 0.75rem;
+}
+
+/* ==========================================
+   LISTA DE PRODUCTOS - ALTURA ADAPTATIVA
+========================================== */
+
+#billItemsList {
+    /* La altura depende de la cantidad de productos */
+    flex: 0 1 auto !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+
+    /* Límite máximo del 70% de la pantalla */
+    max-height: 70dvh !important;
+
+    /* Scroll solamente cuando se supera el límite */
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    -webkit-overflow-scrolling: touch;
+
+    box-sizing: border-box !important;
+
+    margin-bottom: 0.75rem !important;
+}
+
+
+/* Subtotal y botones siempre visibles */
+#bill-section > div:not(#billItemsList),
+#bill-section > button {
+    flex-shrink: 0 !important;
+}
+
+/* Pantallas de poca altura */
+@media (max-height: 650px) {
+    #bill-section:not(.hidden) {
+        padding: 0.65rem !important;
+    }
+
+    #bill-section > h2 {
+        margin-top: 0.3rem;
+        margin-bottom: 0.4rem;
+    }
+}
+
+
+/* ================================================= */
+/* CATÁLOGO DE PLATOS - SCROLL HORIZONTAL            */
+/* ================================================= */
+
+#plusCatalogGrid {
+    display: grid !important;
+
+    /* Dos filas de platos */
+    grid-template-rows: repeat(2, 55px) !important;
+
+    /* Las columnas se generan hacia la derecha */
+    grid-template-columns: none !important;
+    grid-auto-flow: column !important;
+    grid-auto-columns: calc((100% - 16px) / 3) !important;
+
+    gap: 8px !important;
+
+    width: 100% !important;
+    height: 126px !important;
+    max-height: 126px !important;
+
+    box-sizing: border-box !important;
+
+    justify-content: start !important;
+    align-content: start !important;
+
+    /* Activar desplazamiento horizontal */
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+
+    padding: 4px !important;
+
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+}
+
+/* Botones de los platos */
+#plusCatalogGrid > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 55px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+}
