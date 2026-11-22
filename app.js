@@ -96,10 +96,17 @@ window.onload = function() {
             );
 
         } catch (error) {
-            console.error('RESTOPOS - Error al restaurar sesión:', error);
-            await auth.signOut();
-            showCustomAlert('No fue posible verificar tu perfil. Intenta nuevamente.');
-        }
+    console.error('RESTOPOS - Error al restaurar sesión:', error);
+
+    showCustomAlert(
+        'Error verificando perfil: ' +
+        (error.code || 'sin código') +
+        ' - ' +
+        (error.message || 'Sin descripción')
+    );
+
+    await auth.signOut();
+}
     });
 };
 
