@@ -9,6 +9,7 @@
 /* 1. VARIABLES GLOBALES Y ESTADO INICIAL VACÍO               */
 /* ========================================================== */
 
+/*
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzhezTR3M0sdvL83xWy8EwUrHfIpmG841DT0kd85rzuYaCB4iauIvDNoON8xIdjW93XmA/exec";
 //const WEB_APP_URL = "https://script.google.com/macros/s/TU_ID/exec?action=getLastUpdated";
 
@@ -41,6 +42,8 @@ let tablesRefreshInterval = null;
 let lastKitchenAlarmTime = 0;
 let lastWaiterAlarmTime = 0;
 
+*/
+
 /* ========================================================== */
 /* 1. INICIALIZACIÓN DE SESIÓN                                */
 /* ========================================================== */
@@ -50,16 +53,54 @@ let lastWaiterAlarmTime = 0;
  * Cómo lo realiza: Restaura la sesión activa si existe o precarga exclusivamente los usuarios.
  * Consulta a Sheets: Llama a `loadUsersAndConfigFromCloud()` (Tablas: `Usuarios` y `Config`).
  */
-window.onload = async function() {
-    if (localStorage.getItem('restopos_logged') === 'true') {
-        const username = localStorage.getItem('restopos_current_user') || 'admin';
-        const role = localStorage.getItem('restopos_current_role') || 'admin';
-        
-        await loadUsersAndConfigFromCloud();
-        setupUserSession(username, role, false);
-    } else {
-        await loadUsersAndConfigFromCloud();
-    }
+window.onload = function() {
+    auth.onAuthStateChanged(async function(firebaseUser) {
+
+        if (!firebaseUser) {
+            localStorage.removeItem('restopos_logged');
+            localStorage.removeItem('restopos_current_user');
+            localStorage.removeItem('restopos_current_role');
+
+            document.getElementById('login-view').classList.remove('hidden');
+            return;
+        }
+
+        try {
+            const userDoc = await db
+                .collection('usuarios')
+                .doc(firebaseUser.uid)
+                .get();
+
+            if (!userDoc.exists) {
+                await auth.signOut();
+                showCustomAlert('La cuenta no tiene un perfil registrado en RESTOPOS.');
+                return;
+            }
+
+            const userData = userDoc.data();
+            const validRoles = ['admin', 'mesero', 'cocinero'];
+
+            if (userData.activo !== true || !validRoles.includes(userData.rol)) {
+                await auth.signOut();
+                showCustomAlert('La cuenta está desactivada o no tiene un rol válido.');
+                return;
+            }
+
+            localStorage.setItem('restopos_current_user', userData.nombre || userData.email);
+            localStorage.setItem('restopos_current_role', userData.rol);
+
+            setupUserSession(
+                userData.nombre || userData.email,
+                userData.rol,
+                false
+            );
+
+        } catch (error) {
+            console.error('RESTOPOS - Error al restaurar sesión:', error);
+            await auth.signOut();
+            showCustomAlert('No fue posible verificar tu perfil. Intenta nuevamente.');
+        }
+    });
 };
 
 
@@ -77,7 +118,7 @@ async function loadUsersAndConfigFromCloud() {
         const response = await fetch(`${WEB_APP_URL}?action=getUsersAndConfig`);
         if (!response.ok) throw new Error("Error HTTP al consultar usuarios");
         const cloudData = await response.json();
-        
+
         if (cloudData && cloudData.status !== 'error') {
             if (Array.isArray(cloudData.users)) {
                 users = cloudData.users;
@@ -101,40 +142,60 @@ async function loadUsersAndConfigFromCloud() {
  * Cómo lo realiza: Consulta la nube mediante el endpoint ligero, valida el rol y usuario.
  * Consulta a Sheets: Llama a `loadUsersAndConfigFromCloud()` (Tabla: `Usuarios`).
  */
-async function login() {
-    const userInput = document.getElementById('userInput').value.trim();
-    const passInput = document.getElementById('passInput').value.trim();
 
-    if (!userInput || !passInput) {
-        showCustomAlert('Ingrese usuario y contraseña.');
+async function login() {
+    const emailInput = document.getElementById('userInput').value.trim();
+    const passInput = document.getElementById('passInput').value;
+
+    if (!emailInput || !passInput) {
+        showCustomAlert('Ingrese correo electrónico y contraseña.');
         return;
     }
 
-    showCustomAlert('🔄 Validando credenciales en Google Sheets...');
-    const cloudLoaded = await loadUsersAndConfigFromCloud();
+    if (!navigator.onLine) {
+        showCustomAlert('Se necesita conexión a internet para iniciar sesión.');
+        return;
+    }
 
-    const foundUser = users.find(u =>
-        String(u.username).trim().toLowerCase() === userInput.toLowerCase() &&
-        String(u.pass).trim() === passInput
-    );
+    try {
+        showCustomAlert('🔄 Verificando credenciales con Firebase...');
 
-    const alertOverlay = document.getElementById('customAlertModal');
-    if (alertOverlay) alertOverlay.style.display = 'none';
+        await auth.signInWithEmailAndPassword(
+            emailInput,
+            passInput
+        );
 
-    if (foundUser) {
-        localStorage.setItem('restopos_logged', 'true');
-        localStorage.setItem('restopos_current_user', foundUser.username);
-        localStorage.setItem('restopos_current_role', foundUser.role);
+        const alertOverlay = document.getElementById('customAlertModal');
+        if (alertOverlay) alertOverlay.style.display = 'none';
 
-        setupUserSession(foundUser.username, foundUser.role, true);
-    } else {
-        if (!cloudLoaded && !navigator.onLine) {
-            showCustomAlert('No hay conexión a internet. No fue posible consultar los usuarios.');
-        } else {
-            showCustomAlert('Usuario o contraseña incorrectos.');
+        // La sesión y el perfil se procesan en onAuthStateChanged.
+
+    } catch (error) {
+        console.error('RESTOPOS - Error de inicio de sesión:', error);
+
+        const alertOverlay = document.getElementById('customAlertModal');
+        if (alertOverlay) alertOverlay.style.display = 'none';
+
+        let message = 'No fue posible iniciar sesión.';
+
+        if (error.code === 'auth/invalid-email') {
+            message = 'El correo electrónico no tiene un formato válido.';
+        } else if (
+            error.code === 'auth/invalid-credential' ||
+            error.code === 'auth/wrong-password' ||
+            error.code === 'auth/user-not-found'
+        ) {
+            message = 'Correo electrónico o contraseña incorrectos.';
+        } else if (error.code === 'auth/too-many-requests') {
+            message = 'Demasiados intentos. Espera unos minutos.';
+        } else if (error.code === 'auth/network-request-failed') {
+            message = 'Error de conexión. Comprueba tu internet.';
         }
+
+        showCustomAlert(message);
     }
 }
+
 
 /**
  * Configura la interfaz gráfica y redirige a la vista inicial según el rol.
@@ -229,25 +290,40 @@ function renderDashboardMenu(role) {
  * Cómo lo realiza: Borra las credenciales de localStorage y limpia las vistas.
  * Consulta a Sheets: Ninguna.
  */
-function logout() {
-    localStorage.removeItem('restopos_logged');
-    localStorage.removeItem('restopos_current_user');
-    localStorage.removeItem('restopos_current_role');
+
+async function logout() {
+    try {
+        await auth.signOut();
+
+        localStorage.removeItem('restopos_logged');
+        localStorage.removeItem('restopos_current_user');
+        localStorage.removeItem('restopos_current_role');
 
         const sections = [
-        'dashboard-view', 'tables-section', 'kitchen-section', 'users-admin-section',
-        'tables-admin-section', 'order-section', 'bill-section', 'catalog-section',
-        'dashboard-analytics-section'
-    ];
+            'dashboard-view',
+            'tables-section',
+            'kitchen-section',
+            'users-admin-section',
+            'tables-admin-section',
+            'order-section',
+            'bill-section',
+            'catalog-section',
+            'dashboard-analytics-section'
+        ];
 
-    sections.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
-    });
+        sections.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+        });
 
-    document.getElementById('login-view').classList.remove('hidden');
-    document.getElementById('userInput').value = '';
-    document.getElementById('passInput').value = '';
+        document.getElementById('login-view').classList.remove('hidden');
+        document.getElementById('userInput').value = '';
+        document.getElementById('passInput').value = '';
+
+    } catch (error) {
+        console.error('RESTOPOS - Error al cerrar sesión:', error);
+        showCustomAlert('No fue posible cerrar la sesión. Intenta nuevamente.');
+    }
 }
 
 /**
@@ -278,16 +354,17 @@ async function showSection(sectionId) {
         return;
     }
 
-        // CORRECCIÓN: No descargar datos pesados en el menú principal, mesas, dashboard analítico, catálogo ni pedidos, comandas tampoco
+    // CORRECCIÓN: No descargar datos pesados en el menú principal, mesas, dashboard analítico, catálogo ni pedidos, comandas tampoco
     if (![
-    'dashboard-view',
-    'tables-section',
-    'dashboard-analytics-section',
-    'catalog-section',
-    'tables-admin-section',
-    'order-section',
-    'kitchen-section'].includes(sectionId)) {
-    await loadDataFromCloud();}
+        'dashboard-view',
+        'tables-section',
+        'dashboard-analytics-section',
+        'catalog-section',
+        'tables-admin-section',
+        'order-section',
+        'kitchen-section'].includes(sectionId)) {
+        await loadDataFromCloud();
+    }
 
     const sections = [
         'dashboard-view', 'tables-section', 'kitchen-section', 'users-admin-section',
@@ -303,17 +380,33 @@ async function showSection(sectionId) {
     const target = document.getElementById(sectionId);
     if (target) target.classList.remove('hidden');
 
-    if (kitchenInterval) { clearInterval(kitchenInterval); kitchenInterval = null; }
-    if (kitchenCloudPollInterval) { clearInterval(kitchenCloudPollInterval); kitchenCloudPollInterval = null; }
-    if (tablesRefreshInterval) { clearInterval(tablesRefreshInterval); tablesRefreshInterval = null; }
+    if (kitchenInterval) {
+        clearInterval(kitchenInterval);
+        kitchenInterval = null;
+    }
 
+    if (kitchenCloudPollInterval) {
+        clearInterval(kitchenCloudPollInterval);
+        kitchenCloudPollInterval = null;
+    }
+
+    // Desconectar escuchador anterior de Firestore
+    if (kitchenFirestoreUnsubscribe) {
+        kitchenFirestoreUnsubscribe();
+        kitchenFirestoreUnsubscribe = null;
+    }
+
+    if (tablesRefreshInterval) {
+        clearInterval(tablesRefreshInterval);
+        tablesRefreshInterval = null;
+    }
     document.querySelectorAll('.admin-back-btn').forEach(btn => {
         btn.style.display = (role === 'admin') ? 'block' : 'none';
     });
 
     if (sectionId === 'dashboard-view') {
         renderDashboardMenu(role);
-    }   else if (sectionId === 'tables-section') {
+    } else if (sectionId === 'tables-section') {
         const headerBar = document.getElementById('tablesHeaderBar');
         const userTitle = document.getElementById('tablesUserTitle');
         const roleBadge = document.getElementById('tablesRoleBadge');
@@ -329,248 +422,248 @@ async function showSection(sectionId) {
             if (alarmCard) alarmCard.style.display = 'block';
         }
 
-        // Carga inicial: consulta exclusiva de mesas (sin productos pesados)
+        // Carga inicial de mesas desde Firebase
         try {
-            const res = await fetch(`${WEB_APP_URL}?action=getTables`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.status === 'success') {
-                    if (Array.isArray(data.tables)) {
-                        tables = data.tables;
-                        saveData();
-                    }
-                }
+            console.log('RESTOPOS: Consultando mesas en Firebase...');
+
+            const cloudTables = await window.RestoposDB.getAll('mesas');
+
+            if (Array.isArray(cloudTables)) {
+                tables = cloudTables;
+                saveData();
+
+                console.log(
+                    'RESTOPOS: Mesas cargadas desde Firebase:',
+                    tables.length
+                );
             }
+
         } catch (e) {
-            console.warn("Usando datos locales para mesas:", e);
+            console.error(
+                'RESTOPOS: Error cargando mesas desde Firebase:',
+                e.code,
+                e.message
+            );
+
+            console.warn('Se conservarán las mesas locales.');
         }
 
         renderTables();
-        
+
         // ⬇️ AGREGAN AQUÍ LA LÍNEA NUEVA: ⬇️
         checkWaiterReadyAlarm();
 
-
-        // Sondeo automático cada 60 segundos consultando EXCLUSIVAMENTE mesas
-        // Sondeo automático cada 60 segundos consultando EXCLUSIVAMENTE mesas
+        // Actualización automática de mesas desde Firebase cada 60 segundos
         let isRefreshingTables = false;
+
         tablesRefreshInterval = setInterval(async () => {
             const tablesSec = document.getElementById('tables-section');
+
             if (tablesSec && !tablesSec.classList.contains('hidden')) {
+
                 if (isRefreshingTables) return;
+
                 isRefreshingTables = true;
+
                 try {
-                    const res = await fetch(`${WEB_APP_URL}?action=getTables`);
-                    if (res && res.ok) {
-                        const data = await res.json();
-                        if (data && data.status === 'success' && Array.isArray(data.tables)) {
-                            tables = data.tables;
-                            renderTables();
-                            checkWaiterReadyAlarm();
-                        }
+                    const cloudTables = await window.RestoposDB.getAll('mesas');
+
+                    if (Array.isArray(cloudTables)) {
+                        tables = cloudTables;
+
+                        renderTables();
+                        checkWaiterReadyAlarm();
+
+                        console.log(
+                            'RESTOPOS: Mesas actualizadas desde Firebase:',
+                            tables.length
+                        );
                     }
+
                 } catch (e) {
-                    // Silenciamos el error de red temporal en segundo plano para no saturar la consola
-                    console.warn("Sondeo en segundo plano pausado por red lenta o sin conexión.");
+                    console.warn(
+                        'RESTOPOS: Error actualizando mesas desde Firebase:',
+                        e.code,
+                        e.message
+                    );
+
                 } finally {
                     isRefreshingTables = false;
                 }
+
             } else {
                 clearInterval(tablesRefreshInterval);
                 tablesRefreshInterval = null;
             }
+
         }, 60000);
 
     } else if (sectionId === 'tables-admin-section') {
         cancelEditTable();
-        
-        // Consulta ligera exclusiva para la pestaña Mesas
+
+        // Consultar mesas desde Firebase
         try {
-            const res = await fetch(`${WEB_APP_URL}?action=getTables`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.status === 'success' && Array.isArray(data.tables)) {
-                    tables = data.tables;
-                    saveData();
-                }
+            console.log('RESTOPOS: Cargando administración de mesas desde Firebase...');
+
+            const cloudTables = await window.RestoposDB.getAll('mesas');
+
+            if (Array.isArray(cloudTables)) {
+                tables = cloudTables;
+                saveData();
+
+                console.log(
+                    'RESTOPOS: Mesas disponibles para administración:',
+                    tables.length
+                );
             }
+
         } catch (e) {
-            console.warn("Usando datos locales para administración de mesas:", e);
+            console.error(
+                'RESTOPOS: Error cargando administración de mesas:',
+                e.code,
+                e.message
+            );
         }
 
         renderTablesAdmin();
 
-    
-} else if (sectionId === 'kitchen-section') {
-    const kitchenSection = document.getElementById('kitchen-section');
-    if (!kitchenSection) return;
+    } else if (sectionId === 'kitchen-section') {
+        const kitchenSection = document.getElementById('kitchen-section');
+        if (!kitchenSection) return;
 
-    const timerConfigBox = document.getElementById('kitchenTimerConfigBox');
+        const timerConfigBox = document.getElementById('kitchenTimerConfigBox');
 
-    if (timerConfigBox) {
-        timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
-    }
-
-    // Carga inicial: descargar exclusivamente las mesas y comandas.
-    let localLastUpdated = Number(appConfig.lastUpdated) || 0;
-
-    try {
-        const res = await fetch(`${WEB_APP_URL}?action=getTables`);
-
-        if (!res.ok) {
-            throw new Error('Error HTTP: ' + res.status);
+        if (timerConfigBox) {
+            timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
         }
 
-        const data = await res.json();
+        // Carga inicial: descargar exclusivamente las mesas y comandas.
+        // Carga inicial: consultar mesas y comandas desde Firebase.
+        try {
+            console.log('RESTOPOS: Cargando comandas de cocina desde Firebase...');
 
-        if (
-            data &&
-            data.status === 'success' &&
-            Array.isArray(data.tables)
-        ) {
-            tables = data.tables;
+            const cloudTables = await window.RestoposDB.getAll('mesas');
 
-            if (Number.isFinite(Number(data.lastUpdated))) {
-                localLastUpdated = Number(data.lastUpdated);
-                appConfig.lastUpdated = localLastUpdated;
+            if (!Array.isArray(cloudTables)) {
+                throw new Error('Firebase no devolvió una lista válida de mesas.');
             }
+
+            tables = cloudTables;
 
             saveData();
-        } else {
-            throw new Error('Respuesta inválida al consultar las mesas.');
+
+            console.log(
+                'RESTOPOS: Comandas cargadas desde Firebase:',
+                tables.length
+            );
+
+        } catch (e) {
+            console.error(
+                'RESTOPOS: Error cargando comandas desde Firebase:',
+                e.code,
+                e.message
+            );
+
+            console.warn('Se conservarán las comandas locales de cocina.');
         }
 
-    } catch (e) {
-        console.warn(
-            'RESTOPOS: usando comandas locales en cocina:',
-            e
-        );
-    }
+        renderKitchenOrders();
 
-    renderKitchenOrders();
+        // Actualización visual local cada segundo.
+        kitchenInterval = setInterval(() => {
+            if (
+                kitchenSection &&
+                !kitchenSection.classList.contains('hidden')
+            ) {
+                renderKitchenOrders();
+            } else {
+                clearInterval(kitchenInterval);
+                kitchenInterval = null;
+            }
+        }, 1000);
 
-    // Actualización visual local cada segundo.
-    kitchenInterval = setInterval(() => {
-        if (
-            kitchenSection &&
-            !kitchenSection.classList.contains('hidden')
-        ) {
-            renderKitchenOrders();
-        } else {
-            clearInterval(kitchenInterval);
-            kitchenInterval = null;
-        }
-    }, 1000);
+        // Escuchar cambios de mesas y comandas en tiempo real desde Firebase.
+        console.log('RESTOPOS: Activando escucha en tiempo real para cocina...');
 
-    // Consultar versión de datos cada 15 segundos.
-    let isRefreshingKitchen = false;
+        kitchenFirestoreUnsubscribe = window.RestoposDB.listenCollection(
+            'mesas',
 
-    kitchenCloudPollInterval = setInterval(async () => {
-
-        if (
-            kitchenSection &&
-            !kitchenSection.classList.contains('hidden')
-        ) {
-
-            if (isRefreshingKitchen) return;
-
-            isRefreshingKitchen = true;
-
-            try {
-                const resCheck = await fetch(
-                    `${WEB_APP_URL}?action=getLastUpdated`
-                );
-
-                if (!resCheck.ok) {
-                    throw new Error('Error consultando la versión.');
-                }
-
-                const checkData = await resCheck.json();
+            (cloudTables) => {
+                const kitchenSection = document.getElementById('kitchen-section');
 
                 if (
-                    checkData &&
-                    checkData.status === 'success' &&
-                    Number(checkData.lastUpdated) > localLastUpdated
+                    !kitchenSection ||
+                    kitchenSection.classList.contains('hidden')
                 ) {
-
-                    // Si hay cambios, descargar solamente las mesas.
-                    const resTables = await fetch(
-                        `${WEB_APP_URL}?action=getTables`
-                    );
-
-                    if (!resTables.ok) {
-                        throw new Error('Error descargando las mesas.');
-                    }
-
-                    const tablesData = await resTables.json();
-
-                    if (
-                        tablesData &&
-                        tablesData.status === 'success' &&
-                        Array.isArray(tablesData.tables)
-                    ) {
-
-                        tables = tablesData.tables;
-
-                        const newVersion = Number(tablesData.lastUpdated);
-
-                        localLastUpdated = Number.isFinite(newVersion)
-                            ? newVersion
-                            : Number(checkData.lastUpdated);
-
-                        appConfig.lastUpdated = localLastUpdated;
-
-                        saveData();
-
-                        renderKitchenOrders();
-
-                        console.log(
-                            'RESTOPOS: cocina actualizada correctamente.',
-                            'Versión:',
-                            localLastUpdated
-                        );
-                    }
+                    return;
                 }
 
-            } catch (e) {
-                console.warn(
-                    'RESTOPOS: error actualizando comandas de cocina:',
-                    e
+                if (Array.isArray(cloudTables)) {
+                    tables = cloudTables;
+
+                    saveData();
+
+                    renderKitchenOrders();
+
+                    console.log(
+                        'RESTOPOS: Cocina sincronizada en tiempo real.',
+                        'Mesas:',
+                        tables.length
+                    );
+                }
+            },
+
+            (error) => {
+                console.error(
+                    'RESTOPOS: Error en escucha de cocina:',
+                    error.code,
+                    error.message
                 );
-            } finally {
-                isRefreshingKitchen = false;
             }
-
-        } else {
-            clearInterval(kitchenCloudPollInterval);
-            kitchenCloudPollInterval = null;
-        }
-
-    }, 15000);
-
+        );
 
     } else if (sectionId === 'users-admin-section') {
         cancelEditUser();
         renderUsersAdmin();
     } else if (sectionId === 'catalog-section') {
-        cancelEditProduct();
-        renderRecipeCheckboxes();
-        
-        // Consulta ligera exclusiva para la pestaña Productos
-        try {
-            const res = await fetch(`${WEB_APP_URL}?action=getProducts`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.status === 'success' && Array.isArray(data.products)) {
-                    products = data.products;
-                    saveData();
-                }
-            }
-        } catch (e) {
-            console.warn("Usando datos locales para el catálogo:", e);
+    cancelEditProduct();
+
+    // Consultar productos desde Firebase
+    try {
+        console.log('RESTOPOS: Cargando catálogo desde Firebase...');
+
+        const cloudProducts = await window.RestoposDB.getAll('productos');
+
+        if (Array.isArray(cloudProducts)) {
+            products = cloudProducts;
+
+            // Mantener compatibilidad con bebidas y adicionales
+            drinks = products.filter(product =>
+                String(product.category || '').toLowerCase() === 'bebidas'
+            );
+
+            addons = products.filter(product =>
+                String(product.category || '').toLowerCase() === 'adicionales'
+            );
+
+            saveData();
+
+            console.log(
+                'RESTOPOS: Catálogo cargado desde Firebase:',
+                products.length
+            );
         }
 
-        renderProducts();
+    } catch (e) {
+        console.error(
+            'RESTOPOS: Error cargando catálogo desde Firebase:',
+            e.code,
+            e.message
+        );
+    }
+
+    renderRecipeCheckboxes();
+    renderProducts();
     } else if (sectionId === 'dashboard-analytics-section') {
         renderSalesDashboard();
     }
@@ -745,13 +838,13 @@ function renderTables() {
         // Parsear items y receipts por si vienen como string desde Google Sheets
         let items = t.items;
         if (typeof items === 'string') {
-            try { items = JSON.parse(items); } catch(e) { items = []; }
+            try { items = JSON.parse(items); } catch (e) { items = []; }
         }
         if (!Array.isArray(items)) items = [];
 
         let receipts = t.receipts;
         if (typeof receipts === 'string') {
-            try { receipts = JSON.parse(receipts); } catch(e) { receipts = []; }
+            try { receipts = JSON.parse(receipts); } catch (e) { receipts = []; }
         }
         if (!Array.isArray(receipts)) receipts = [];
 
@@ -799,30 +892,133 @@ function renderTablesAdmin() {
     });
 }
 
+
+/**
+ * ==========================================================
+ * GUARDAR MESA
+ * Crea una mesa nueva o actualiza el nombre de una existente
+ * directamente en Firebase Firestore.
+ * ==========================================================
+ */
 async function saveNewTable() {
+
+    // Comprobar que el dispositivo tenga conexión a internet.
     if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: Debe estar conectado a internet para crear o modificar mesas.');
+        showCustomAlert(
+            '❌ Acción bloqueada: Debe estar conectado a internet para crear o modificar mesas.'
+        );
         return;
     }
 
+    // Obtener y validar el nombre ingresado.
     const nameInput = document.getElementById('newTableName');
     const name = nameInput.value.trim();
-    if (!name) { showCustomAlert('Ingrese el nombre de la mesa.'); return; }
 
-    if (editingTableId !== null) {
-        const table = tables.find(t => t.id === editingTableId);
-        if (table) table.name = name;
-        cancelEditTable();
-    } else {
-        const newId = tables.length > 0 ? Math.max(...tables.map(t => Number(t.id) || 0)) + 1 : 1;
-        tables.push({ id: newId, name: name, status: 'libre', items: [], receipts: [] });
+    if (!name) {
+        showCustomAlert('Ingrese el nombre de la mesa.');
+        return;
     }
 
-    appConfig.lastUpdated = Date.now();
-    await saveDataAndSyncCloudSync('Mesa guardada y sincronizada exitosamente en Google Sheets.');
-    nameInput.value = '';
-    renderTablesAdmin();
+    // Determinar si se está editando una mesa existente.
+    const wasEditing = editingTableId !== null;
+
+    try {
+
+        if (wasEditing) {
+
+            // Buscar la mesa que se desea modificar.
+            const table = tables.find(
+                t => Number(t.id) === Number(editingTableId)
+            );
+
+            if (!table) {
+                showCustomAlert('No se encontró la mesa que desea editar.');
+                return;
+            }
+
+            // Obtener el identificador del documento en Firestore.
+            const documentId = table._docId || `mesa_${table.id}`;
+
+            // Actualizar únicamente el nombre de la mesa en Firebase.
+            await window.RestoposDB.update(
+                'mesas',
+                documentId,
+                {
+                    name: name
+                }
+            );
+
+            // Actualizar el nombre en los datos locales.
+            table.name = name;
+
+            // Finalizar el modo de edición.
+            cancelEditTable();
+
+        } else {
+
+            // Calcular el siguiente identificador numérico disponible.
+            const newId = tables.length > 0
+                ? Math.max(...tables.map(t => Number(t.id) || 0)) + 1
+                : 1;
+
+            // Construir el registro inicial de la nueva mesa.
+            const newTable = {
+                id: newId,
+                name: name,
+                status: 'libre',
+                items: [],
+                receipts: []
+            };
+
+            // Crear el documento de la mesa en Firestore.
+            await window.RestoposDB.set(
+                'mesas',
+                `mesa_${newId}`,
+                newTable
+            );
+
+            // Incorporar la mesa a la lista local.
+            tables.push({
+                ...newTable,
+                _docId: `mesa_${newId}`
+            });
+        }
+
+        // Actualizar la fecha de modificación local.
+        appConfig.lastUpdated = Date.now();
+
+        // Guardar el estado local de la aplicación.
+        saveData();
+
+        // Limpiar el campo del formulario.
+        nameInput.value = '';
+
+        // Actualizar la lista visual de administración de mesas.
+        renderTablesAdmin();
+
+        // Confirmar la operación realizada.
+        showCustomAlert(
+            wasEditing
+                ? 'Mesa actualizada correctamente en Firebase.'
+                : 'Mesa creada correctamente en Firebase.'
+        );
+
+    } catch (error) {
+
+        // Registrar los detalles del error para diagnóstico.
+        console.error(
+            'RESTOPOS: Error guardando mesa en Firebase:',
+            error.code,
+            error.message
+        );
+
+        // Informar que Firebase no pudo completar la operación.
+        showCustomAlert(
+            'No se pudo guardar la mesa en Firebase. Verifique su conexión e inténtelo nuevamente.'
+        );
+    }
 }
+
 
 function editTable(id) {
     if (!navigator.onLine) {
@@ -844,142 +1040,357 @@ function cancelEditTable() {
     document.getElementById('btnCancelTableEdit').classList.add('hidden');
 }
 
+/**
+ * ==========================================================
+ * ELIMINAR MESA
+ * Solicita confirmación personalizada y elimina definitivamente
+ * el documento de la mesa en Firebase Firestore.
+ * ==========================================================
+ */
 async function deleteTable(id) {
+
+    // Comprobar que exista conexión a internet.
     if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: Debe estar conectado a internet para eliminar mesas.');
+        showCustomAlert(
+            '❌ Acción bloqueada: Debe estar conectado a internet para eliminar mesas.'
+        );
         return;
     }
 
-    const table = tables.find(t => t.id === id);
+    // Buscar la mesa que se desea eliminar.
+    const table = tables.find(
+        t => Number(t.id) === Number(id)
+    );
+
+    // Detener la operación si la mesa no existe.
     if (!table) return;
-    
-    if (table.status === 'ocupada' || (table.items && table.items.length > 0)) {
-        showCustomAlert('No se puede eliminar una mesa ocupada.');
+
+    // Verificar que la mesa no tenga comandas pendientes.
+    const hasItems = Array.isArray(table.items)
+        && table.items.length > 0;
+
+    // Verificar que la mesa no tenga cuentas o recibos asociados.
+    const hasReceipts = Array.isArray(table.receipts)
+        && table.receipts.length > 0;
+
+    // Impedir la eliminación de mesas ocupadas o con información asociada.
+    if (
+        table.status === 'ocupada' ||
+        hasItems ||
+        hasReceipts
+    ) {
+        showCustomAlert(
+            'No se puede eliminar esta mesa porque tiene comandas, cuentas o recibos asociados.'
+        );
         return;
     }
 
-    if (confirm(`¿Eliminar ${table.name}?`)) {
-        tables = tables.filter(t => t.id !== id);
-        if (editingTableId === id) cancelEditTable();
+    // Solicitar confirmación mediante el popup personalizado.
+    const confirmed = await showCustomConfirm(
+        `¿Desea eliminar definitivamente ${table.name}?`
+    );
+
+    // Cancelar si el usuario no confirma.
+    if (!confirmed) return;
+
+    try {
+
+        // Obtener el identificador real del documento en Firestore.
+        const documentId = table._docId || `mesa_${table.id}`;
+
+        // Eliminar definitivamente el documento de Firebase.
+        await window.RestoposDB.remove(
+            'mesas',
+            documentId
+        );
+
+        // Retirar la mesa de la lista local.
+        tables = tables.filter(
+            t => Number(t.id) !== Number(id)
+        );
+
+        // Cancelar la edición si corresponde a la mesa eliminada.
+        if (Number(editingTableId) === Number(id)) {
+            cancelEditTable();
+        }
+
+        // Actualizar la fecha de modificación.
         appConfig.lastUpdated = Date.now();
-        await saveDataAndSyncCloudSync('Mesa eliminada de Google Sheets.');
+
+        // Guardar los cambios en el almacenamiento local.
+        saveData();
+
+        // Actualizar la lista visual de administración.
         renderTablesAdmin();
+
+        // Informar que la eliminación fue exitosa.
+        showCustomAlert(
+            'Mesa eliminada definitivamente de Firebase.'
+        );
+
+    } catch (error) {
+
+        // Registrar el error para facilitar su diagnóstico.
+        console.error(
+            'RESTOPOS: Error eliminando mesa de Firebase:',
+            error.code,
+            error.message
+        );
+
+        // Informar que no se pudo completar la eliminación.
+        showCustomAlert(
+            'No se pudo eliminar la mesa. Verifique su conexión e inténtelo nuevamente.'
+        );
     }
 }
+
 
 
 /* ========================================================== */
 /* 5. PEDIDOS Y COMANDAS                                      */
 /* ========================================================== */
 
-/**
- * Abre la sección de pedidos para una mesa.
- * Cómo lo realiza: Sincroniza desde la nube y prepara la interfaz de comandas.
- * Consulta a Sheets: Llama a `loadDataFromCloud()`.
- */
 
+/**
+ * ==========================================================
+ * ABRIR COMANDA DE MESA
+ * Consulta mesas y productos desde Firebase Firestore,
+ * valida los datos y prepara la pantalla de pedidos.
+ * ==========================================================
+ */
 async function openTableOrder(id) {
+
+    // Guardar el identificador de la mesa seleccionada.
     currentTableId = id;
 
-    // 1. Descargar mesas y productos desde la nube
+    // Descargar mesas y productos directamente desde Firebase.
     try {
-        const [resTables, resProducts] = await Promise.all([
-            fetch(`${WEB_APP_URL}?action=getTables`).catch(err => null),
-            fetch(`${WEB_APP_URL}?action=getProducts`).catch(err => null)
+
+        console.log(
+            'RESTOPOS: Cargando datos de la comanda desde Firebase...'
+        );
+
+        // Consultar mesas y productos simultáneamente.
+        const [cloudTables, cloudProducts] = await Promise.all([
+            window.RestoposDB.getAll('mesas'),
+            window.RestoposDB.getAll('productos')
         ]);
 
-        if (resTables && resTables.ok) {
-            const dataT = await resTables.json();
-
-            if (dataT && dataT.status === 'success' && Array.isArray(dataT.tables)) {
-                tables = dataT.tables;
-            }
+        // Actualizar las mesas locales si Firebase devuelve un arreglo.
+        if (Array.isArray(cloudTables)) {
+            tables = cloudTables;
         }
 
-        if (resProducts && resProducts.ok) {
-            const dataP = await resProducts.json();
+        // Actualizar los productos locales si Firebase devuelve un arreglo.
+        if (Array.isArray(cloudProducts)) {
+            products = cloudProducts;
 
-            if (dataP && dataP.status === 'success' && Array.isArray(dataP.products)) {
-                products = dataP.products;
-            }
+            // Mantener compatibilidad con las listas de bebidas y adicionales.
+            drinks = products.filter(product =>
+                String(product.category || '').toLowerCase() === 'bebidas'
+            );
+
+            addons = products.filter(product =>
+                String(product.category || '').toLowerCase() === 'adicionales'
+            );
         }
 
+        // Guardar los datos descargados en el almacenamiento local.
         saveData();
 
-    } catch (e) {
-        console.warn("Usando datos locales para la orden de mesa:", e);
+        console.log(
+            'RESTOPOS: Datos de comanda cargados desde Firebase.',
+            'Mesas:',
+            tables.length,
+            'Productos:',
+            products.length
+        );
+
+    } catch (error) {
+
+        // Conservar los datos locales si falla la consulta a Firebase.
+        console.error(
+            'RESTOPOS: Error cargando datos de comanda desde Firebase:',
+            error.code,
+            error.message
+        );
+
+        console.warn(
+            'RESTOPOS: Se utilizarán los datos locales disponibles.'
+        );
     }
 
-    // 2. Buscar la mesa después de sincronizar
-    let table = tables.find(t => String(t.id) === String(id));
+    // Buscar la mesa seleccionada después de consultar Firebase.
+    let table = tables.find(
+        t => String(t.id) === String(id)
+    );
 
+    // Detener la operación si la mesa no existe.
     if (!table) {
         showCustomAlert('No se encontró la mesa seleccionada.');
         return;
     }
 
-    // 3. Asegurar que items y receipts sean arreglos válidos
+    // Asegurar que las comandas tengan un arreglo válido.
     if (typeof table.items === 'string') {
         try {
             table.items = JSON.parse(table.items);
-        } catch (e) {
+        } catch (error) {
             table.items = [];
         }
     }
 
-    if (!Array.isArray(table.items)) table.items = [];
+    if (!Array.isArray(table.items)) {
+        table.items = [];
+    }
 
+    // Asegurar que los recibos tengan un arreglo válido.
     if (typeof table.receipts === 'string') {
         try {
             table.receipts = JSON.parse(table.receipts);
-        } catch (e) {
+        } catch (error) {
             table.receipts = [];
         }
     }
 
-    if (!Array.isArray(table.receipts)) table.receipts = [];
+    if (!Array.isArray(table.receipts)) {
+        table.receipts = [];
+    }
 
-    // 4. Mostrar la sección de pedidos
+    // Abrir la sección de pedidos.
     await showSection('order-section');
 
-    // Volver a buscar la mesa por si showSection actualizó los datos
-    table = tables.find(t => String(t.id) === String(id));
+    // Volver a buscar la mesa por si showSection actualizó los datos.
+    table = tables.find(
+        t => String(t.id) === String(id)
+    );
 
+    // Detener la operación si la mesa ya no está disponible.
     if (!table) return;
 
-    // 5. Mostrar el nombre y número de mesa en el encabezado
+    // Preparar el título de la pantalla de pedidos.
     const title = `Pedido - ${table.name}`;
 
+    // Actualizar los encabezados de la comanda.
     const orderTitle = document.getElementById('order-title');
     const titleEl = document.getElementById('orderTableTitle');
 
-    if (orderTitle) orderTitle.textContent = title;
-    if (titleEl) titleEl.textContent = title;
+    if (orderTitle) {
+        orderTitle.textContent = title;
+    }
 
-    // 6. Cargar categoría inicial y productos de la comanda
+    if (titleEl) {
+        titleEl.textContent = title;
+    }
+
+    // Seleccionar la categoría inicial de productos.
     filterPlusCategory('sopas');
+
+    // Dibujar los productos y artículos de la comanda.
     renderPlusOrderItems();
 }
 
 
-
-
-
-
+/**
+ * ==========================================================
+ * MARCAR PEDIDO COMO RECOGIDO
+ * Actualiza en Firebase los platos que ya fueron servidos
+ * y confirma que el cliente los recogió.
+ * ==========================================================
+ */
 async function markTablePickedUp() {
-    const table = tables.find(t => t.id === currentTableId);
+
+    // Buscar la mesa que tiene abierta el usuario.
+    const table = tables.find(
+        t => Number(t.id) === Number(currentTableId)
+    );
+
+    // Detener la operación si la mesa no existe.
     if (!table) return;
 
-    table.items.forEach(item => {
-        if (item.sentToKitchen && item.served) item.pickedUp = true;
-    });
+    // Verificar que exista conexión a internet.
+    if (!navigator.onLine) {
+        showCustomAlert(
+            'No hay conexión a internet. No se pudo marcar el pedido como recogido.'
+        );
+        return;
+    }
 
-    appConfig.lastUpdated = Date.now();
-    await saveDataAndSyncCloudSync('Pedido marcado como recogido.');
-    const readyBanner = document.getElementById('readyForPickupBanner');
-    if (readyBanner) readyBanner.style.display = 'none';
-    renderPlusOrderItems();
+    // Comprobar que la mesa tenga una lista válida de platos.
+    if (!Array.isArray(table.items)) {
+        showCustomAlert('No se encontraron platos en esta mesa.');
+        return;
+    }
+
+    try {
+
+        // Crear una copia de los platos y marcar como recogidos
+        // únicamente los que ya fueron enviados y servidos.
+        const updatedItems = table.items.map(item => {
+
+            if (item.sentToKitchen && item.served) {
+                return {
+                    ...item,
+                    pickedUp: true
+                };
+            }
+
+            // Mantener sin cambios los demás platos.
+            return item;
+        });
+
+        // Obtener el identificador real del documento de Firestore.
+        const documentId = table._docId || `mesa_${table.id}`;
+
+        // Guardar los cambios directamente en Firebase.
+        await window.RestoposDB.update(
+            'mesas',
+            documentId,
+            {
+                items: updatedItems
+            }
+        );
+
+        // Actualizar los datos locales después de confirmar el guardado.
+        table.items = updatedItems;
+
+        // Actualizar la fecha de modificación local.
+        appConfig.lastUpdated = Date.now();
+
+        // Guardar el estado actualizado en el almacenamiento local.
+        saveData();
+
+        // Ocultar el aviso de platos listos para recoger.
+        const readyBanner = document.getElementById(
+            'readyForPickupBanner'
+        );
+
+        if (readyBanner) {
+            readyBanner.style.display = 'none';
+        }
+
+        // Actualizar visualmente los platos de la comanda.
+        renderPlusOrderItems();
+
+        // Informar que el pedido fue marcado como recogido.
+        showCustomAlert('Pedido marcado como recogido correctamente.');
+
+    } catch (error) {
+
+        // Registrar el error para facilitar su diagnóstico.
+        console.error(
+            'RESTOPOS: Error marcando pedido como recogido en Firebase:',
+            error.code,
+            error.message
+        );
+
+        // Informar que no se pudo completar la operación.
+        showCustomAlert(
+            'No se pudo marcar el pedido como recogido. Verifique su conexión e inténtelo nuevamente.'
+        );
+    }
 }
+
 
 function normalizeCategory(cat) {
     if (!cat) return 'principales';
@@ -1130,34 +1541,124 @@ function filterPlusCategory(category, event) {
 
 
 
-function addProductDirectlyToOrder(itemIdentifier) {
-    const table = tables.find(t => t.id === currentTableId);
+
+/**
+ * ==========================================================
+ * AGREGAR PRODUCTO DIRECTAMENTE A LA COMANDA
+ * Registra el producto en la mesa y guarda los cambios
+ * directamente en Firebase Firestore.
+ * ==========================================================
+ */
+async function addProductDirectlyToOrder(itemIdentifier) {
+
+    // Buscar la mesa que tiene abierta el usuario.
+    const table = tables.find(
+        t => Number(t.id) === Number(currentTableId)
+    );
+
+    // Detener la operación si la mesa no existe.
     if (!table) return;
 
-    const id = parseInt(String(itemIdentifier).replace('prod_', '').replace('drink_', '').replace('addon_', ''), 10);
-    const prod = products.find(p => p.id === id);
+    // Comprobar que exista conexión a internet.
+    if (!navigator.onLine) {
+        showCustomAlert(
+            'No hay conexión a internet. No se pudo agregar el producto.'
+        );
+        return;
+    }
+
+    // Extraer el identificador numérico del producto.
+    const id = parseInt(
+        String(itemIdentifier)
+            .replace('prod_', '')
+            .replace('drink_', '')
+            .replace('addon_', ''),
+        10
+    );
+
+    // Buscar el producto en el catálogo.
+    const prod = products.find(
+        p => Number(p.id) === id
+    );
+
+    // Detener la operación si el producto no existe.
     if (!prod) return;
 
-    const orderItemData = {
-        uid: '_' + Math.random().toString(36).substr(2, 9),
-        productId: prod.id,
-        name: prod.name,
-        finalPrice: prod.price,
-        modifications: [],
-        observation: '',
-        kitchenChecked: false,
-        billed: false,
-        sentToKitchen: false,
-        served: false,
-        pickedUp: false
-    };
+    try {
 
-    table.items.push(orderItemData);
-    table.status = 'ocupada';
+        // Crear el nuevo elemento de la comanda.
+        const orderItemData = {
+            uid: '_' + Math.random().toString(36).substr(2, 9),
+            productId: prod.id,
+            name: prod.name,
+            finalPrice: prod.price,
+            modifications: [],
+            observation: '',
+            kitchenChecked: false,
+            billed: false,
+            sentToKitchen: false,
+            served: false,
+            pickedUp: false
+        };
 
-    renderPlusOrderItems();
-    saveData();
+        // Preparar una copia de los elementos actuales.
+        const currentItems = Array.isArray(table.items)
+            ? table.items
+            : [];
+
+        // Agregar el nuevo producto sin modificar todavía los datos locales.
+        const updatedItems = [
+            ...currentItems,
+            orderItemData
+        ];
+
+        // Obtener el identificador real del documento de Firestore.
+        const documentId = table._docId || `mesa_${table.id}`;
+
+        // Guardar la comanda directamente en Firebase.
+        await window.RestoposDB.update(
+            'mesas',
+            documentId,
+            {
+                items: updatedItems,
+                status: 'ocupada'
+            }
+        );
+
+        // Actualizar los datos locales después del guardado exitoso.
+        table.items = updatedItems;
+        table.status = 'ocupada';
+
+        // Actualizar la fecha de modificación local.
+        appConfig.lastUpdated = Date.now();
+
+        // Guardar los cambios en el almacenamiento local.
+        saveData();
+
+        // Actualizar visualmente los productos de la comanda.
+        renderPlusOrderItems();
+
+        console.log(
+            'RESTOPOS: Producto agregado a la comanda en Firebase:',
+            prod.name
+        );
+
+    } catch (error) {
+
+        // Registrar el error para facilitar el diagnóstico.
+        console.error(
+            'RESTOPOS: Error agregando producto a Firebase:',
+            error.code,
+            error.message
+        );
+
+        // Informar que el producto no pudo agregarse.
+        showCustomAlert(
+            'No se pudo agregar el producto a la comanda. Verifique su conexión e inténtelo nuevamente.'
+        );
+    }
 }
+
 
 function renderPlusOrderItems() {
     const table = tables.find(t => t.id === currentTableId);
@@ -1219,44 +1720,311 @@ function renderPlusOrderItems() {
     // 💡 NUEVO: Controlar automáticamente si se muestra u oculta el banner de "Marcar como Recogido"
     const hasReadyItems = table.items.some(item => item.sentToKitchen && item.served && !item.pickedUp);
     let readyBanner = document.getElementById('readyForPickupBanner');
-    
+
     if (readyBanner) {
         readyBanner.style.display = hasReadyItems ? 'block' : 'none';
     }
 }
 
 
-function updateItemKitchenCheck(index, isChecked) {
-    const table = tables.find(t => t.id === currentTableId);
-    if (table && table.items[index]) {
-        table.items[index].kitchenChecked = isChecked;
-        saveData();
-    }
-}
 
-function updateItemObservation(index, textValue) {
-    const table = tables.find(t => t.id === currentTableId);
-    if (table && table.items[index]) {
-        table.items[index].observation = textValue;
-        table.items[index].modifications = textValue ? [`Nota: ${textValue}`] : [];
-        saveData();
-    }
-}
+/**
+ * ==========================================================
+ * ACTUALIZAR SELECCIÓN DE PLATO PARA COCINA
+ * Guarda en Firebase el estado del checkbox que utiliza
+ * el mesero para seleccionar los platos que enviará a cocina.
+ * ==========================================================
+ */
+async function updateItemKitchenCheck(index, isChecked) {
 
-async function removePlusOrderItem(index) {
-    const table = tables.find(t => t.id === currentTableId);
+    // Buscar la mesa que tiene abierta el usuario.
+    const table = tables.find(
+        t => Number(t.id) === Number(currentTableId)
+    );
+
+    // Verificar que la mesa y el arreglo de platos existan.
+    if (!table || !Array.isArray(table.items)) return;
+
+    // Obtener el plato seleccionado.
     const item = table.items[index];
 
-    if (item && item.billed) {
+    // Detener la operación si el plato no existe.
+    if (!item) return;
+
+    // Impedir cambios en platos enviados a cocina o facturados.
+    if (item.sentToKitchen || item.billed) {
+        renderPlusOrderItems();
+        return;
+    }
+
+    // Comprobar que exista conexión a internet.
+    if (!navigator.onLine) {
+        renderPlusOrderItems();
+
+        showCustomAlert(
+            'No hay conexión a internet. No se pudo actualizar la selección.'
+        );
+        return;
+    }
+
+    try {
+
+        // Crear una copia de los platos con el checkbox actualizado.
+        const updatedItems = table.items.map((currentItem, currentIndex) => {
+
+            // Modificar únicamente el plato seleccionado.
+            if (currentIndex === index) {
+                return {
+                    ...currentItem,
+                    kitchenChecked: isChecked
+                };
+            }
+
+            // Mantener sin cambios los demás platos.
+            return currentItem;
+        });
+
+        // Obtener el identificador real del documento de Firestore.
+        const documentId = table._docId || `mesa_${table.id}`;
+
+        // Guardar la selección directamente en Firebase.
+        await window.RestoposDB.update(
+            'mesas',
+            documentId,
+            {
+                items: updatedItems
+            }
+        );
+
+        // Actualizar los datos locales después del guardado exitoso.
+        table.items = updatedItems;
+
+        // Actualizar la fecha de modificación local.
+        appConfig.lastUpdated = Date.now();
+
+        // Guardar los cambios en el almacenamiento local.
+        saveData();
+
+    } catch (error) {
+
+        // Registrar el error para facilitar el diagnóstico.
+        console.error(
+            'RESTOPOS: Error actualizando selección para cocina:',
+            error.code,
+            error.message
+        );
+
+        // Restaurar visualmente el estado anterior del checkbox.
+        renderPlusOrderItems();
+
+        // Informar que no se pudo guardar el cambio.
+        showCustomAlert(
+            'No se pudo actualizar la selección. Verifique su conexión e inténtelo nuevamente.'
+        );
+    }
+}
+
+
+
+/**
+ * ==========================================================
+ * ACTUALIZAR OBSERVACIÓN DEL PLATO
+ * Actualiza localmente la observación y sus modificaciones.
+ * Guarda los cambios en Firebase 700 ms después de que
+ * el mesero termina de escribir.
+ * ==========================================================
+ */
+function updateItemObservation(index, textValue) {
+
+    // Buscar la mesa que tiene abierta el usuario.
+    const table = tables.find(
+        t => Number(t.id) === Number(currentTableId)
+    );
+
+    // Verificar que la mesa y sus platos existan.
+    if (!table || !Array.isArray(table.items)) return;
+
+    // Obtener el plato correspondiente.
+    const item = table.items[index];
+
+    // Detener la operación si el plato no existe.
+    if (!item) return;
+
+    // Impedir modificaciones en platos enviados o facturados.
+    if (item.sentToKitchen || item.billed) {
+        renderPlusOrderItems();
+        return;
+    }
+
+    // Actualizar inmediatamente los datos locales.
+    item.observation = textValue;
+    item.modifications = textValue
+        ? [`Nota: ${textValue}`]
+        : [];
+
+    // Guardar el cambio localmente.
+    saveData();
+
+    // Identificar de forma única la observación que se está editando.
+    const timerKey = `${currentTableId}_${item.uid}`;
+
+    // Cancelar el guardado anterior si el usuario sigue escribiendo.
+    if (observationSaveTimers[timerKey]) {
+        clearTimeout(observationSaveTimers[timerKey]);
+    }
+
+    // Programar el guardado en Firebase después de 700 ms.
+    observationSaveTimers[timerKey] = setTimeout(async () => {
+
+        try {
+
+            // Comprobar que exista conexión a internet.
+            if (!navigator.onLine) {
+                throw new Error('No hay conexión a internet.');
+            }
+
+            // Obtener el identificador real del documento de Firestore.
+            const documentId = table._docId || `mesa_${table.id}`;
+
+            // Guardar la lista actualizada de platos en Firebase.
+            await window.RestoposDB.update(
+                'mesas',
+                documentId,
+                {
+                    items: table.items
+                }
+            );
+
+            console.log(
+                'RESTOPOS: Observación guardada en Firebase.',
+                item.name
+            );
+
+        } catch (error) {
+
+            // Registrar el error para facilitar su diagnóstico.
+            console.error(
+                'RESTOPOS: Error guardando observación:',
+                error.code,
+                error.message
+            );
+
+            // Informar del problema sin interrumpir la escritura.
+            showCustomAlert(
+                'No se pudo guardar la observación en Firebase. Verifique su conexión.'
+            );
+
+        } finally {
+
+            // Liberar el temporizador utilizado por este plato.
+            delete observationSaveTimers[timerKey];
+        }
+
+    }, 700);
+}
+
+
+/**
+ * ==========================================================
+ * ELIMINAR PRODUCTO DE LA COMANDA
+ * Elimina el producto localmente y actualiza Firestore.
+ * No permite eliminar platos enviados a cocina o facturados.
+ * ==========================================================
+ */
+async function removePlusOrderItem(index) {
+
+    // Buscar la mesa que tiene abierta el usuario.
+    const table = tables.find(
+        t => Number(t.id) === Number(currentTableId)
+    );
+
+    // Verificar que la mesa exista y tenga una lista de platos.
+    if (!table || !Array.isArray(table.items)) return;
+
+    // Buscar el producto que se desea eliminar.
+    const item = table.items[index];
+
+    // Comprobar que el producto exista.
+    if (!item) return;
+
+    // Impedir la eliminación de platos que ya fueron facturados.
+    if (item.billed) {
         showCustomAlert('Este plato ya fue facturado.');
         return;
     }
 
-    table.items.splice(index, 1);
-    if (table.items.length === 0) table.status = 'libre';
+    // Impedir la eliminación de platos que ya fueron enviados a cocina.
+    if (item.sentToKitchen) {
+        showCustomAlert(
+            'Este plato ya fue enviado a cocina y no se puede eliminar.'
+        );
+        return;
+    }
 
-    renderPlusOrderItems();
-    saveData();
+    // Comprobar que exista conexión a internet.
+    if (!navigator.onLine) {
+        showCustomAlert(
+            'No hay conexión a internet. No se pudo eliminar el producto.'
+        );
+        return;
+    }
+
+    try {
+
+        // Crear una copia de la lista sin el producto seleccionado.
+        const updatedItems = table.items.filter(
+            (currentItem, currentIndex) => currentIndex !== index
+        );
+
+        // Mantener el comportamiento actual cuando la mesa queda vacía.
+        const updatedStatus = updatedItems.length === 0
+            ? 'libre'
+            : 'ocupada';
+
+        // Obtener el identificador real del documento de Firestore.
+        const documentId = table._docId || `mesa_${table.id}`;
+
+        // Guardar la eliminación directamente en Firebase.
+        await window.RestoposDB.update(
+            'mesas',
+            documentId,
+            {
+                items: updatedItems,
+                status: updatedStatus
+            }
+        );
+
+        // Actualizar los datos locales después del guardado exitoso.
+        table.items = updatedItems;
+        table.status = updatedStatus;
+
+        // Actualizar la fecha de modificación local.
+        appConfig.lastUpdated = Date.now();
+
+        // Guardar los cambios en el almacenamiento local.
+        saveData();
+
+        // Actualizar visualmente la comanda y el total.
+        renderPlusOrderItems();
+
+        console.log(
+            'RESTOPOS: Producto eliminado de la comanda en Firebase.'
+        );
+
+    } catch (error) {
+
+        // Registrar el error para facilitar el diagnóstico.
+        console.error(
+            'RESTOPOS: Error eliminando producto de Firebase:',
+            error.code,
+            error.message
+        );
+
+        // Informar que no se pudo completar la eliminación.
+        showCustomAlert(
+            'No se pudo eliminar el producto. Verifique su conexión e inténtelo nuevamente.'
+        );
+    }
 }
 
 
@@ -1281,47 +2049,175 @@ function playAlarmBeep() {
     }
 }
 
+
+/**
+ * ==========================================================
+ * ENVIAR COMANDA A COCINA
+ * Consulta primero los datos actualizados de Firestore
+ * para identificar correctamente los productos seleccionados.
+ * ==========================================================
+ */
 async function sendOrderToKitchen() {
-    const table = tables.find(t => t.id === currentTableId);
-    if (!table || !table.items || table.items.length === 0) {
-        showCustomAlert('No hay platos en esta mesa.');
+
+    // Comprobar conexión a internet.
+    if (!navigator.onLine) {
+        showCustomAlert(
+            'No hay conexión a internet. La comanda no se pudo enviar a cocina.'
+        );
         return;
     }
 
-    const itemsToSend = table.items.filter(item => !item.sentToKitchen && item.kitchenChecked);
+    // Buscar la mesa seleccionada.
+    const localTable = tables.find(
+        t => Number(t.id) === Number(currentTableId)
+    );
 
-    if (itemsToSend.length === 0) {
-        showCustomAlert('⚠️ Por favor seleccione con el checkbox al menos un plato nuevo para enviar a cocina.');
+    if (!localTable) {
+        showCustomAlert('No se encontró la mesa seleccionada.');
         return;
     }
-
-    const now = Date.now();
-
-    table.items.forEach(item => {
-        if (!item.sentToKitchen && item.kitchenChecked) {
-            item.sentToKitchen = true;
-            item.served = false;
-            item.pickedUp = false;
-            item.sentAt = now;
-            item.kitchenChecked = true;
-        }
-    });
-
-    table.status = 'ocupada';
-    appConfig.lastUpdated = now;
-
-    renderPlusOrderItems();
-    saveData();
 
     try {
-        await syncDataToCloud();
-        showCustomAlert(`👨‍🍳 Comanda enviada a cocina exitosamente (${itemsToSend.length} ítem(s)).`);
-    } catch (error) {
-        showCustomAlert(`⚠️ Guardado localmente. Se sincronizará al haber red.`);
-    }
 
-    showSection('tables-section');
+        console.log(
+            'RESTOPOS: Consultando estado actualizado de la mesa en Firebase...'
+        );
+
+        // Obtener el identificador del documento de Firestore.
+        const documentId =
+            localTable._docId || `mesa_${localTable.id}`;
+
+        // Consultar directamente la mesa en Firebase.
+        const cloudTable = await window.RestoposDB.getById(
+            'mesas',
+            documentId
+        );
+
+        if (!cloudTable) {
+            showCustomAlert(
+                'No se encontró la mesa en Firebase.'
+            );
+            return;
+        }
+
+        // Actualizar la copia local con los datos más recientes.
+        localTable.items = Array.isArray(cloudTable.items)
+            ? cloudTable.items
+            : [];
+
+        localTable.status = cloudTable.status || 'libre';
+
+        // Identificar los productos nuevos seleccionados.
+        const itemsToSend = localTable.items.filter(
+            item =>
+                item.sentToKitchen !== true &&
+                item.kitchenChecked === true
+        );
+
+        console.log(
+            'RESTOPOS: Productos seleccionados para cocina:',
+            itemsToSend.length
+        );
+
+        // Mostrar los estados encontrados para diagnóstico.
+        console.log(
+            'RESTOPOS: Estado de productos:',
+            localTable.items.map(item => ({
+                nombre: item.name,
+                kitchenChecked: item.kitchenChecked,
+                sentToKitchen: item.sentToKitchen
+            }))
+        );
+
+        // Detener el envío si no hay productos seleccionados.
+        if (itemsToSend.length === 0) {
+
+            saveData();
+            renderPlusOrderItems();
+
+            showCustomAlert(
+                '⚠️ No hay productos nuevos seleccionados para enviar a cocina.'
+            );
+
+            return;
+        }
+
+        // Registrar el momento exacto del envío.
+        const now = Date.now();
+
+        // Preparar los productos seleccionados para cocina.
+        const updatedItems = localTable.items.map(item => {
+
+            // Conservar los productos que no fueron seleccionados.
+            if (
+                item.sentToKitchen === true ||
+                item.kitchenChecked !== true
+            ) {
+                return item;
+            }
+
+            // Marcar el producto como enviado.
+            return {
+                ...item,
+                sentToKitchen: true,
+                served: false,
+                pickedUp: false,
+                sentAt: now,
+                kitchenChecked: true
+            };
+        });
+
+        // Guardar la comanda directamente en Firestore.
+        await window.RestoposDB.update(
+            'mesas',
+            documentId,
+            {
+                items: updatedItems,
+                status: 'ocupada'
+            }
+        );
+
+        // Actualizar los datos locales después del guardado.
+        localTable.items = updatedItems;
+        localTable.status = 'ocupada';
+
+        appConfig.lastUpdated = now;
+
+        // Guardar el estado local.
+        saveData();
+
+        // Actualizar visualmente la comanda.
+        renderPlusOrderItems();
+
+        console.log(
+            'RESTOPOS: Comanda enviada correctamente a Firebase.',
+            'Productos:',
+            itemsToSend.length
+        );
+
+        // Informar el resultado.
+        showCustomAlert(
+            `👨‍🍳 Comanda enviada a cocina exitosamente (${itemsToSend.length} ítem(s)).`
+        );
+
+        // Regresar a la pantalla de mesas.
+        await showSection('tables-section');
+
+    } catch (error) {
+
+        console.error(
+            'RESTOPOS: Error enviando comanda a Firebase:',
+            error.code,
+            error.message
+        );
+
+        showCustomAlert(
+            '⚠️ No se pudo enviar la comanda a cocina. Verifique su conexión e inténtelo nuevamente.'
+        );
+    }
 }
+
+
 
 /**
  * Renderiza comandas en pantalla de cocina con alertas de color según porcentaje y umbral.
@@ -1443,14 +2339,38 @@ function renderKitchenOrders() {
 }
 
 
+
+/**
+ * ==========================================================
+ * MARCAR LOTE COMO SERVIDO
+ * Actualiza el estado de los platos preparados directamente
+ * en Firebase Firestore.
+ * ==========================================================
+ */
 async function markBatchServed(tableId, batchId) {
-    const table = tables.find(t => t.id === tableId);
+
+    // Buscar la mesa correspondiente al lote seleccionado.
+    const table = tables.find(
+        t => Number(t.id) === Number(tableId)
+    );
+
+    // Detener la operación si la mesa no existe.
     if (!table) return;
 
-    // Crear ventana de confirmación.
+    // Comprobar que exista conexión a internet.
+    if (!navigator.onLine) {
+        showCustomAlert(
+            'No hay conexión a internet. No se puede atender la comanda.'
+        );
+        return;
+    }
+
+    // Crear la ventana personalizada de confirmación.
     let modal = document.getElementById('serveBatchModal');
 
     if (!modal) {
+
+        // Crear el contenedor del popup.
         modal = document.createElement('div');
         modal.id = 'serveBatchModal';
 
@@ -1465,6 +2385,7 @@ async function markBatchServed(tableId, batchId) {
             padding:1rem;
         `;
 
+        // Construir el contenido y los botones del popup.
         modal.innerHTML = `
             <div style="
                 background:#fff;
@@ -1506,72 +2427,117 @@ async function markBatchServed(tableId, batchId) {
             </div>
         `;
 
+        // Incorporar el popup al documento.
         document.body.appendChild(modal);
     }
 
+    // Mostrar el nombre de la mesa en el mensaje.
     document.getElementById('serveBatchMessage').textContent =
         `¿Marcar este lote de la ${table.name} como servido?`;
 
+    // Obtener las referencias de los botones.
     const confirmButton =
         document.getElementById('serveBatchConfirm');
 
     const cancelButton =
         document.getElementById('serveBatchCancel');
 
+    // Mostrar la ventana de confirmación.
     modal.style.display = 'flex';
 
+    // Configurar la cancelación de la operación.
     cancelButton.onclick = () => {
         modal.style.display = 'none';
     };
 
+    // Configurar la confirmación y actualización del lote.
     confirmButton.onclick = async () => {
+
+        // Evitar múltiples envíos mientras se procesa la operación.
         confirmButton.disabled = true;
         confirmButton.textContent = 'Procesando...';
 
         try {
-            // Marcar los productos del lote como servidos.
-            table.items.forEach(item => {
+
+            // Crear una copia de los platos con el estado actualizado.
+            const updatedItems = table.items.map(item => {
+
+                // Identificar únicamente los platos del lote seleccionado.
                 if (
                     item.sentToKitchen &&
                     item.sentAt === batchId
                 ) {
-                    item.served = true;
-                    item.pickedUp = false;
+
+                    // Marcar el plato como servido.
+                    return {
+                        ...item,
+                        served: true,
+                        pickedUp: false
+                    };
                 }
+
+                // Conservar sin cambios los demás platos.
+                return item;
             });
 
+            // Obtener el identificador del documento de Firestore.
+            const documentId = table._docId || `mesa_${table.id}`;
+
+            // Guardar los estados actualizados directamente en Firebase.
+            await window.RestoposDB.update(
+                'mesas',
+                documentId,
+                {
+                    items: updatedItems
+                }
+            );
+
+            // Actualizar los datos locales después del guardado exitoso.
+            table.items = updatedItems;
+
+            // Actualizar la fecha de modificación local.
             appConfig.lastUpdated = Date.now();
 
-            // Actualizar la pantalla de cocina.
+            // Guardar los cambios en el almacenamiento local.
+            saveData();
+
+            // Actualizar visualmente las comandas de cocina.
             renderKitchenOrders();
 
-            // Sincronizar con Google Sheets.
-            await syncDataToCloud();
-
+            // Cerrar la ventana de confirmación.
             modal.style.display = 'none';
 
+            // Informar que la comanda fue atendida correctamente.
             showCustomAlert(
                 'Comanda atendida correctamente.'
             );
 
         } catch (error) {
+
+            // Registrar los detalles del error.
             console.error(
-                'Error al atender la comanda:',
-                error
+                'RESTOPOS: Error atendiendo comanda en Firebase:',
+                error.code,
+                error.message
             );
 
+            // Cerrar el popup después del error.
             modal.style.display = 'none';
 
+            // Informar que no se pudo actualizar el lote.
             showCustomAlert(
-                'No se pudo sincronizar la comanda. Verifique la conexión.'
+                'No se pudo actualizar la comanda en Firebase. Verifique la conexión.'
             );
 
         } finally {
+
+            // Restaurar el botón para futuras operaciones.
             confirmButton.disabled = false;
             confirmButton.textContent = 'Sí, atender';
         }
     };
 }
+
 
 
 
@@ -1625,8 +2591,8 @@ function openBillSection() {
                     <strong>${item.name}</strong>
 
                     ${isBilled
-                        ? '<span style="color:#dc2626; font-size:0.72rem; font-weight:bold; white-space:nowrap;">✓ FACTURADO</span>'
-                        : ''}
+                ? '<span style="color:#dc2626; font-size:0.72rem; font-weight:bold; white-space:nowrap;">✓ FACTURADO</span>'
+                : ''}
                 </span>
             </label>
 
@@ -1657,75 +2623,124 @@ function calculatePartialTotal() {
 }
 
 
-async function generateReceipt() {
-    const table = tables.find(t => t.id === currentTableId);
 
+/**
+ * ==========================================================
+ * GENERAR RECIBO
+ * Marca los productos seleccionados como facturados
+ * y registra el recibo directamente en Firebase Firestore.
+ * ==========================================================
+ */
+async function generateReceipt() {
+
+    // Buscar la mesa que se está facturando.
+    const table = tables.find(
+        t => Number(t.id) === Number(currentTableId)
+    );
+
+    // Verificar que la mesa exista.
     if (!table) {
         showCustomAlert('No se encontró la mesa.');
         return;
     }
 
-    if (!table.receipts) table.receipts = [];
+    // Comprobar que los arreglos de la mesa sean válidos.
+    if (!Array.isArray(table.items)) {
+        showCustomAlert('No se encontraron productos en esta mesa.');
+        return;
+    }
 
+    // Comprobar que exista conexión a internet.
+    if (!navigator.onLine) {
+        showCustomAlert(
+            'No hay conexión a internet. No se puede generar el recibo.'
+        );
+        return;
+    }
+
+    // Obtener los productos seleccionados para facturar.
     const selectedCheckboxes = Array.from(
         document.querySelectorAll('.bill-item-chk:checked')
     );
 
+    // Exigir que se seleccione al menos un producto.
     if (selectedCheckboxes.length === 0) {
         showCustomAlert('Seleccione al menos un ítem.');
         return;
     }
 
+    // Obtener los índices de los productos seleccionados.
     const selectedIndexes = selectedCheckboxes.map(chk =>
         parseInt(chk.value, 10)
     );
 
-    // Validar que ningún producto ya esté facturado.
+    // Validar que los productos existan y no estén facturados.
     const validIndexes = selectedIndexes.filter(index =>
+        Number.isInteger(index) &&
         table.items[index] &&
         table.items[index].billed !== true
     );
 
+    // Impedir facturar productos que ya fueron facturados.
     if (validIndexes.length !== selectedIndexes.length) {
         showCustomAlert(
             'Uno o más productos ya fueron facturados. Actualice la cuenta.'
         );
+
         openBillSection();
         return;
     }
 
+    // Obtener el botón para evitar operaciones simultáneas.
     const generateButton = document.querySelector(
         '#bill-section button[onclick="generateReceipt()"]'
     );
 
+    // Deshabilitar el botón mientras se procesa el recibo.
     if (generateButton) {
         if (generateButton.disabled) return;
+
         generateButton.disabled = true;
         generateButton.textContent = 'Procesando recibo...';
     }
 
-    const receiptId = Date.now();
-    const previousBilledStates = validIndexes.map(index => ({
-        index,
-        billed: table.items[index].billed
-    }));
-
     try {
+
+        // Crear un identificador único para el recibo.
+        const receiptId = Date.now();
+
+        // Inicializar el total y las listas del recibo.
         let partialTotal = 0;
         const receiptItems = [];
         const receiptItemUids = [];
 
-        validIndexes.forEach(index => {
-            const item = table.items[index];
+        // Crear una copia de los productos y marcarlos como facturados.
+        const updatedItems = table.items.map((item, index) => {
 
-            item.billed = true;
+            // Mantener sin cambios los productos no seleccionados.
+            if (!validIndexes.includes(index)) {
+                return item;
+            }
 
+            // Calcular el valor del producto seleccionado.
             partialTotal += Number(item.finalPrice) || 0;
 
-            receiptItems.push({ ...item });
+            // Registrar el UID del producto en el recibo.
             receiptItemUids.push(item.uid);
+
+            // Crear la copia facturada del producto.
+            const billedItem = {
+                ...item,
+                billed: true
+            };
+
+            // Agregar el producto al contenido del recibo.
+            receiptItems.push({ ...billedItem });
+
+            return billedItem;
         });
 
+        // Construir el recibo conservando su estructura actual.
         const newReceipt = {
             id: receiptId,
             items: receiptItems,
@@ -1737,42 +2752,67 @@ async function generateReceipt() {
             })
         };
 
-        table.receipts.push(newReceipt);
+        // Preparar la lista actual de recibos de la mesa.
+        const currentReceipts = Array.isArray(table.receipts)
+            ? table.receipts
+            : [];
 
+        // Agregar el nuevo recibo sin modificar todavía los datos locales.
+        const updatedReceipts = [
+            ...currentReceipts,
+            newReceipt
+        ];
+
+        // Obtener el identificador real del documento de Firestore.
+        const documentId = table._docId || `mesa_${table.id}`;
+
+        // Guardar los productos facturados y el recibo en una sola actualización.
+        await window.RestoposDB.update(
+            'mesas',
+            documentId,
+            {
+                items: updatedItems,
+                receipts: updatedReceipts
+            }
+        );
+
+        // Actualizar los datos locales después de confirmar el guardado.
+        table.items = updatedItems;
+        table.receipts = updatedReceipts;
+
+        // Actualizar la fecha de modificación local.
         appConfig.lastUpdated = Date.now();
 
-        // Guardar y esperar confirmación de Google Sheets.
-        await syncDataToCloud();
+        // Guardar el estado actualizado en el almacenamiento local.
+        saveData();
 
+        // Informar que el recibo fue generado correctamente.
         showCustomAlert('Recibo generado correctamente.');
 
-        // Actualizar la pantalla: los productos facturados
-        // aparecerán deshabilitados.
+        // Actualizar la pantalla de facturación.
         openBillSection();
 
     } catch (error) {
-        console.error('Error al generar recibo:', error);
 
-        // Revertir el estado de los productos.
-        previousBilledStates.forEach(previous => {
-            table.items[previous.index].billed = previous.billed;
-        });
-
-        // Eliminar el recibo que no pudo sincronizarse.
-        table.receipts = table.receipts.filter(
-            receipt => receipt.id !== receiptId
+        // Registrar el error para facilitar su diagnóstico.
+        console.error(
+            'RESTOPOS: Error generando recibo en Firebase:',
+            error.code,
+            error.message
         );
 
-        saveData();
-
+        // Informar que no se pudo confirmar el recibo.
         showCustomAlert(
-            'No se pudo confirmar el recibo en Google Sheets. ' +
-            'Los productos siguen disponibles para facturar.'
+            'No se pudo confirmar el recibo en Firebase. ' +
+            'Verifique su conexión e inténtelo nuevamente.'
         );
 
+        // Actualizar la pantalla de facturación.
         openBillSection();
 
     } finally {
+
+        // Habilitar nuevamente el botón de generación.
         if (generateButton) {
             generateButton.disabled = false;
             generateButton.textContent =
@@ -1780,6 +2820,7 @@ async function generateReceipt() {
         }
     }
 }
+
 
 
 
@@ -2028,27 +3069,23 @@ function printReceipt(receiptId) {
     printWindow.document.close();
 }
 
-
-
-
-
 /**
- * Registra el pago del recibo y guarda la venta en Google Sheets.
- * Cómo lo realiza: Inserta filas en la tabla `Facturas` y actualiza estados de mesa.
- * Consulta a Sheets: Inserta en `Facturas` vía `sendNewSalesToCloud()`.
- * La siguiente versión conserva el registro de ventas y elimina 
- * los productos pagados de la cuenta.
-También evita depender exclusivamente de receipt.itemUids, 
-porque recupera los UID desde los productos guardados en el 
-recibo cuando sea necesario.
+ * ==========================================================
+ * CONFIRMAR PAGO DE RECIBO
+ * Registra las ventas en Firebase Firestore y actualiza
+ * la mesa mediante una transacción atómica.
+ * ==========================================================
  */
-
-
 async function confirmPayReceipt(receiptId) {
-    const table = tables.find(t => t.id === currentTableId);
 
-    if (!table || !table.receipts) return;
+    // Buscar la mesa seleccionada.
+    const table = tables.find(
+        t => String(t.id) === String(currentTableId)
+    );
 
+    if (!table || !Array.isArray(table.receipts)) return;
+
+    // Buscar el recibo que se desea cobrar.
     const receipt = table.receipts.find(
         r => Number(r.id) === Number(receiptId)
     );
@@ -2197,6 +3234,7 @@ async function confirmPayReceipt(receiptId) {
 
     // Calcular el cambio automáticamente.
     amountInput.oninput = () => {
+
         const received = Math.floor(Number(amountInput.value) || 0);
         const change = Math.max(0, received - total);
 
@@ -2210,13 +3248,17 @@ async function confirmPayReceipt(receiptId) {
         }
     };
 
+    // Cancelar el cobro.
     document.getElementById('payReceiptCancel').onclick = () => {
         modal.style.display = 'none';
     };
 
+    // Confirmar y registrar el pago.
     confirmButton.onclick = async () => {
+
         const received = Math.floor(Number(amountInput.value) || 0);
 
+        // Validar el dinero recibido.
         if (!Number.isSafeInteger(received) || received < total) {
             errorDisplay.textContent =
                 'Ingrese un monto igual o superior al total.';
@@ -2224,118 +3266,256 @@ async function confirmPayReceipt(receiptId) {
             return;
         }
 
-        // Evitar doble confirmación.
+        if (total <= 0) {
+            errorDisplay.textContent =
+                'El total del recibo no es válido.';
+            return;
+        }
+
+        // Verificar conexión a internet.
+        if (!navigator.onLine) {
+            errorDisplay.textContent =
+                'No hay conexión a internet.';
+            return;
+        }
+
+        // Evitar múltiples confirmaciones.
+        if (confirmButton.disabled) return;
+
         confirmButton.disabled = true;
         confirmButton.textContent = 'Procesando...';
 
-        const currentTable = tables.find(
-            t => t.id === currentTableId
-        );
-
-        if (!currentTable || !currentTable.receipts) {
-            modal.style.display = 'none';
-            showCustomAlert('No se encontró la cuenta.');
-            return;
-        }
-
-        const receiptIndex = currentTable.receipts.findIndex(
-            r => Number(r.id) === Number(receiptId)
-        );
-
-        if (receiptIndex === -1) {
-            modal.style.display = 'none';
-            showCustomAlert('El recibo ya no está disponible.');
-            return;
-        }
-
-        const currentReceipt = currentTable.receipts[receiptIndex];
-
-        const nowFull = new Date();
-
-        const facNumero =
-            `FAC-${nowFull.getFullYear()}` +
-            `${String(nowFull.getMonth() + 1).padStart(2, '0')}` +
-            `${String(nowFull.getDate()).padStart(2, '0')}` +
-            `${String(nowFull.getHours()).padStart(2, '0')}` +
-            `${String(nowFull.getMinutes()).padStart(2, '0')}`;
-
-        const newSalesBatch = [];
-
-        (currentReceipt.items || []).forEach(item => {
-            newSalesBatch.push({
-                facnumero: facNumero,
-                mesa: currentTable.name,
-                plato: item.name,
-                detallesmodificaciones: item.observation || 'Ninguna',
-                valorpagado: item.finalPrice,
-                fecha: nowFull.toLocaleDateString(),
-                hora: nowFull.toLocaleTimeString(),
-                usuario: localStorage.getItem('restopos_current_user') || 'admin'
-            });
-        });
-
-        const itemUids = currentReceipt.itemUids?.length
-            ? currentReceipt.itemUids
-            : (currentReceipt.items || [])
-                .map(item => item.uid)
-                .filter(Boolean);
-
         try {
-            // Primero registrar las ventas.
-            await sendNewSalesToCloud(newSalesBatch);
 
-            salesHistory.push(...newSalesBatch);
+            // Identificar el documento de la mesa en Firestore.
+            const documentId =
+                table._docId || `mesa_${table.id}`;
 
-            // Eliminar recibo pagado.
-            currentTable.receipts.splice(receiptIndex, 1);
+            const tableRef = window.db
+                .collection('mesas')
+                .doc(documentId);
 
-            // Retirar los productos pagados de la cuenta.
-            currentTable.items = currentTable.items.filter(
-                item => !itemUids.includes(item.uid)
+            // Preparar identificadores únicos y estables del pago.
+            const paymentId =
+                `pago_${table.id}_${receipt.id}`;
+
+            const nowFull = new Date();
+
+            // Generar número de factura.
+            const facNumero =
+                `FAC-${nowFull.getFullYear()}` +
+                `${String(nowFull.getMonth() + 1).padStart(2, '0')}` +
+                `${String(nowFull.getDate()).padStart(2, '0')}` +
+                `${String(nowFull.getHours()).padStart(2, '0')}` +
+                `${String(nowFull.getMinutes()).padStart(2, '0')}` +
+                `${String(nowFull.getSeconds()).padStart(2, '0')}`;
+
+            const fecha = nowFull.toLocaleDateString();
+            const hora = nowFull.toLocaleTimeString();
+
+            const usuario =
+                localStorage.getItem('restopos_current_user') || 'admin';
+
+            const cambio = received - total;
+
+            // Ejecutar el registro del pago y la actualización
+            // de la mesa dentro de una sola transacción.
+            const result = await window.RestoposDB.runTransaction(
+                async (transaction) => {
+
+                    // Leer la versión actual de la mesa en Firebase.
+                    const tableSnapshot = await transaction.get(tableRef);
+
+                    if (!tableSnapshot.exists) {
+                        throw new Error(
+                            'La mesa no existe en Firebase.'
+                        );
+                    }
+
+                    const cloudTable = tableSnapshot.data();
+
+                    const cloudItems = Array.isArray(cloudTable.items)
+                        ? cloudTable.items
+                        : [];
+
+                    const cloudReceipts = Array.isArray(cloudTable.receipts)
+                        ? cloudTable.receipts
+                        : [];
+
+                    // Comprobar que el recibo todavía esté pendiente.
+                    const receiptIndex = cloudReceipts.findIndex(
+                        r => Number(r.id) === Number(receiptId)
+                    );
+
+                    if (receiptIndex === -1) {
+                        throw new Error(
+                            'El recibo ya fue cobrado o anulado.'
+                        );
+                    }
+
+                    const currentReceipt = cloudReceipts[receiptIndex];
+
+                    const receiptItems = Array.isArray(currentReceipt.items)
+                        ? currentReceipt.items
+                        : [];
+
+                    if (receiptItems.length === 0) {
+                        throw new Error(
+                            'El recibo no contiene productos.'
+                        );
+                    }
+
+                    // Obtener los UID de los productos cobrados.
+                    const itemUids = currentReceipt.itemUids?.length
+                        ? currentReceipt.itemUids
+                        : receiptItems
+                            .map(item => item.uid)
+                            .filter(Boolean);
+
+                    if (itemUids.length === 0) {
+                        throw new Error(
+                            'No se encontraron los identificadores de los productos.'
+                        );
+                    }
+
+                    // Preparar los documentos de venta.
+                    const newSalesBatch = receiptItems.map(
+                        (item, index) => {
+
+                            const saleId =
+                                `${paymentId}_${index + 1}`;
+
+                            return {
+                                id: saleId,
+                                facnumero: facNumero,
+                                mesa: cloudTable.name || table.name,
+                                plato: item.name || 'Producto',
+                                detallesmodificaciones:
+                                    item.observation || 'Ninguna',
+                                valorpagado:
+                                    Math.round(Number(item.finalPrice) || 0),
+                                fecha,
+                                hora,
+                                usuario,
+
+                                // Datos adicionales para relacionar
+                                // cada producto con su pago.
+                                receiptId: String(currentReceipt.id),
+                                tableId: Number(cloudTable.id),
+                                paymentId,
+                                createdAt: nowFull.getTime(),
+                                totalFactura: total,
+                                dineroRecibido: received,
+                                cambio
+                            };
+                        }
+                    );
+
+                    // Preparar los documentos de Firestore.
+                    // Los identificadores deterministas evitan
+                    // duplicar ventas si se reintenta la operación.
+                    const salesRefs = newSalesBatch.map(
+                        sale => window.db
+                            .collection('ventas')
+                            .doc(sale.id)
+                    );
+
+                    // Preparar la mesa sin el recibo cobrado.
+                    const updatedReceipts = cloudReceipts.filter(
+                        r => Number(r.id) !== Number(receiptId)
+                    );
+
+                    // Retirar únicamente los productos cobrados.
+                    const updatedItems = cloudItems.filter(
+                        item => !itemUids.includes(item.uid)
+                    );
+
+                    // Liberar la mesa solo si ya no tiene productos
+                    // ni recibos pendientes.
+                    const updatedStatus =
+                        updatedItems.length === 0 &&
+                        updatedReceipts.length === 0
+                            ? 'libre'
+                            : 'ocupada';
+
+                    // Registrar cada producto vendido.
+                    salesRefs.forEach((saleRef, index) => {
+                        transaction.set(
+                            saleRef,
+                            newSalesBatch[index]
+                        );
+                    });
+
+                    // Actualizar la mesa en la misma transacción.
+                    transaction.update(tableRef, {
+                        items: updatedItems,
+                        receipts: updatedReceipts,
+                        status: updatedStatus
+                    });
+
+                    return {
+                        newSalesBatch,
+                        updatedItems,
+                        updatedReceipts,
+                        updatedStatus
+                    };
+                }
             );
+
+            // Actualizar el estado local después del éxito
+            // confirmado por Firestore.
+            table.items = result.updatedItems;
+            table.receipts = result.updatedReceipts;
+            table.status = result.updatedStatus;
+
+            salesHistory.push(...result.newSalesBatch);
 
             appConfig.lastUpdated = Date.now();
 
             saveData();
 
-            await syncDataToCloud();
-
+            // Cerrar la ventana de cobro.
             modal.style.display = 'none';
 
-            const change = received - total;
-
+            // Informar el resultado.
             if (
-                currentTable.items.length === 0 &&
-                currentTable.receipts.length === 0
+                table.items.length === 0 &&
+                table.receipts.length === 0
             ) {
-                currentTable.status = 'libre';
-
-                saveData();
-                await syncDataToCloud();
 
                 showCustomAlert(
-                    `¡Pago registrado correctamente! Cambio: ${formatMoney(change)}`,
+                    `¡Pago registrado correctamente! Cambio: ${formatMoney(cambio)}`,
                     () => showSection('tables-section')
                 );
 
             } else {
+
                 showCustomAlert(
-                    `¡Pago registrado correctamente! Cambio: ${formatMoney(change)}`
+                    `¡Pago registrado correctamente! Cambio: ${formatMoney(cambio)}`
                 );
 
                 openBillSection();
             }
 
         } catch (error) {
-            console.error('Error registrando el pago:', error);
+
+            console.error(
+                'RESTOPOS: Error registrando pago en Firebase:',
+                error.code,
+                error.message
+            );
 
             modal.style.display = 'none';
 
             showCustomAlert(
-                'Ocurrió un error al registrar el pago. Verifique la hoja Facturas antes de volver a cobrar.'
+                'No se pudo registrar el pago en Firebase. ' +
+                'La transacción no se completó y la mesa conserva sus datos. ' +
+                'Verifique la conexión y los permisos antes de reintentar.'
             );
 
         } finally {
+
+            // Restaurar el botón para futuros cobros.
             confirmButton.disabled = false;
             confirmButton.textContent = 'Confirmar pago';
         }
@@ -2347,22 +3527,48 @@ async function confirmPayReceipt(receiptId) {
 
 
 
-
+/**
+ * ==========================================================
+ * ANULAR RECIBO
+ * Elimina el recibo de Firestore y devuelve los productos
+ * asociados al estado disponible para facturación.
+ * ==========================================================
+ */
 async function cancelReceipt(receiptId) {
-    const table = tables.find(t => t.id === currentTableId);
 
-    if (!table || !table.receipts) return;
-
-    const receiptIndex = table.receipts.findIndex(
-        r => Number(r.id) === Number(receiptId)
+    // Buscar la mesa que tiene abierta el usuario.
+    const table = tables.find(
+        t => Number(t.id) === Number(currentTableId)
     );
 
-    if (receiptIndex === -1) return;
+    // Verificar que la mesa y sus recibos existan.
+    if (!table || !Array.isArray(table.receipts)) return;
 
-    // Crear ventana de confirmación con diseño de RESTOPOS.
+    // Comprobar que exista conexión a internet.
+    if (!navigator.onLine) {
+        showCustomAlert(
+            'No hay conexión a internet. No se puede anular el recibo.'
+        );
+        return;
+    }
+
+    // Buscar el recibo que se desea anular.
+    const receiptIndex = table.receipts.findIndex(
+        receipt => Number(receipt.id) === Number(receiptId)
+    );
+
+    // Detener la operación si el recibo no existe.
+    if (receiptIndex === -1) {
+        showCustomAlert('No se encontró el recibo.');
+        return;
+    }
+
+    // Crear la ventana personalizada de confirmación.
     let modal = document.getElementById('cancelReceiptModal');
 
     if (!modal) {
+
+        // Crear el contenedor del popup.
         modal = document.createElement('div');
         modal.id = 'cancelReceiptModal';
 
@@ -2377,6 +3583,7 @@ async function cancelReceipt(receiptId) {
             padding:1rem;
         `;
 
+        // Construir el contenido y los botones.
         modal.innerHTML = `
             <div style="
                 background:#fff;
@@ -2395,10 +3602,18 @@ async function cancelReceipt(receiptId) {
                     para facturar.
                 </p>
 
-                <div style="display:flex;gap:0.6rem;margin-top:1.2rem;">
+                <div style="
+                    display:flex;
+                    gap:0.6rem;
+                    margin-top:1.2rem;
+                ">
                     <button id="cancelReceiptNo"
                         class="btn"
-                        style="flex:1;background:#e2e8f0;color:#1e293b;">
+                        style="
+                            flex:1;
+                            background:#e2e8f0;
+                            color:#1e293b;
+                        ">
                         Cancelar
                     </button>
 
@@ -2411,75 +3626,133 @@ async function cancelReceipt(receiptId) {
             </div>
         `;
 
+        // Incorporar el popup al documento.
         document.body.appendChild(modal);
     }
 
+    // Obtener las referencias de los botones.
+    const cancelButton = document.getElementById('cancelReceiptNo');
+    const confirmButton = document.getElementById('cancelReceiptYes');
+
+    // Mostrar el popup.
     modal.style.display = 'flex';
 
-    document.getElementById('cancelReceiptNo').onclick = () => {
+    // Configurar la cancelación de la operación.
+    cancelButton.onclick = () => {
         modal.style.display = 'none';
     };
 
-    document.getElementById('cancelReceiptYes').onclick = async () => {
-        modal.style.display = 'none';
+    // Configurar la confirmación de anulación.
+    confirmButton.onclick = async () => {
 
-        const receipt = table.receipts[receiptIndex];
+        // Evitar múltiples operaciones simultáneas.
+        if (confirmButton.disabled) return;
 
-        const itemUids = receipt.itemUids?.length
-            ? receipt.itemUids
-            : (receipt.items || [])
-                .map(item => item.uid)
-                .filter(Boolean);
-
-        const previousStates = table.items.map(item => ({
-            uid: item.uid,
-            billed: item.billed
-        }));
+        confirmButton.disabled = true;
+        confirmButton.textContent = 'Procesando...';
 
         try {
-            table.items.forEach(item => {
+
+            // Obtener nuevamente el recibo seleccionado.
+            const currentReceiptIndex = table.receipts.findIndex(
+                receipt => Number(receipt.id) === Number(receiptId)
+            );
+
+            // Verificar que el recibo siga existiendo.
+            if (currentReceiptIndex === -1) {
+                throw new Error('El recibo ya no está disponible.');
+            }
+
+            const receipt = table.receipts[currentReceiptIndex];
+
+            // Obtener los UID de los productos asociados al recibo.
+            const itemUids = receipt.itemUids?.length
+                ? receipt.itemUids
+                : (receipt.items || [])
+                    .map(item => item.uid)
+                    .filter(Boolean);
+
+            // Preparar los productos con su estado de facturación restaurado.
+            const updatedItems = table.items.map(item => {
+
+                // Restaurar únicamente los productos de este recibo.
                 if (itemUids.includes(item.uid)) {
-                    item.billed = false;
+                    return {
+                        ...item,
+                        billed: false
+                    };
                 }
+
+                // Conservar los demás productos sin cambios.
+                return item;
             });
 
-            table.receipts.splice(receiptIndex, 1);
+            // Preparar la lista de recibos sin el recibo anulado.
+            const updatedReceipts = table.receipts.filter(
+                (currentReceipt, index) =>
+                    index !== currentReceiptIndex
+            );
 
+            // Obtener el identificador real del documento de Firestore.
+            const documentId = table._docId || `mesa_${table.id}`;
+
+            // Guardar la anulación y restaurar los productos en una sola operación.
+            await window.RestoposDB.update(
+                'mesas',
+                documentId,
+                {
+                    items: updatedItems,
+                    receipts: updatedReceipts
+                }
+            );
+
+            // Actualizar los datos locales después de confirmar el guardado.
+            table.items = updatedItems;
+            table.receipts = updatedReceipts;
+
+            // Actualizar la fecha de modificación local.
             appConfig.lastUpdated = Date.now();
 
-            await syncDataToCloud();
+            // Guardar los cambios en el almacenamiento local.
+            saveData();
 
+            // Cerrar el popup de confirmación.
+            modal.style.display = 'none';
+
+            // Informar que el recibo fue anulado correctamente.
             showCustomAlert(
                 'Recibo anulado correctamente. Los productos están disponibles nuevamente.'
             );
 
+            // Actualizar la pantalla de facturación.
             openBillSection();
 
         } catch (error) {
-            console.error('Error anulando recibo:', error);
 
-            previousStates.forEach(previous => {
-                const item = table.items.find(
-                    current => current.uid === previous.uid
-                );
-
-                if (item) {
-                    item.billed = previous.billed;
-                }
-            });
-
-            table.receipts.push(receipt);
-
-            saveData();
-
-            showCustomAlert(
-                'No se pudo anular el recibo. Verifique la conexión.'
+            // Registrar el error para facilitar su diagnóstico.
+            console.error(
+                'RESTOPOS: Error anulando recibo en Firebase:',
+                error.code,
+                error.message
             );
 
-            openBillSection();
+            // Cerrar el popup.
+            modal.style.display = 'none';
+
+            // Informar que no se pudo completar la operación.
+            showCustomAlert(
+                'No se pudo anular el recibo. Verifique la conexión e inténtelo nuevamente.'
+            );
+
+        } finally {
+
+            // Restaurar el botón para futuras operaciones.
+            confirmButton.disabled = false;
+            confirmButton.textContent = 'Sí, anular';
         }
     };
 }
+
 
 
 
@@ -2514,6 +3787,128 @@ function showCustomAlert(message, callback) {
         alertOverlay.style.display = 'none';
         if (typeof callback === 'function') callback();
     };
+}
+
+/**
+ * ==========================================================
+ * CONFIRMACIÓN PERSONALIZADA
+ * Muestra un popup blanco con botones Cancelar y Eliminar.
+ * Devuelve true si el usuario confirma y false si cancela.
+ * ==========================================================
+ */
+function showCustomConfirm(message) {
+
+    // Buscar el modal existente para evitar crear duplicados.
+    let confirmOverlay = document.getElementById('customConfirmModal');
+
+    // Crear el modal si todavía no existe.
+    if (!confirmOverlay) {
+
+        confirmOverlay = document.createElement('div');
+        confirmOverlay.id = 'customConfirmModal';
+
+        // Aplicar el mismo estilo visual de showCustomAlert.
+        confirmOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10002;
+            padding: 1rem;
+        `;
+
+        // Construir el contenido del popup.
+        confirmOverlay.innerHTML = `
+            <div style="
+                background: #fff;
+                padding: 1.5rem;
+                border-radius: 12px;
+                width: 100%;
+                max-width: 320px;
+                text-align: center;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            ">
+                <h3 style="color: #1f2937; margin-top: 0;">
+                    Confirmar eliminación
+                </h3>
+
+                <p id="customConfirmMessage"
+                   style="font-size: 0.9rem; color: #374151; margin-bottom: 1.2rem;">
+                </p>
+
+                <div style="
+                    display: flex;
+                    justify-content: center;
+                    gap: 0.7rem;
+                ">
+                    <button
+                        type="button"
+                        id="customConfirmCancelBtn"
+                        style="
+                            padding: 0.5rem 1rem;
+                            background: #e5e7eb;
+                            color: #374151;
+                            border: none;
+                            border-radius: 6px;
+                        ">
+                        Cancelar
+                    </button>
+
+                    <button
+                        type="button"
+                        id="customConfirmDeleteBtn"
+                        style="
+                            padding: 0.5rem 1rem;
+                            background: #dc2626;
+                            color: #fff;
+                            border: none;
+                            border-radius: 6px;
+                        ">
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Incorporar el modal al documento.
+        document.body.appendChild(confirmOverlay);
+    }
+
+    // Mostrar el mensaje de forma segura como texto.
+    document.getElementById('customConfirmMessage').innerText = message;
+
+    // Mostrar el popup.
+    confirmOverlay.style.display = 'flex';
+
+    // Esperar la decisión del usuario.
+    return new Promise(resolve => {
+
+        // Obtener los botones del popup.
+        const cancelBtn = document.getElementById('customConfirmCancelBtn');
+        const deleteBtn = document.getElementById('customConfirmDeleteBtn');
+
+        // Función común para cerrar el popup y devolver la decisión.
+        const finishConfirmation = (confirmed) => {
+            confirmOverlay.style.display = 'none';
+
+            // Retirar los eventos para evitar ejecuciones duplicadas.
+            cancelBtn.onclick = null;
+            deleteBtn.onclick = null;
+
+            resolve(confirmed);
+        };
+
+        // Cancelar la operación.
+        cancelBtn.onclick = () => finishConfirmation(false);
+
+        // Confirmar la operación.
+        deleteBtn.onclick = () => finishConfirmation(true);
+    });
 }
 
 
@@ -2603,6 +3998,7 @@ function renderProducts() {
     }
 }
 
+
 async function saveProduct() {
     const nameInput = document.getElementById('newProdName');
     const priceInput = document.getElementById('newProdPrice');
@@ -2619,25 +4015,98 @@ async function saveProduct() {
         return;
     }
 
-    if (editingProductId !== null) {
-        const prod = products.find(p => p.id === editingProductId);
-        if (prod) {
-            prod.name = name;
-            prod.price = price;
-            prod.category = category;
-            prod.active = active;
-        }
-        cancelEditProduct();
-    } else {
-        const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
-        products.push({ id: newId, name, price, category, active });
-    }
+    try {
+        let productId;
+        let documentId;
 
-    appConfig.lastUpdated = Date.now();
-    await saveDataAndSyncCloudSync('Plato guardado y sincronizado exitosamente.');
-    cancelEditProduct();
-    renderProducts();
+        if (editingProductId !== null) {
+            // EDITAR PRODUCTO EXISTENTE
+            const prod = products.find(p => p.id === editingProductId);
+
+            if (!prod) {
+                showCustomAlert('No se encontró el producto que desea editar.');
+                return;
+            }
+
+            productId = prod.id;
+            documentId = prod._docId || `producto_${productId}`;
+
+        } else {
+            // CREAR PRODUCTO NUEVO
+            const numericIds = products.map(p => Number(p.id) || 0);
+
+            productId = numericIds.length > 0
+                ? Math.max(...numericIds) + 1
+                : 1;
+
+            documentId = `producto_${productId}`;
+        }
+
+        const productData = {
+            id: productId,
+            name: name,
+            price: price,
+            category: category,
+            active: active
+        };
+
+        // Guardar directamente en Firestore
+        await window.RestoposDB.set(
+            'productos',
+            documentId,
+            productData
+        );
+
+        // Actualizar estado local después de confirmar el guardado
+        if (editingProductId !== null) {
+            const prod = products.find(p => p.id === editingProductId);
+
+            Object.assign(prod, productData, {
+                _docId: documentId
+            });
+
+        } else {
+            products.push({
+                ...productData,
+                _docId: documentId
+            });
+        }
+
+        // Actualizar listas de categorías
+        drinks = products.filter(product =>
+            String(product.category || '').toLowerCase() === 'bebidas'
+        );
+
+        addons = products.filter(product =>
+            String(product.category || '').toLowerCase() === 'adicionales'
+        );
+
+        appConfig.lastUpdated = Date.now();
+
+        saveData();
+
+        cancelEditProduct();
+        renderProducts();
+
+        showCustomAlert(
+            editingProductId !== null
+                ? 'Producto actualizado correctamente en Firebase.'
+                : 'Producto creado correctamente en Firebase.'
+        );
+
+    } catch (error) {
+        console.error(
+            'RESTOPOS: Error guardando producto en Firebase:',
+            error.code,
+            error.message
+        );
+
+        showCustomAlert(
+            'No se pudo guardar el producto en Firebase. Verifique su conexión e inténtelo nuevamente.'
+        );
+    }
 }
+
 
 function editProduct(id) {
     const prod = products.find(p => p.id === id);
@@ -2677,18 +4146,85 @@ function cancelEditProduct() {
     document.getElementById('btnCancelEdit').classList.add('hidden');
 }
 
+
+
+/**
+ * ==========================================================
+ * ELIMINAR PRODUCTO
+ * Solicita confirmación mediante el popup personalizado
+ * y elimina definitivamente el documento de Firestore.
+ * ==========================================================
+ */
 async function deleteProduct(id) {
+
+    // Buscar el producto en el catálogo local.
     const prod = products.find(p => p.id === id);
+
+    // Detener la operación si el producto no existe.
     if (!prod) return;
 
-    if (confirm(`¿Desea eliminar el plato "${prod.name}"?`)) {
+    // Mostrar confirmación personalizada.
+    const confirmed = await showCustomConfirm(
+        `¿Desea eliminar el plato "${prod.name}"?`
+    );
+
+    // Cancelar la operación si el usuario no confirma.
+    if (!confirmed) return;
+
+    try {
+
+        // Obtener el identificador real del documento de Firestore.
+        const documentId = prod._docId || `producto_${prod.id}`;
+
+        // Eliminar definitivamente el documento de Firestore.
+        await window.RestoposDB.remove(
+            'productos',
+            documentId
+        );
+
+        // Retirar el producto de la lista local.
         products = products.filter(p => p.id !== id);
-        if (editingProductId === id) cancelEditProduct();
+
+        // Actualizar las listas de bebidas y adicionales.
+        drinks = products.filter(product =>
+            String(product.category || '').toLowerCase() === 'bebidas'
+        );
+
+        addons = products.filter(product =>
+            String(product.category || '').toLowerCase() === 'adicionales'
+        );
+
+        // Cancelar la edición si el producto eliminado estaba seleccionado.
+        if (editingProductId === id) {
+            cancelEditProduct();
+        }
+
+        // Guardar los cambios locales.
         appConfig.lastUpdated = Date.now();
-        await saveDataAndSyncCloudSync('Plato eliminado exitosamente.');
+        saveData();
+
+        // Actualizar visualmente el catálogo.
         renderProducts();
+
+        // Informar que la eliminación fue exitosa.
+        showCustomAlert('Producto eliminado definitivamente de Firebase.');
+
+    } catch (error) {
+
+        // Registrar el error para facilitar el diagnóstico.
+        console.error(
+            'RESTOPOS: Error eliminando producto de Firebase:',
+            error.code,
+            error.message
+        );
+
+        // Informar al usuario que no se pudo completar la operación.
+        showCustomAlert(
+            'No se pudo eliminar el producto. Verifique su conexión e inténtelo nuevamente.'
+        );
     }
 }
+
 
 function renderDrinks() {
     const list = document.getElementById('drinksList');
@@ -2734,21 +4270,58 @@ function cancelEditAddon() {
  */
 async function loadDataFromCloud() {
     try {
-        const response = await fetch(`${WEB_APP_URL}?action=getData`);
-        if (!response.ok) throw new Error("Error HTTP");
-        const cloudData = await response.json();
-        if (cloudData && cloudData.status !== 'error') {
-            if (Array.isArray(cloudData.tables)) tables = cloudData.tables;
-            if (Array.isArray(cloudData.products)) products = cloudData.products;
-            if (Array.isArray(cloudData.drinks)) drinks = cloudData.drinks;
-            if (Array.isArray(cloudData.addons)) addons = cloudData.addons;
-            if (Array.isArray(cloudData.users)) users = cloudData.users;
-            if (cloudData.config) appConfig = cloudData.config;
-            saveData();
-            return true;
+        console.log('RESTOPOS: Cargando datos desde Firebase...');
+
+        const [cloudTables, cloudProducts, cloudConfig] =
+            await Promise.all([
+                window.RestoposDB.getAll('mesas'),
+                window.RestoposDB.getAll('productos'),
+                window.RestoposDB.getById('configuracion', 'general')
+            ]);
+
+        // MESAS
+        tables = cloudTables;
+
+        // PRODUCTOS
+        products = cloudProducts;
+
+        // BEBIDAS: productos de categoría bebidas
+        drinks = products.filter(product =>
+            String(product.category || '').toLowerCase() === 'bebidas'
+        );
+
+        // ADICIONALES: productos de categoría adicionales
+        addons = products.filter(product =>
+            String(product.category || '').toLowerCase() === 'adicionales'
+        );
+
+        // CONFIGURACIÓN GENERAL
+        if (cloudConfig) {
+            appConfig = {
+                ...appConfig,
+                ...cloudConfig
+            };
         }
-    } catch (e) {
-        console.warn("Usando caché local:", e);
+
+        // Guardar copia local
+        saveData();
+
+        console.log('RESTOPOS: Datos cargados desde Firebase.', {
+            mesas: tables.length,
+            productos: products.length,
+            bebidas: drinks.length,
+            adicionales: addons.length
+        });
+
+        return true;
+
+    } catch (error) {
+        console.error(
+            'RESTOPOS: Error cargando datos desde Firebase:',
+            error.code,
+            error.message
+        );
+
         return false;
     }
 }
@@ -3108,7 +4681,7 @@ function generateWeeklyChartHtml(sales) {
                         </linearGradient>
                     </defs>
                     <line x1="0" y1="0" x2="${chartWidth}" y2="0" stroke="#f1f5f9" stroke-width="1"/>
-                    <line x1="0" y1="${chartHeight/2}" x2="${chartWidth}" y2="${chartHeight/2}" stroke="#f1f5f9" stroke-width="1"/>
+                    <line x1="0" y1="${chartHeight / 2}" x2="${chartWidth}" y2="${chartHeight / 2}" stroke="#f1f5f9" stroke-width="1"/>
                     <line x1="0" y1="${chartHeight}" x2="${chartWidth}" y2="${chartHeight}" stroke="#e2e8f0" stroke-width="1"/>
                     <polygon points="${polylineArea}" fill="url(#orangeGradient)" />
                     <polyline fill="none" stroke="#ea580c" stroke-width="2.5" points="${points}" stroke-linecap="round" stroke-linejoin="round"/>
@@ -3171,11 +4744,11 @@ function generateDailySalesChartHtml(sales) {
 
     const maxDataVal = Math.max(...chartValues, 100000);
     const topVal = Math.ceil(maxDataVal / 250000) * 250000 || 1000000;
-    
+
     const chartHeight = 160;
-    const chartWidth = Math.max(650, chartLabels.length * 55); 
+    const chartWidth = Math.max(650, chartLabels.length * 55);
     const paddingLeft = 100; // 👈 Aumentado para dar espacio a los números y al texto vertical
-    const paddingBottom = 60; 
+    const paddingBottom = 60;
     const paddingRight = 20;
     const usableWidth = chartWidth - paddingLeft - paddingRight;
     const slotWidth = chartLabels.length > 0 ? usableWidth / chartLabels.length : usableWidth;
@@ -3204,7 +4777,7 @@ function generateDailySalesChartHtml(sales) {
     for (let i = 0; i <= steps; i++) {
         const yCoord = (chartHeight / steps) * i;
         const valLabel = topVal - (topVal / steps) * i;
-        
+
         let formattedVal = Math.round(valLabel).toLocaleString();
 
         if (i < steps) {

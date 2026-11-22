@@ -198,7 +198,7 @@ body:has(#order-section:not(.hidden)) {
 
         <div class="input-group">
             <label>Usuario</label>
-            <input type="text" id="userInput" placeholder="Ej: admin, mesero">
+            <input type="text" id="userInput" placeholder="Correo@ejemplo.com" autocomplete="email" required>
         </div>
 
         <div class="input-group">
@@ -211,7 +211,6 @@ body:has(#order-section:not(.hidden)) {
         </button>
 
         <p style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
-            Admin por defecto: admin / 123
         </p>
 
     </div>
@@ -868,8 +867,17 @@ body:has(#order-section:not(.hidden)) {
      SCRIPT PRINCIPAL
      NO MODIFICAR LA LÓGICA DE app.js
 ========================================== -->
+<!-- FIREBASE SDK -->
+<script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore-compat.js"></script>
 
+<!-- CONFIGURACIÓN Y CONEXIÓN -->
+<script src="./js/config.js"></script>
+<script src="./js/firebase-init.js"></script>
+
+<!-- SERVICIOS DE DATOS FIREBASE -->
+<script src="./js/firebase-data.js"></script>
+
+<!-- APLICACIÓN PRINCIPAL -->
 <script src="./app.js"></script>
-
-</body>
-</html>
