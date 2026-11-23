@@ -4131,9 +4131,6 @@ async function confirmPayReceipt(receiptId) {
     amountInput.focus();
 }
 
-
-
-
 /**
  * ==========================================================
  * ANULAR RECIBO
