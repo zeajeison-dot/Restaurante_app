@@ -557,49 +557,60 @@ async function showSection(sectionId) {
         checkWaiterReadyAlarm();
 
         // Actualización automática de mesas desde Firebase cada 60 segundos
-        let isRefreshingTables = false;
+        // let isRefreshingTables = false;
 
-        tablesRefreshInterval = setInterval(async () => {
-            const tablesSec = document.getElementById('tables-section');
+        
+        // Escuchar cambios de mesas en tiempo real desde Firebase.
+        console.log(
+            'RESTOPOS: Activando escucha en tiempo real para mesas...'
+        );
 
-            if (tablesSec && !tablesSec.classList.contains('hidden')) {
+        kitchenFirestoreUnsubscribe = window.RestoposDB.listenCollection(
+            'mesas',
 
-                if (isRefreshingTables) return;
+            (cloudTables) => {
 
-                isRefreshingTables = true;
+                const tablesSec = document.getElementById('tables-section');
 
-                try {
-                    const cloudTables = await window.RestoposDB.getAll('mesas');
-
-                    if (Array.isArray(cloudTables)) {
-                        tables = cloudTables;
-
-                        renderTables();
-                        checkWaiterReadyAlarm();
-
-                        console.log(
-                            'RESTOPOS: Mesas actualizadas desde Firebase:',
-                            tables.length
-                        );
-                    }
-
-                } catch (e) {
-                    console.warn(
-                        'RESTOPOS: Error actualizando mesas desde Firebase:',
-                        e.code,
-                        e.message
-                    );
-
-                } finally {
-                    isRefreshingTables = false;
+                // Comprobar que la pantalla de mesas siga abierta.
+                if (
+                    !tablesSec ||
+                    tablesSec.classList.contains('hidden')
+                ) {
+                    return;
                 }
 
-            } else {
-                clearInterval(tablesRefreshInterval);
-                tablesRefreshInterval = null;
-            }
+                if (Array.isArray(cloudTables)) {
 
-        }, 60000);
+                    // Actualizar las mesas con los datos de Firebase.
+                    tables = cloudTables;
+
+                    // Guardar los datos locales.
+                    saveData();
+
+                    // Actualizar visualmente las mesas.
+                    renderTables();
+
+                    // Comprobar si cocina atendió alguna comanda.
+                    checkWaiterReadyAlarm();
+
+                    console.log(
+                        'RESTOPOS: Mesas sincronizadas en tiempo real.',
+                        'Mesas:',
+                        tables.length
+                    );
+                }
+            },
+
+            (error) => {
+                console.error(
+                    'RESTOPOS: Error en escucha de mesas:',
+                    error.code,
+                    error.message
+                );
+            }
+        );
+
 
     } else if (sectionId === 'tables-admin-section') {
         cancelEditTable();
