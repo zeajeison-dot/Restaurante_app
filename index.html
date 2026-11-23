@@ -371,51 +371,103 @@ body:has(#order-section:not(.hidden)) {
          6. GESTIÓN DE USUARIOS Y PERMISOS
     ========================================== -->
 
-    <div id="users-admin-section" class="card hidden">
+    
+<div id="users-admin-section" class="card hidden">
 
-        <h2>👥 Gestión de Usuarios y Permisos</h2>
+    <h2 id="formUserTitle">👥 Gestión de Usuarios y Permisos</h2>
 
-        <div class="input-group">
-            <label id="formUserTitle">Nombre de Usuario</label>
-            <input type="text" id="newUsername" placeholder="Ej: mesero_carlos">
-        </div>
+    <!-- Nombre del empleado -->
+    <div class="input-group">
+        <label for="newUserName">Nombre del empleado</label>
+        <input
+            type="text"
+            id="newUserName"
+            placeholder="Ej: Carlos Pérez"
+            autocomplete="name"
+        >
+    </div>
 
-        <div class="input-group">
-            <label>Contraseña / PIN</label>
-            <input type="password" id="newUserPass" placeholder="••••">
-        </div>
+    <!-- Correo electrónico -->
+    <div class="input-group">
+        <label for="newUserEmail">Correo electrónico</label>
+        <input
+            type="email"
+            id="newUserEmail"
+            placeholder="Ej: carlos@gmail.com"
+            autocomplete="email"
+        >
+    </div>
 
-        <div class="input-group">
-            <label>Rol / Permisos en el Sistema</label>
+    <!-- Contraseña -->
+    <div class="input-group">
+        <label for="newUserPass">Contraseña</label>
+        <input
+            type="password"
+            id="newUserPass"
+            placeholder="Mínimo 6 caracteres"
+            autocomplete="new-password"
+        >
+        <small id="userPasswordHelp">
+            Obligatoria para crear una cuenta. Déjala vacía al editar.
+        </small>
+    </div>
 
-            <select id="newUserRole">
-                <option value="mesero">Mesero (Solo Mesas y Pedidos)</option>
-                <option value="cocinero">Cocinero (Solo Módulo de Cocina)</option>
-                <option value="admin">Administrador (Acceso Total)</option>
-            </select>
-        </div>
+    <!-- Rol y permisos -->
+    <div class="input-group">
+        <label for="newUserRole">Rol / Permisos en el Sistema</label>
 
-        <button class="btn" id="btnSaveUser" onclick="saveUser()">
-            Crear / Guardar Usuario (Online)
-        </button>
+        <select id="newUserRole">
+            <option value="mesero">Mesero (Solo Mesas y Pedidos)</option>
+            <option value="cocinero">Cocinero (Solo Módulo de Cocina)</option>
+            <option value="admin">Administrador (Acceso Total)</option>
+        </select>
+    </div>
+    <!-- Estado del empleado -->
+    <div class="input-group">
+        <label for="newUserStatus">Estado del empleado</label>
+        <select id="newUserStatus">
+            <option value="true">Activo</option>
+            <option value="false">Desactivado</option>
+        </select>
+    </div>
 
-        <button class="btn btn-secondary hidden" id="btnCancelUserEdit" onclick="cancelEditUser()">
-            Cancelar Edición
-        </button>
+    <!-- Guardar usuario -->
+    <button class="btn" id="btnSaveUser" onclick="saveUser()">
+        Crear Usuario
+    </button>
 
-        <div style="margin-top: 1.5rem;">
+    <!-- Cancelar edición -->
+    <button
+        class="btn btn-secondary hidden"
+        id="btnCancelUserEdit"
+        onclick="cancelEditUser()"
+    >
+        Cancelar Edición
+    </button>
 
-            <h3>Usuarios Registrados</h3>
+    <!-- Listado de usuarios -->
+    <div style="margin-top: 1.5rem;">
 
-            <div id="usersList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
+        <h3>Usuarios Registrados</h3>
 
-        </div>
-
-        <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
-            Volver al Menú
-        </button>
+        <div
+            id="usersList"
+            style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"
+        ></div>
 
     </div>
+
+    <!-- Regresar al menú -->
+    <button
+        class="btn btn-secondary"
+        style="margin-top: 1.5rem;"
+        onclick="showSection('dashboard-view')"
+    >
+        Volver al Menú
+    </button>
+
+</div>
+
 
 
     <!-- ==========================================

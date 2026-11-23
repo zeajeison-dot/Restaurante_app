@@ -96,53 +96,96 @@ window.onload = function() {
             );
 
         } catch (error) {
-    console.error('RESTOPOS - Error al restaurar sesión:', error);
+            console.error('RESTOPOS - Error al restaurar sesión:', error);
 
-    showCustomAlert(
-        'Error verificando perfil: ' +
-        (error.code || 'sin código') +
-        ' - ' +
-        (error.message || 'Sin descripción')
-    );
+            showCustomAlert(
+                'Error verificando perfil: ' +
+                (error.code || 'sin código') +
+                ' - ' +
+                (error.message || 'Sin descripción')
+            );
 
-    await auth.signOut();
-}
+            await auth.signOut();
+        }
     });
 };
 
 
-/* ========================================================== */
-/* 2. AUTENTICACIÓN Y CONTROL DE VISTAS                       */
-/* ========================================================== */
 
 /**
- * Descarga exclusivamente la tabla de Usuarios y Configuración desde la nube para el Login.
- * Cómo lo realiza: Realiza un fetch al endpoint ligero `getUsersAndConfig`.
- * Consulta a Sheets: Lee únicamente las tablas `Usuarios` y `Config`.
+ * ==========================================================
+ * CARGAR USUARIOS Y CONFIGURACIÓN DESDE FIREBASE
+ * ==========================================================
+ *
+ * Obtiene la configuración general desde Firestore.
+ * Si el usuario autenticado es administrador, también
+ * consulta la colección de usuarios.
+ *
+ * La autenticación y las contraseñas son gestionadas
+ * exclusivamente por Firebase Authentication.
+ *
+ * ==========================================================
  */
 async function loadUsersAndConfigFromCloud() {
     try {
-        const response = await fetch(`${WEB_APP_URL}?action=getUsersAndConfig`);
-        if (!response.ok) throw new Error("Error HTTP al consultar usuarios");
-        const cloudData = await response.json();
-
-        if (cloudData && cloudData.status !== 'error') {
-            if (Array.isArray(cloudData.users)) {
-                users = cloudData.users;
-                localStorage.setItem('restopos_users', JSON.stringify(users));
-            }
-            if (cloudData.config) {
-                appConfig = cloudData.config;
-                localStorage.setItem('restopos_config', JSON.stringify(appConfig));
-            }
-            return true;
+        if (!window.auth || !window.auth.currentUser) {
+            throw new Error('No hay un usuario autenticado en Firebase.');
         }
-    } catch (e) {
-        console.warn("No se pudieron cargar usuarios de la nube, usando caché local:", e);
-        users = JSON.parse(localStorage.getItem('restopos_users')) || [];
+
+        // Consultar la configuración general.
+        const cloudConfig = await window.RestoposDB.getById(
+            'configuracion',
+            'general'
+        );
+
+        if (cloudConfig) {
+            appConfig = {
+                ...appConfig,
+                waiterAlarmInterval: Number(cloudConfig.waiterAlarmInterval) || 60,
+                waiterCanGenerateReceipt:
+                    cloudConfig.waiterCanGenerateReceipt !== false,
+                lastUpdated: Number(cloudConfig.lastUpdated) || 0
+            };
+
+            localStorage.setItem(
+                'restopos_config',
+                JSON.stringify(appConfig)
+            );
+        }
+
+        // Consultar los datos del usuario autenticado.
+        const currentUser = await window.RestoposDB.getById(
+            'usuarios',
+            window.auth.currentUser.uid
+        );
+
+        if (!currentUser || currentUser.activo !== true) {
+            throw new Error('El usuario no existe o está desactivado.');
+        }
+
+        // Solo el administrador puede consultar la lista completa.
+        if (currentUser.rol === 'admin') {
+            users = await window.RestoposDB.getAll('usuarios');
+
+            localStorage.setItem(
+                'restopos_users',
+                JSON.stringify(users)
+            );
+        }
+
+        return true;
+
+    } catch (error) {
+        console.error(
+            'RESTOPOS: Error cargando usuarios o configuración:',
+            error.code,
+            error.message
+        );
+
+        return false;
     }
-    return false;
 }
+
 
 /**
  * Valida las credenciales ingresadas consultando estrictamente la tabla de usuarios.
@@ -239,26 +282,79 @@ function setupUserSession(username, role, isNewLogin = false) {
     }
 }
 
+
 /**
- * Guarda la configuración de intervalos de alarma de mesero en Google Sheets.
- * Cómo lo realiza: Valida el input en segundos y sincroniza con la nube.
- * Consulta a Sheets: Modifica la tabla `Config` vía `saveDataAndSyncCloudSync()`.
+ * ==========================================================
+ * GUARDAR CONFIGURACIÓN DE ALARMAS Y PERMISOS EN FIREBASE
+ * ==========================================================
+ *
+ * Guarda el intervalo de alarma para los meseros y el permiso
+ * para generar recibos directamente en Firestore.
+ *
+ * Colección: configuracion
+ * Documento: general
+ *
+ * ==========================================================
  */
 async function saveWaiterAlarmConfig() {
-    const val = parseInt(document.getElementById('waiterAlarmIntervalParam').value, 10);
-    const canGen = document.getElementById('waiterCanGenerateReceiptParam')?.checked ?? true;
+    const val = parseInt(
+        document.getElementById('waiterAlarmIntervalParam').value,
+        10
+    );
+
+    const canGen = document
+        .getElementById('waiterCanGenerateReceiptParam')
+        ?.checked ?? true;
 
     if (isNaN(val) || val < 5) {
-        showCustomAlert('Ingrese un valor válido en segundos (mínimo 5).');
+        showCustomAlert(
+            'Ingrese un valor válido en segundos (mínimo 5).'
+        );
         return;
     }
 
-    appConfig.waiterAlarmInterval = val;
-    appConfig.waiterCanGenerateReceipt = canGen;
-    appConfig.lastUpdated = Date.now();
+    try {
+        const updatedConfig = {
+            waiterAlarmInterval: val,
+            waiterCanGenerateReceipt: canGen,
+            lastUpdated: Date.now()
+        };
 
-    await saveDataAndSyncCloudSync('Configuración y permisos guardados correctamente en Sheets.');
+        // Guardar configuración directamente en Firestore.
+        await window.RestoposDB.set(
+            'configuracion',
+            'general',
+            updatedConfig,
+            true
+        );
+
+        // Actualizar la configuración local.
+        appConfig = {
+            ...appConfig,
+            ...updatedConfig
+        };
+
+        localStorage.setItem(
+            'restopos_config',
+            JSON.stringify(appConfig)
+        );
+
+        showCustomAlert(
+            '✅ Configuración y permisos guardados correctamente en Firebase.'
+        );
+
+    } catch (error) {
+        console.error(
+            'RESTOPOS: Error guardando configuración:',
+            error
+        );
+
+        showCustomAlert(
+            '❌ No fue posible guardar la configuración en Firebase.'
+        );
+    }
 }
+
 
 /**
  * Dibuja las tarjetas del menú principal para el Administrador.
@@ -629,48 +725,81 @@ async function showSection(sectionId) {
             }
         );
 
+
     } else if (sectionId === 'users-admin-section') {
         cancelEditUser();
+
+        // Cargar usuarios desde Firestore antes de mostrarlos.
+        try {
+            console.log('RESTOPOS: Cargando usuarios desde Firebase...');
+
+            const cloudUsers = await window.RestoposDB.getAll('usuarios');
+
+            if (Array.isArray(cloudUsers)) {
+                users = cloudUsers;
+
+                localStorage.setItem(
+                    'restopos_users',
+                    JSON.stringify(users)
+                );
+
+                console.log(
+                    'RESTOPOS: Usuarios cargados desde Firebase:',
+                    users.length
+                );
+            }
+
+        } catch (error) {
+            console.error(
+                'RESTOPOS: Error cargando usuarios desde Firebase:',
+                error.code,
+                error.message
+            );
+
+            showCustomAlert('No fue posible cargar los usuarios desde Firebase.');
+            return;
+        }
+
         renderUsersAdmin();
     } else if (sectionId === 'catalog-section') {
-    cancelEditProduct();
+        cancelEditProduct();
 
-    // Consultar productos desde Firebase
-    try {
-        console.log('RESTOPOS: Cargando catálogo desde Firebase...');
+        // Consultar productos desde Firebase
+        try {
+            console.log('RESTOPOS: Cargando catálogo desde Firebase...');
 
-        const cloudProducts = await window.RestoposDB.getAll('productos');
+            const cloudProducts = await window.RestoposDB.getAll('productos');
 
-        if (Array.isArray(cloudProducts)) {
-            products = cloudProducts;
+            if (Array.isArray(cloudProducts)) {
+                products = cloudProducts;
 
-            // Mantener compatibilidad con bebidas y adicionales
-            drinks = products.filter(product =>
-                String(product.category || '').toLowerCase() === 'bebidas'
-            );
+                // Mantener compatibilidad con bebidas y adicionales
+                drinks = products.filter(product =>
+                    String(product.category || '').toLowerCase() === 'bebidas'
+                );
 
-            addons = products.filter(product =>
-                String(product.category || '').toLowerCase() === 'adicionales'
-            );
+                addons = products.filter(product =>
+                    String(product.category || '').toLowerCase() === 'adicionales'
+                );
 
-            saveData();
+                saveData();
 
-            console.log(
-                'RESTOPOS: Catálogo cargado desde Firebase:',
-                products.length
+                console.log(
+                    'RESTOPOS: Catálogo cargado desde Firebase:',
+                    products.length
+                );
+            }
+
+        } catch (e) {
+            console.error(
+                'RESTOPOS: Error cargando catálogo desde Firebase:',
+                e.code,
+                e.message
             );
         }
 
-    } catch (e) {
-        console.error(
-            'RESTOPOS: Error cargando catálogo desde Firebase:',
-            e.code,
-            e.message
-        );
-    }
-
-    renderRecipeCheckboxes();
-    renderProducts();
+        renderRecipeCheckboxes();
+        renderProducts();
     } else if (sectionId === 'dashboard-analytics-section') {
         renderSalesDashboard();
     }
@@ -715,103 +844,574 @@ function checkWaiterReadyAlarm() {
  * Cómo lo realiza: Limpia `#usersList` e inserta los registros.
  * Consulta a Sheets: Ninguna.
  */
+
+/**
+ * ==========================================================
+ * RENDERIZAR USUARIOS REGISTRADOS EN FIRESTORE
+ * ==========================================================
+ */
 function renderUsersAdmin() {
     const list = document.getElementById('usersList');
     if (!list) return;
+
     list.innerHTML = '';
 
-    users.forEach(u => {
+    if (!Array.isArray(users) || users.length === 0) {
+        list.innerHTML = `
+            <p style="text-align:center;color:var(--text-secondary);padding:1rem;">
+                No hay usuarios registrados.
+            </p>
+        `;
+        return;
+    }
+
+    users.forEach(user => {
         const item = document.createElement('div');
         item.className = 'product-row';
+
+        const userId = user._docId || user.uid;
+        const role = user.rol || 'sin rol';
+        const status = user.activo === true ? 'Activo' : 'Desactivado';
+
         item.innerHTML = `
             <div class="product-info">
-                <span><strong>${u.username}</strong></span>
-                <span style="font-size:0.75rem; color: var(--text-secondary); display:block; text-transform:uppercase;">Rol: ${u.role}</span>
+                <span><strong>${user.nombre || 'Sin nombre'}</strong></span>
+
+                <span style="font-size:0.75rem;color:var(--text-secondary);display:block;">
+                    ${user.email || 'Sin correo'}
+                </span>
+
+                <span style="font-size:0.75rem;color:var(--text-secondary);display:block;text-transform:uppercase;">
+                    Rol: ${role}
+                </span>
+
+                <span style="font-size:0.75rem;display:block;color:${user.activo === true ? '#16a34a' : '#dc2626'};">
+                    ${status}
+                </span>
             </div>
+
             <div class="product-actions">
-                <button onclick="editUser(${u.id})" class="action-btn" title="Editar">✏️</button>
-                <button onclick="deleteUser(${u.id})" class="action-btn" title="Eliminar">🗑️</button>
+                <button
+                    onclick="editUser('${userId}')"
+                    class="action-btn"
+                    title="Editar"
+                >✏️</button>
+
+                <button
+                    onclick="deleteUser('${userId}')"
+                    class="action-btn"
+                    title="Eliminar"
+                >🗑️</button>
             </div>
         `;
+
         list.appendChild(item);
     });
 }
 
+
+
 /**
- * Guarda o actualiza un usuario en la nube.
- * Cómo lo realiza: Valida campos y sincroniza.
- * Consulta a Sheets: Modifica la tabla `Usuarios` vía `saveDataAndSyncCloudSync()`.
+ * ==========================================================
+ * CREAR Y ACTUALIZAR USUARIOS CON FIREBASE
+ * ==========================================================
+ *
+ * Firebase Authentication:
+ * - Crea las cuentas de los empleados.
+ * - Gestiona las contraseñas.
+ *
+ * Firestore:
+ * - Guarda nombre, correo, rol y estado.
+ * - Utiliza el UID de Authentication como ID del documento.
+ *
+ * Se utiliza una segunda instancia de Firebase Auth para
+ * conservar abierta la sesión del administrador.
+ *
+ * ==========================================================
  */
 async function saveUser() {
+
     if (!navigator.onLine) {
-        showCustomAlert('❌ Acción bloqueada: Sin conexión a internet.');
+        showCustomAlert('❌ Se necesita conexión a internet.');
         return;
     }
 
-    const username = document.getElementById('newUsername').value.trim();
-    const pass = document.getElementById('newUserPass').value.trim();
+    const name = document.getElementById('newUserName').value.trim();
+    const email = document.getElementById('newUserEmail').value.trim().toLowerCase();
+    const pass = document.getElementById('newUserPass').value;
     const role = document.getElementById('newUserRole').value;
+    const isActive = document.getElementById('newUserStatus').value === 'true';
 
-    if (!username || !pass) {
-        showCustomAlert('Por favor ingrese usuario y contraseña.');
+    const emailInput = document.getElementById('newUserEmail');
+    const btnSave = document.getElementById('btnSaveUser');
+
+    // Validar nombre.
+    if (!name) {
+        showCustomAlert('Ingrese el nombre del empleado.');
         return;
     }
 
-    if (editingUserId !== null) {
-        const user = users.find(u => u.id == editingUserId);
-        if (user) { user.username = username; user.pass = pass; user.role = role; }
-        cancelEditUser();
-    } else {
-        const newId = users.length > 0 ? Math.max(...users.map(u => Number(u.id))) + 1 : 1;
-        users.push({ id: newId, username, pass, role });
+    // Validar correo.
+    if (!email || !emailInput.checkValidity()) {
+        showCustomAlert('Ingrese un correo electrónico válido.');
+        return;
     }
 
-    appConfig.lastUpdated = Date.now();
-    await saveDataAndSyncCloudSync('Usuario guardado en Google Sheets exitosamente.');
-    document.getElementById('newUsername').value = '';
+    // Validar rol permitido.
+    if (!['admin', 'mesero', 'cocinero'].includes(role)) {
+        showCustomAlert('El rol seleccionado no es válido.');
+        return;
+    }
+
+    const isEditing = editingUserId !== null;
+
+    // La contraseña solo es obligatoria al crear una cuenta.
+    if (!isEditing && (!pass || pass.length < 6)) {
+        showCustomAlert(
+            'La contraseña debe tener al menos 6 caracteres.'
+        );
+        return;
+    }
+
+    btnSave.disabled = true;
+    btnSave.innerText = 'Guardando...';
+
+    try {
+
+        // ==================================================
+        // 1. ACTUALIZAR USUARIO EXISTENTE EN FIRESTORE
+        // ==================================================
+
+        if (isEditing) {
+
+            const user = users.find(
+                u => (u._docId || u.uid) === editingUserId
+            );
+
+            if (!user) {
+                throw new Error('No se encontró el usuario seleccionado.');
+            }
+
+            // No permitir cambiar el correo desde esta función.
+            // El correo de acceso pertenece a Authentication.
+            const existingEmail = String(user.email || '').trim().toLowerCase();
+
+            if (email !== existingEmail) {
+                throw new Error(
+                    'No se puede cambiar el correo de acceso desde la edición. Se conserva el correo registrado en Firebase Authentication.'
+                );
+            }
+
+            
+// No permitir desactivar la cuenta del administrador actual.
+if (
+    window.auth.currentUser &&
+    window.auth.currentUser.uid === editingUserId &&
+    !isActive
+) {
+    throw new Error(
+        'No puedes desactivar tu propia cuenta mientras estás administrando RESTOPOS.'
+    );
+}
+
+// Evitar que el sistema se quede sin administradores activos.
+const remainsAdmin = role === 'admin' && isActive;
+
+if (user.rol === 'admin' && user.activo === true && !remainsAdmin) {
+    const otherActiveAdmins = users.filter(
+        u =>
+            (u._docId || u.uid) !== editingUserId &&
+            u.rol === 'admin' &&
+            u.activo === true
+    );
+
+    if (otherActiveAdmins.length === 0) {
+        throw new Error(
+            'No puedes desactivar o cambiar el rol del último administrador activo.'
+        );
+    }
+}
+
+// Guardar los cambios en Firestore.
+await window.RestoposDB.update(
+    'usuarios',
+    editingUserId,
+    {
+        nombre: name,
+        rol: role,
+        activo: isActive,
+        updatedAt: Date.now()
+    }
+);
+
+// Actualizar los datos locales.
+user.nombre = name;
+user.rol = role;
+user.activo = isActive;
+user.updatedAt = Date.now();
+
+localStorage.setItem(
+    'restopos_users',
+    JSON.stringify(users)
+);
+
+
+            // Actualizar la información local.
+            user.nombre = name;
+            user.rol = role;
+
+            cancelEditUser();
+            renderUsersAdmin();
+
+            showCustomAlert(
+                '✅ Datos del empleado actualizados correctamente en Firebase.'
+            );
+
+            return;
+        }
+
+        // ==================================================
+        // 2. CREAR NUEVA CUENTA EN FIREBASE AUTHENTICATION
+        // ==================================================
+
+        const secondaryAppName = 'restoposUserCreation';
+
+        // Reutilizar la instancia secundaria si ya existe.
+        let secondaryApp = firebase.apps.find(
+            app => app.name === secondaryAppName
+        );
+
+        // Crear una instancia secundaria independiente.
+        if (!secondaryApp) {
+            secondaryApp = firebase.initializeApp(
+                window.firebaseApp.options,
+                secondaryAppName
+            );
+        }
+
+        const secondaryAuth = secondaryApp.auth();
+
+        let createdAuthUser = null;
+        let firestoreSaved = false;
+
+        try {
+
+            // Crear la cuenta sin cerrar la sesión principal.
+            const credential = await secondaryAuth
+                .createUserWithEmailAndPassword(email, pass);
+
+            createdAuthUser = credential.user;
+
+            const uid = createdAuthUser.uid;
+
+            // ==================================================
+            // 3. GUARDAR PERFIL DEL EMPLEADO EN FIRESTORE
+            // ==================================================
+
+            const userData = {
+                nombre: name,
+                email: email,
+                rol: role,
+                activo: true,
+                createdAt: Date.now()
+            };
+
+            await window.RestoposDB.set(
+                'usuarios',
+                uid,
+                userData,
+                false
+            );
+
+            firestoreSaved = true;
+
+            // Incorporar el nuevo empleado a la lista local.
+            users.push({
+                ...userData,
+                _docId: uid
+            });
+
+            // Cerrar únicamente la sesión secundaria.
+            await secondaryAuth.signOut();
+
+            cancelEditUser();
+            renderUsersAdmin();
+
+            showCustomAlert(
+                '✅ Usuario creado correctamente en Firebase Authentication y Firestore.'
+            );
+
+        } catch (error) {
+
+            // Si Auth creó la cuenta pero Firestore falló,
+            // intentar eliminar la cuenta incompleta.
+            if (createdAuthUser && !firestoreSaved) {
+                try {
+                    await createdAuthUser.delete();
+                } catch (deleteError) {
+                    console.error(
+                        'No se pudo revertir la cuenta incompleta:',
+                        deleteError
+                    );
+                }
+            }
+
+            try {
+                await secondaryAuth.signOut();
+            } catch (signOutError) {
+                console.warn(
+                    'No se pudo cerrar la sesión secundaria:',
+                    signOutError
+                );
+            }
+
+            throw error;
+        }
+
+    } catch (error) {
+
+        console.error(
+            'RESTOPOS: Error guardando usuario:',
+            error.code,
+            error.message
+        );
+
+        let message = 'No fue posible guardar el usuario.';
+
+        if (error.code === 'auth/email-already-in-use') {
+            message = 'Este correo electrónico ya está registrado en Firebase Authentication.';
+        } else if (error.code === 'auth/invalid-email') {
+            message = 'El correo electrónico no es válido.';
+        } else if (error.code === 'auth/weak-password') {
+            message = 'La contraseña es demasiado débil.';
+        } else if (error.code === 'permission-denied') {
+            message = 'Firebase no autorizó la operación. Comprueba los permisos del administrador.';
+        } else if (error.message) {
+            message = error.message;
+        }
+
+        showCustomAlert('❌ ' + message);
+
+    } finally {
+
+        btnSave.disabled = false;
+
+        btnSave.innerText = editingUserId !== null
+            ? 'Guardar Cambios'
+            : 'Crear Usuario';
+    }
+}
+
+
+/**
+ * ==========================================================
+ * EDITAR USUARIO REGISTRADO EN FIRESTORE
+ * ==========================================================
+ */
+function editUser(uid) {
+    if (!navigator.onLine) {
+        showCustomAlert('❌ Sin conexión a internet.');
+        return;
+    }
+
+    const user = users.find(
+        u => (u._docId || u.uid) === uid
+    );
+
+    if (!user) {
+        showCustomAlert('No se encontró el usuario seleccionado.');
+        return;
+    }
+
+    // Guardar el UID del usuario que se está editando.
+    editingUserId = uid;
+
+    // Cargar los datos actuales del empleado.
+    document.getElementById('newUserName').value =
+        user.nombre || '';
+
+    document.getElementById('newUserEmail').value =
+        user.email || '';
+    document.getElementById('newUserEmail').readOnly = true;
+
+    // Firebase no permite recuperar contraseñas.
+    // Se deja vacío para conservar la contraseña actual.
     document.getElementById('newUserPass').value = '';
-    renderUsersAdmin();
+
+    document.getElementById('newUserRole').value =
+        user.rol || 'mesero';
+        
+    document.getElementById('newUserStatus').value =
+    user.activo === true ? 'true' : 'false';
+    
+    // Actualizar textos del formulario.
+    document.getElementById('formUserTitle').innerText =
+        'Editar empleado';
+
+    document.getElementById('btnSaveUser').innerText =
+        'Guardar Cambios';
+
+    document.getElementById('userPasswordHelp').innerText =
+        'Deja este campo vacío para conservar la contraseña actual.';
+
+    document.getElementById('btnCancelUserEdit')
+        .classList.remove('hidden');
+
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
 }
 
-function editUser(id) {
-    if (!navigator.onLine) { showCustomAlert('❌ Sin conexión a internet.'); return; }
-    const user = users.find(u => u.id == id);
-    if (user) {
-        editingUserId = id;
-        document.getElementById('newUsername').value = user.username;
-        document.getElementById('newUserPass').value = user.pass;
-        document.getElementById('newUserRole').value = user.role;
-        document.getElementById('formUserTitle').innerText = 'Editar Usuario';
-        document.getElementById('btnSaveUser').innerText = 'Guardar Cambios (Online)';
-        document.getElementById('btnCancelUserEdit').classList.remove('hidden');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-}
 
+/**
+ * ==========================================================
+ * CANCELAR EDICIÓN DE USUARIO
+ * ==========================================================
+ */
 function cancelEditUser() {
     editingUserId = null;
-    document.getElementById('newUsername').value = '';
+
+    document.getElementById('newUserName').value = '';
+    document.getElementById('newUserEmail').value = '';
+    document.getElementById('newUserEmail').readOnly = false;
     document.getElementById('newUserPass').value = '';
+
     document.getElementById('newUserRole').value = 'mesero';
-    document.getElementById('formUserTitle').innerText = 'Nombre de Usuario';
-    document.getElementById('btnSaveUser').innerText = 'Crear / Guardar Usuario (Online)';
-    document.getElementById('btnCancelUserEdit').classList.add('hidden');
+    document.getElementById('newUserStatus').value = 'true';
+
+    document.getElementById('formUserTitle').innerText =
+        '👥 Gestión de Usuarios y Permisos';
+
+    document.getElementById('btnSaveUser').innerText =
+        'Crear Usuario';
+
+    document.getElementById('userPasswordHelp').innerText =
+        'Obligatoria para crear una cuenta. Déjala vacía al editar.';
+
+    document.getElementById('btnCancelUserEdit')
+        .classList.add('hidden');
 }
 
-async function deleteUser(id) {
-    if (!navigator.onLine) { showCustomAlert('❌ Sin conexión a internet.'); return; }
-    const user = users.find(u => u.id == id);
-    if (!user) return;
-    if (user.username === 'admin') { showCustomAlert('No se puede eliminar el administrador.'); return; }
 
-    if (confirm(`¿Desea eliminar a "${user.username}"?`)) {
-        users = users.filter(u => u.id != id);
-        if (editingUserId == id) cancelEditUser();
-        appConfig.lastUpdated = Date.now();
-        await saveDataAndSyncCloudSync('Usuario eliminado.');
+
+/**
+ * ==========================================================
+ * DESACTIVAR USUARIOS EN FIRESTORE
+ * ==========================================================
+ *
+ * No elimina la cuenta de Firebase Authentication.
+ * Cambia activo a false para impedir el acceso a Firestore.
+ *
+ * Conserva los registros históricos del empleado.
+ * ==========================================================
+ */
+async function deleteUser(id) {
+
+    if (!navigator.onLine) {
+        showCustomAlert('❌ Sin conexión a internet.');
+        return;
+    }
+
+    // Buscar al empleado por su UID de Firebase.
+    const user = users.find(
+        u => String(u._docId || u.uid) === String(id)
+    );
+
+    if (!user) {
+        showCustomAlert('No se encontró el empleado seleccionado.');
+        return;
+    }
+
+    const userId = user._docId || user.uid;
+
+    // No permitir desactivar la cuenta que está administrando el sistema.
+    if (
+        window.auth &&
+        window.auth.currentUser &&
+        window.auth.currentUser.uid === userId
+    ) {
+        showCustomAlert(
+            'No puedes desactivar tu propia cuenta de administrador.'
+        );
+        return;
+    }
+
+    // Evitar dejar el sistema sin administradores activos.
+    if (user.rol === 'admin') {
+        const activeAdmins = users.filter(
+            u => u.rol === 'admin' && u.activo === true
+        );
+
+        if (activeAdmins.length <= 1) {
+            showCustomAlert(
+                'No puedes desactivar el último administrador activo.'
+            );
+            return;
+        }
+    }
+
+    const employeeName = user.nombre || user.email || 'este empleado';
+
+    const confirmed = await showCustomConfirm(
+        `¿Deseas desactivar a "${employeeName}"?\n\nEl empleado perderá el acceso al sistema, pero sus registros históricos se conservarán.`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+
+        // Actualizar el estado directamente en Firestore.
+        await window.RestoposDB.update(
+            'usuarios',
+            userId,
+            {
+                activo: false,
+                updatedAt: Date.now()
+            }
+        );
+
+        // Actualizar la lista local.
+        user.activo = false;
+        user.updatedAt = Date.now();
+
+        // Cancelar edición si corresponde.
+        if (editingUserId === userId) {
+            cancelEditUser();
+        }
+
+        localStorage.setItem(
+            'restopos_users',
+            JSON.stringify(users)
+        );
+
         renderUsersAdmin();
+
+        showCustomAlert(
+            '✅ Empleado desactivado correctamente en Firebase.'
+        );
+
+        console.log(
+            'RESTOPOS: Usuario desactivado:',
+            userId
+        );
+
+    } catch (error) {
+
+        console.error(
+            'RESTOPOS: Error desactivando usuario:',
+            error.code,
+            error.message
+        );
+
+        showCustomAlert(
+            '❌ No fue posible desactivar el empleado en Firebase.'
+        );
     }
 }
+
 
 
 /* ========================================================== */
@@ -3441,7 +4041,7 @@ async function confirmPayReceipt(receiptId) {
                     // ni recibos pendientes.
                     const updatedStatus =
                         updatedItems.length === 0 &&
-                        updatedReceipts.length === 0
+                            updatedReceipts.length === 0
                             ? 'libre'
                             : 'ocupada';
 
@@ -4333,115 +4933,119 @@ async function loadDataFromCloud() {
     }
 }
 
-async function saveDataAndSyncCloudSync(msg) {
-    saveData();
-    try {
-        await fetch(WEB_APP_URL, {
-            method: 'POST',
-            body: JSON.stringify({ tables, products, drinks, addons, users, config: appConfig })
-        });
-        showCustomAlert(`✅ ${msg}`);
-    } catch (e) {
-        console.error("Error al sincronizar:", e);
-    }
-}
-
-
-async function syncDataToCloud() {
-    try {
-        // Guardar primero una copia local de los datos.
-        saveData();
-
-        // Preparar los datos que se enviarán a Google Sheets.
-        const payload = {
-            tables: tables,
-            products: products,
-            drinks: drinks,
-            addons: addons,
-            users: users,
-            config: appConfig
-        };
-
-        const response = await fetch(WEB_APP_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'text/plain;charset=utf-8'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        // Comprobar el estado de la petición HTTP.
-        if (!response.ok) {
-            throw new Error(
-                'Error HTTP al sincronizar: ' + response.status
-            );
+/* eliminar funcion solo consulta a sheets
+        async function saveDataAndSyncCloudSync(msg) {
+            saveData();
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ tables, products, drinks, addons, users, config: appConfig })
+                });
+                showCustomAlert(`✅ ${msg}`);
+            } catch (e) {
+                console.error("Error al sincronizar:", e);
+            }
         }
+*/
 
-        // Leer y validar la respuesta de Apps Script.
-        const responseText = await response.text();
-
-        let result;
-
-        try {
-            result = JSON.parse(responseText);
-        } catch (parseError) {
-            throw new Error(
-                'Google Apps Script devolvió una respuesta no válida.'
-            );
+/* se elimina porwue solo se utiliza para sheets
+        async function syncDataToCloud() {
+            try {
+                // Guardar primero una copia local de los datos.
+                saveData();
+        
+                // Preparar los datos que se enviarán a Google Sheets.
+                const payload = {
+                    tables: tables,
+                    products: products,
+                    drinks: drinks,
+                    addons: addons,
+                    users: users,
+                    config: appConfig
+                };
+        
+                const response = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8'
+                    },
+                    body: JSON.stringify(payload)
+                });
+        
+                // Comprobar el estado de la petición HTTP.
+                if (!response.ok) {
+                    throw new Error(
+                        'Error HTTP al sincronizar: ' + response.status
+                    );
+                }
+        
+                // Leer y validar la respuesta de Apps Script.
+                const responseText = await response.text();
+        
+                let result;
+        
+                try {
+                    result = JSON.parse(responseText);
+                } catch (parseError) {
+                    throw new Error(
+                        'Google Apps Script devolvió una respuesta no válida.'
+                    );
+                }
+        
+                // Apps Script puede responder HTTP 200 aunque exista un error.
+                if (!result || result.status !== 'success') {
+                    throw new Error(
+                        result && result.message
+                            ? result.message
+                            : 'Google Sheets no confirmó el guardado.'
+                    );
+                }
+        
+                // Actualizar la versión local con la versión confirmada por la nube.
+                if (
+                    result.lastUpdated !== undefined &&
+                    Number.isFinite(Number(result.lastUpdated))
+                ) {
+                    appConfig.lastUpdated = Number(result.lastUpdated);
+                }
+        
+                // Guardar nuevamente los datos y la versión confirmada.
+                saveData();
+        
+                console.log(
+                    'RESTOPOS: sincronización confirmada.',
+                    'Versión:',
+                    appConfig.lastUpdated
+                );
+        
+                return result;
+        
+            } catch (error) {
+                console.error(
+                    'RESTOPOS: error de sincronización:',
+                    error
+                );
+        
+                // Importante: comunicar el error a la función que llamó
+                // a syncDataToCloud(), para que no muestre un éxito falso.
+                throw error;
+            }
         }
-
-        // Apps Script puede responder HTTP 200 aunque exista un error.
-        if (!result || result.status !== 'success') {
-            throw new Error(
-                result && result.message
-                    ? result.message
-                    : 'Google Sheets no confirmó el guardado.'
-            );
+        
+*/
+/* se eliminar solo se usa para sheets
+        async function sendNewSalesToCloud(salesArray) {
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ salesHistory: salesArray })
+                });
+            } catch (e) {
+                console.error("Error registrando venta:", e);
+            }
         }
-
-        // Actualizar la versión local con la versión confirmada por la nube.
-        if (
-            result.lastUpdated !== undefined &&
-            Number.isFinite(Number(result.lastUpdated))
-        ) {
-            appConfig.lastUpdated = Number(result.lastUpdated);
-        }
-
-        // Guardar nuevamente los datos y la versión confirmada.
-        saveData();
-
-        console.log(
-            'RESTOPOS: sincronización confirmada.',
-            'Versión:',
-            appConfig.lastUpdated
-        );
-
-        return result;
-
-    } catch (error) {
-        console.error(
-            'RESTOPOS: error de sincronización:',
-            error
-        );
-
-        // Importante: comunicar el error a la función que llamó
-        // a syncDataToCloud(), para que no muestre un éxito falso.
-        throw error;
-    }
-}
-
-
-async function sendNewSalesToCloud(salesArray) {
-    try {
-        await fetch(WEB_APP_URL, {
-            method: 'POST',
-            body: JSON.stringify({ salesHistory: salesArray })
-        });
-    } catch (e) {
-        console.error("Error registrando venta:", e);
-    }
-}
-
+*/
+        
 function saveData() {
     localStorage.setItem('restopos_tables', JSON.stringify(tables));
     localStorage.setItem('restopos_addons', JSON.stringify(addons));
@@ -4514,8 +5118,28 @@ async function renderSalesDashboard() {
 }
 
 /**
- * Consulta las facturas filtradas en Google Sheets y renderiza métricas, gráfica y Top Productos.
+ * ==========================================================
+ * CONSULTA Y RENDERIZADO DE ESTADÍSTICAS DE VENTAS
+ * ==========================================================
+ *
+ * Obtiene el historial de ventas directamente desde Firebase
+ * Firestore, aplica filtros por rango de fechas y genera
+ * los indicadores estadísticos del Dashboard.
+ *
+ * Indicadores:
+ * - Venta total.
+ * - Ticket promedio.
+ * - Total de facturas.
+ * - Gráfica de ventas.
+ * - Top 5 de productos más vendidos.
+ *
+ * Fuente de datos: colección Firestore "ventas".
+ * Campo de fecha: createdAt (milisegundos Unix).
+ *
+ * ==========================================================
  */
+
+
 async function fetchAndRenderSalesData() {
     const container = document.getElementById('dashboardAnalyticsContainer');
     if (!container) return;
@@ -4524,33 +5148,84 @@ async function fetchAndRenderSalesData() {
     const endDate = document.getElementById('dashEndDate')?.value || "";
 
     container.innerHTML = `
-        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-            <p>🔄 Consultando facturas filtradas en la nube...</p>
+        <div style="text-align:center;padding:2rem;color:var(--text-secondary);">
+            <p>🔄 Consultando ventas en Firebase...</p>
         </div>
     `;
 
-    try {
-        const response = await fetch(`${WEB_APP_URL}?action=getDashboardDataFiltered&startDate=${startDate}&endDate=${endDate}`);
-        if (!response.ok) throw new Error("Error HTTP: " + response.status);
+    // Variables de fecha disponibles en toda la función.
+    let startTimestamp = null;
+    let endTimestamp = null;
 
-        const result = await response.json();
-        if (result.status === 'success' && Array.isArray(result.salesHistory)) {
-            salesHistory = result.salesHistory;
-        } else {
-            throw new Error(result.message || "Respuesta inválida del servidor.");
+    try {
+        // Consultar las ventas directamente desde Firestore.
+        const allSales = await window.RestoposDB.getAll('ventas');
+
+        // Convertir las fechas seleccionadas en límites de tiempo.
+
+        if (startDate) {
+            const [year, month, day] = startDate.split('-').map(Number);
+            startTimestamp = new Date(year, month - 1, day).getTime();
         }
-    } catch (e) {
-        console.warn("No se pudo consultar el servidor, usando caché local.", e);
-        salesHistory = JSON.parse(localStorage.getItem('restopos_sales_history')) || [];
+
+        if (endDate) {
+            const [year, month, day] = endDate.split('-').map(Number);
+            endTimestamp = new Date(
+                year, month - 1, day, 23, 59, 59, 999
+            ).getTime();
+        }
+
+        // Filtrar las ventas según el rango seleccionado.
+        salesHistory = allSales.filter(sale => {
+            const timestamp = Number(sale.createdAt);
+
+            if (!Number.isFinite(timestamp)) return false;
+
+            if (startTimestamp !== null && timestamp < startTimestamp) {
+                return false;
+            }
+
+            if (endTimestamp !== null && timestamp > endTimestamp) {
+                return false;
+            }
+
+            return true;
+        });
+
+        // Mantener una copia local de las ventas consultadas.
+        localStorage.setItem(
+            'restopos_sales_history',
+            JSON.stringify(salesHistory)
+        );
+
+    } catch (error) {
+        console.error(
+            'RESTOPOS: Error consultando ventas en Firestore:',
+            error.code,
+            error.message
+        );
+
+        container.innerHTML = `
+            <div style="padding:2rem;text-align:center;color:#dc2626;">
+                <h3>No fue posible consultar las ventas</h3>
+                <p>Comprueba tu conexión y los permisos de Firebase.</p>
+            </div>
+        `;
+        return;
     }
 
     container.innerHTML = '';
 
     if (!Array.isArray(salesHistory) || salesHistory.length === 0) {
         container.innerHTML = `
-            <div style="background: #ffffff; border: 1px solid var(--border); padding: 2rem; border-radius: 12px; text-align: center; color: var(--text-secondary);">
-                <h3 style="font-size: 1rem; margin-bottom: 0.5rem; color: var(--text);">Sin datos de ventas en este rango</h3>
-                <p style="font-size: 0.85rem;">No se encontraron facturas entre ${startDate} y ${endDate}.</p>
+            <div style="background:#ffffff;border:1px solid var(--border);padding:2rem;border-radius:12px;text-align:center;color:var(--text-secondary);">
+                <h3 style="font-size:1rem;margin-bottom:0.5rem;color:var(--text);">
+                    Sin datos de ventas en este rango
+                </h3>
+                <p style="font-size:0.85rem;">
+                    No se encontraron facturas entre
+                    ${startDate || 'el inicio'} y ${endDate || 'la fecha actual'}.
+                </p>
             </div>
         `;
         return;
@@ -4561,54 +5236,81 @@ async function fetchAndRenderSalesData() {
     const productCounts = {};
 
     salesHistory.forEach(sale => {
-        const price = parseFloat(sale.valorpagado) || 0;
+        const price = Number(sale.valorpagado) || 0;
         totalRevenue += price;
-        if (sale.facnumero) totalInvoicesSet.add(sale.facnumero);
+
+        if (sale.facnumero) {
+            totalInvoicesSet.add(sale.facnumero);
+        }
 
         const plato = sale.plato || 'Producto General';
         productCounts[plato] = (productCounts[plato] || 0) + 1;
     });
 
     const totalInvoices = totalInvoicesSet.size;
-    const averageTicket = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
-    const sortedProducts = Object.entries(productCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    const averageTicket = totalInvoices > 0
+        ? totalRevenue / totalInvoices
+        : 0;
+
+    const sortedProducts = Object.entries(productCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
 
     let topProductsHtml = '';
+
     sortedProducts.forEach(([prod, count]) => {
         topProductsHtml += `
-            <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px dashed var(--border); font-size: 0.85rem;">
+            <div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px dashed var(--border);font-size:0.85rem;">
                 <span>${prod}</span>
                 <strong>${count} vendidos</strong>
             </div>
         `;
     });
 
-    // Detectar si el rango es mensual (> 10 días) o semanal para elegir el tipo de gráfica
-    const diffTime = Math.abs(new Date(endDate) - new Date(startDate));
+    // Determinar el tipo de gráfica según el rango seleccionado.
+    const diffTime = startTimestamp !== null && endTimestamp !== null
+        ? Math.abs(endTimestamp - startTimestamp)
+        : 0;
+
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     const chartViewType = diffDays > 10 ? 'month' : 'week';
-    const salesChartHtml = renderSalesChart(salesHistory, chartViewType);
+
+    const salesChartHtml = renderSalesChart(
+        salesHistory,
+        chartViewType
+    );
 
     container.innerHTML = `
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
-            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
-                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">VENTA TOTAL</span>
-                <strong style="font-size: 1.1rem; color: var(--primary);">$${Math.round(totalRevenue).toLocaleString()}</strong>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.75rem;margin-bottom:1rem;">
+            <div style="background:#f8fafc;border:1px solid var(--border);padding:0.75rem;border-radius:8px;text-align:center;">
+                <span style="font-size:0.75rem;color:var(--text-secondary);display:block;">VENTA TOTAL</span>
+                <strong style="font-size:1.1rem;color:var(--primary);">
+                    $${Math.round(totalRevenue).toLocaleString('es-CO')}
+                </strong>
             </div>
-            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
-                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">TICKET PROMEDIO</span>
-                <strong style="font-size: 1.1rem; color: var(--success);">$${Math.round(averageTicket).toLocaleString()}</strong>
+
+            <div style="background:#f8fafc;border:1px solid var(--border);padding:0.75rem;border-radius:8px;text-align:center;">
+                <span style="font-size:0.75rem;color:var(--text-secondary);display:block;">TICKET PROMEDIO</span>
+                <strong style="font-size:1.1rem;color:var(--success);">
+                    $${Math.round(averageTicket).toLocaleString('es-CO')}
+                </strong>
             </div>
-            <div style="background: #f8fafc; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; text-align: center;">
-                <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">TOTAL FACTURAS</span>
-                <strong style="font-size: 1.1rem; color: var(--text);">${totalInvoices}</strong>
+
+            <div style="background:#f8fafc;border:1px solid var(--border);padding:0.75rem;border-radius:8px;text-align:center;">
+                <span style="font-size:0.75rem;color:var(--text-secondary);display:block;">TOTAL FACTURAS</span>
+                <strong style="font-size:1.1rem;color:var(--text);">
+                    ${totalInvoices}
+                </strong>
             </div>
         </div>
 
         ${salesChartHtml}
 
-        <div style="background: #ffffff; border: 1px solid var(--border); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem;">
-            <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text);">🏆 Top Productos Más Vendidos</h4>
+        <div style="background:#ffffff;border:1px solid var(--border);padding:0.75rem;border-radius:8px;margin-bottom:1rem;">
+            <h4 style="font-size:0.95rem;margin-bottom:0.5rem;color:var(--text);">
+                🏆 Top Productos Más Vendidos
+            </h4>
             ${topProductsHtml}
         </div>
     `;

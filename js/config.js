@@ -6,7 +6,7 @@
  * ==========================================================
  */
 
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzhezTR3M0sdvL83xWy8EwUrHfIpmG841DT0kd85rzuYaCB4iauIvDNoON8xIdjW93XmA/exec";
+//const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzhezTR3M0sdvL83xWy8EwUrHfIpmG841DT0kd85rzuYaCB4iauIvDNoON8xIdjW93XmA/exec";
 
 let tables = [];
 let users = [];

@@ -328,3 +328,5 @@ window.RestoposDB = (() => {
 console.log(
     'RESTOPOS: Servicios de datos Firebase preparados.'
 );
+
+
