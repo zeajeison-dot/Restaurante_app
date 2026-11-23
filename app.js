@@ -1002,58 +1002,58 @@ async function saveUser() {
                 );
             }
 
-            
-// No permitir desactivar la cuenta del administrador actual.
-if (
-    window.auth.currentUser &&
-    window.auth.currentUser.uid === editingUserId &&
-    !isActive
-) {
-    throw new Error(
-        'No puedes desactivar tu propia cuenta mientras estás administrando RESTOPOS.'
-    );
-}
 
-// Evitar que el sistema se quede sin administradores activos.
-const remainsAdmin = role === 'admin' && isActive;
+            // No permitir desactivar la cuenta del administrador actual.
+            if (
+                window.auth.currentUser &&
+                window.auth.currentUser.uid === editingUserId &&
+                !isActive
+            ) {
+                throw new Error(
+                    'No puedes desactivar tu propia cuenta mientras estás administrando RESTOPOS.'
+                );
+            }
 
-if (user.rol === 'admin' && user.activo === true && !remainsAdmin) {
-    const otherActiveAdmins = users.filter(
-        u =>
-            (u._docId || u.uid) !== editingUserId &&
-            u.rol === 'admin' &&
-            u.activo === true
-    );
+            // Evitar que el sistema se quede sin administradores activos.
+            const remainsAdmin = role === 'admin' && isActive;
 
-    if (otherActiveAdmins.length === 0) {
-        throw new Error(
-            'No puedes desactivar o cambiar el rol del último administrador activo.'
-        );
-    }
-}
+            if (user.rol === 'admin' && user.activo === true && !remainsAdmin) {
+                const otherActiveAdmins = users.filter(
+                    u =>
+                        (u._docId || u.uid) !== editingUserId &&
+                        u.rol === 'admin' &&
+                        u.activo === true
+                );
 
-// Guardar los cambios en Firestore.
-await window.RestoposDB.update(
-    'usuarios',
-    editingUserId,
-    {
-        nombre: name,
-        rol: role,
-        activo: isActive,
-        updatedAt: Date.now()
-    }
-);
+                if (otherActiveAdmins.length === 0) {
+                    throw new Error(
+                        'No puedes desactivar o cambiar el rol del último administrador activo.'
+                    );
+                }
+            }
 
-// Actualizar los datos locales.
-user.nombre = name;
-user.rol = role;
-user.activo = isActive;
-user.updatedAt = Date.now();
+            // Guardar los cambios en Firestore.
+            await window.RestoposDB.update(
+                'usuarios',
+                editingUserId,
+                {
+                    nombre: name,
+                    rol: role,
+                    activo: isActive,
+                    updatedAt: Date.now()
+                }
+            );
 
-localStorage.setItem(
-    'restopos_users',
-    JSON.stringify(users)
-);
+            // Actualizar los datos locales.
+            user.nombre = name;
+            user.rol = role;
+            user.activo = isActive;
+            user.updatedAt = Date.now();
+
+            localStorage.setItem(
+                'restopos_users',
+                JSON.stringify(users)
+            );
 
 
             // Actualizar la información local.
@@ -1240,10 +1240,10 @@ function editUser(uid) {
 
     document.getElementById('newUserRole').value =
         user.rol || 'mesero';
-        
+
     document.getElementById('newUserStatus').value =
-    user.activo === true ? 'true' : 'false';
-    
+        user.activo === true ? 'true' : 'false';
+
     // Actualizar textos del formulario.
     document.getElementById('formUserTitle').innerText =
         'Editar empleado';
@@ -2342,6 +2342,7 @@ function renderPlusOrderItems() {
  * el mesero para seleccionar los platos que enviará a cocina.
  * ==========================================================
  */
+
 async function updateItemKitchenCheck(index, isChecked) {
 
     // Buscar la mesa que tiene abierta el usuario.
@@ -2349,22 +2350,18 @@ async function updateItemKitchenCheck(index, isChecked) {
         t => Number(t.id) === Number(currentTableId)
     );
 
-    // Verificar que la mesa y el arreglo de platos existan.
     if (!table || !Array.isArray(table.items)) return;
 
-    // Obtener el plato seleccionado.
     const item = table.items[index];
 
-    // Detener la operación si el plato no existe.
     if (!item) return;
 
-    // Impedir cambios en platos enviados a cocina o facturados.
+    // Impedir cambios en productos enviados o facturados.
     if (item.sentToKitchen || item.billed) {
         renderPlusOrderItems();
         return;
     }
 
-    // Comprobar que exista conexión a internet.
     if (!navigator.onLine) {
         renderPlusOrderItems();
 
@@ -2376,57 +2373,82 @@ async function updateItemKitchenCheck(index, isChecked) {
 
     try {
 
-        // Crear una copia de los platos con el checkbox actualizado.
-        const updatedItems = table.items.map((currentItem, currentIndex) => {
+        // Actualizar inmediatamente el estado local.
+        const updatedItems = table.items.map(
+            (currentItem, currentIndex) => {
 
-            // Modificar únicamente el plato seleccionado.
-            if (currentIndex === index) {
-                return {
-                    ...currentItem,
-                    kitchenChecked: isChecked
-                };
-            }
+                if (currentIndex === index) {
+                    return {
+                        ...currentItem,
+                        kitchenChecked: isChecked
+                    };
+                }
 
-            // Mantener sin cambios los demás platos.
-            return currentItem;
-        });
-
-        // Obtener el identificador real del documento de Firestore.
-        const documentId = table._docId || `mesa_${table.id}`;
-
-        // Guardar la selección directamente en Firebase.
-        await window.RestoposDB.update(
-            'mesas',
-            documentId,
-            {
-                items: updatedItems
+                return currentItem;
             }
         );
 
-        // Actualizar los datos locales después del guardado exitoso.
+        // Actualizar la mesa local antes de iniciar el guardado.
         table.items = updatedItems;
 
-        // Actualizar la fecha de modificación local.
-        appConfig.lastUpdated = Date.now();
-
-        // Guardar los cambios en el almacenamiento local.
+        // Actualizar la interfaz inmediatamente.
         saveData();
+        renderPlusOrderItems();
+
+        // Identificar el documento de Firestore.
+        const documentId =
+            table._docId || `mesa_${table.id}`;
+
+        // Obtener la cola de guardados anterior.
+        const previousSave =
+            window.kitchenCheckSaveQueue || Promise.resolve();
+
+        // Encolar el nuevo guardado.
+        const currentSave = previousSave
+            .catch(() => { })
+            .then(async () => {
+
+                // Buscar nuevamente la mesa con los últimos cambios.
+                const latestTable = tables.find(
+                    t => Number(t.id) === Number(currentTableId)
+                );
+
+                if (!latestTable) {
+                    throw new Error('No se encontró la mesa.');
+                }
+
+                // Guardar el estado más reciente en Firebase.
+                await window.RestoposDB.update(
+                    'mesas',
+                    documentId,
+                    {
+                        items: latestTable.items
+                    }
+                );
+            });
+
+        // Guardar la referencia de la operación pendiente.
+        window.kitchenCheckSaveQueue = currentSave;
+
+        // Esperar a que termine este guardado.
+        await currentSave;
+
+        console.log(
+            'RESTOPOS: Selección guardada correctamente:',
+            item.name,
+            isChecked
+        );
 
     } catch (error) {
 
-        // Registrar el error para facilitar el diagnóstico.
         console.error(
             'RESTOPOS: Error actualizando selección para cocina:',
             error.code,
             error.message
         );
 
-        // Restaurar visualmente el estado anterior del checkbox.
-        renderPlusOrderItems();
-
-        // Informar que no se pudo guardar el cambio.
         showCustomAlert(
-            'No se pudo actualizar la selección. Verifique su conexión e inténtelo nuevamente.'
+            'No se pudo guardar la selección en Firebase. Verifique su conexión.'
         );
     }
 }
@@ -2693,6 +2715,16 @@ async function sendOrderToKitchen() {
         // Obtener el identificador del documento de Firestore.
         const documentId =
             localTable._docId || `mesa_${localTable.id}`;
+
+        // Esperar a que terminen todos los guardados de los checkbox.
+        if (window.kitchenCheckSaveQueue) {
+
+            console.log(
+                'RESTOPOS: Esperando guardados pendientes de selección...'
+            );
+
+            await window.kitchenCheckSaveQueue;
+        }
 
         // Consultar directamente la mesa en Firebase.
         const cloudTable = await window.RestoposDB.getById(
@@ -5042,7 +5074,7 @@ async function loadDataFromCloud() {
             }
         }
 */
-        
+
 function saveData() {
     localStorage.setItem('restopos_tables', JSON.stringify(tables));
     localStorage.setItem('restopos_addons', JSON.stringify(addons));
