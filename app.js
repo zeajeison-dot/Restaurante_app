@@ -361,32 +361,32 @@ async function saveWaiterAlarmConfig() {
  * Cómo lo realiza: Inserta dinámicamente las tarjetas de navegación en `#dashboardMenuGrid`.
  * Consulta a Sheets: Ninguna.
  */
-function renderDashboardMenu(role) {
-    const grid = document.getElementById('dashboardMenuGrid');
-    if (!grid) return;
+// function renderDashboardMenu(role) {
+//     const grid = document.getElementById('dashboardMenuGrid');
+//     if (!grid) return;
 
-    grid.innerHTML = '';
+//     grid.innerHTML = '';
 
-    const menuCards = [
-        { title: '📊 Dashboard de Ventas', desc: 'Analíticas y resultados comerciales', action: "showSection('dashboard-analytics-section')" },
-        { title: '🪑 Mesas & Pedidos', desc: 'Control de salón', action: "showSection('tables-section')" },
-        { title: '👨‍🍳 Módulo de Cocina', desc: 'Comandas en tiempo real', action: "showSection('kitchen-section')" },
-        { title: '👥 Gestión de Usuarios', desc: 'Crear usuarios y permisos', action: "showSection('users-admin-section')" },
-        { title: '⚙️ Gestionar Mesas', desc: 'Crear / Editar mesas', action: "showSection('tables-admin-section')" },
-        { title: '🍔 Catálogo de Platos', desc: 'Platos, bebidas y adicionales', action: "showSection('catalog-section')" }
-    ];
+//     const menuCards = [
+//         { title: '📊 Dashboard de Ventas', desc: 'Analíticas y resultados comerciales', action: "showSection('dashboard-analytics-section')" },
+//         { title: '🪑 Mesas & Pedidos', desc: 'Control de salón', action: "showSection('tables-section')" },
+//         { title: '👨‍🍳 Módulo de Cocina', desc: 'Comandas en tiempo real', action: "showSection('kitchen-section')" },
+//         { title: '👥 Gestión de Usuarios', desc: 'Crear usuarios y permisos', action: "showSection('users-admin-section')" },
+//         { title: '⚙️ Gestionar Mesas', desc: 'Crear / Editar mesas', action: "showSection('tables-admin-section')" },
+//         { title: '🍔 Catálogo de Platos', desc: 'Platos, bebidas y adicionales', action: "showSection('catalog-section')" }
+//     ];
 
-    menuCards.forEach(card => {
-        const div = document.createElement('div');
-        div.className = 'menu-card';
-        div.setAttribute('onclick', card.action);
-        div.innerHTML = `
-            <h3>${card.title}</h3>
-            <p style="font-size: 0.85rem; color: var(--text-secondary);">${card.desc}</p>
-        `;
-        grid.appendChild(div);
-    });
-}
+//     menuCards.forEach(card => {
+//         const div = document.createElement('div');
+//         div.className = 'menu-card';
+//         div.setAttribute('onclick', card.action);
+//         div.innerHTML = `
+//             <h3>${card.title}</h3>
+//             <p style="font-size: 0.85rem; color: var(--text-secondary);">${card.desc}</p>
+//         `;
+//         grid.appendChild(div);
+//     });
+// }
 
 /**
  * Cierra la sesión activa y retorna a la vista de login.
@@ -439,382 +439,382 @@ function renderDashboardMenu(role) {
  * - Otras secciones: Llama a `loadDataFromCloud()`.
  */
 
-async function showSection(sectionId) {
-    const role = localStorage.getItem('restopos_current_role') || 'admin';
+// async function showSection(sectionId) {
+//     const role = localStorage.getItem('restopos_current_role') || 'admin';
 
-    if (sectionId === 'dashboard-analytics-section' && role !== 'admin') {
-        showCustomAlert('❌ Acceso denegado: El módulo de Dashboard es exclusivo para el rol de Administrador.');
-        return;
-    }
+//     if (sectionId === 'dashboard-analytics-section' && role !== 'admin') {
+//         showCustomAlert('❌ Acceso denegado: El módulo de Dashboard es exclusivo para el rol de Administrador.');
+//         return;
+//     }
 
-    if (role === 'mesero' && !['tables-section', 'order-section', 'bill-section'].includes(sectionId)) {
-        showCustomAlert('Acceso no autorizado para el rol de mesero.');
-        return;
-    }
+//     if (role === 'mesero' && !['tables-section', 'order-section', 'bill-section'].includes(sectionId)) {
+//         showCustomAlert('Acceso no autorizado para el rol de mesero.');
+//         return;
+//     }
 
-    if (role === 'cocinero' && sectionId !== 'kitchen-section') {
-        showCustomAlert('Acceso no autorizado para el rol de cocinero.');
-        return;
-    }
+//     if (role === 'cocinero' && sectionId !== 'kitchen-section') {
+//         showCustomAlert('Acceso no autorizado para el rol de cocinero.');
+//         return;
+//     }
 
-    // CORRECCIÓN: No descargar datos pesados en el menú principal, mesas, dashboard analítico, catálogo ni pedidos, comandas tampoco
-    if (![
-        'dashboard-view',
-        'tables-section',
-        'dashboard-analytics-section',
-        'catalog-section',
-        'tables-admin-section',
-        'order-section',
-        'kitchen-section'].includes(sectionId)) {
-        await loadDataFromCloud();
-    }
+//     // CORRECCIÓN: No descargar datos pesados en el menú principal, mesas, dashboard analítico, catálogo ni pedidos, comandas tampoco
+//     if (![
+//         'dashboard-view',
+//         'tables-section',
+//         'dashboard-analytics-section',
+//         'catalog-section',
+//         'tables-admin-section',
+//         'order-section',
+//         'kitchen-section'].includes(sectionId)) {
+//         await loadDataFromCloud();
+//     }
 
-    const sections = [
-        'dashboard-view', 'tables-section', 'kitchen-section', 'users-admin-section',
-        'tables-admin-section', 'order-section', 'bill-section', 'catalog-section',
-        'dashboard-analytics-section'
-    ];
+//     const sections = [
+//         'dashboard-view', 'tables-section', 'kitchen-section', 'users-admin-section',
+//         'tables-admin-section', 'order-section', 'bill-section', 'catalog-section',
+//         'dashboard-analytics-section'
+//     ];
 
-    sections.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
-    });
+//     sections.forEach(id => {
+//         const el = document.getElementById(id);
+//         if (el) el.classList.add('hidden');
+//     });
 
-    const target = document.getElementById(sectionId);
-    if (target) target.classList.remove('hidden');
+//     const target = document.getElementById(sectionId);
+//     if (target) target.classList.remove('hidden');
 
-    if (kitchenInterval) {
-        clearInterval(kitchenInterval);
-        kitchenInterval = null;
-    }
+//     if (kitchenInterval) {
+//         clearInterval(kitchenInterval);
+//         kitchenInterval = null;
+//     }
 
-    if (kitchenCloudPollInterval) {
-        clearInterval(kitchenCloudPollInterval);
-        kitchenCloudPollInterval = null;
-    }
+//     if (kitchenCloudPollInterval) {
+//         clearInterval(kitchenCloudPollInterval);
+//         kitchenCloudPollInterval = null;
+//     }
 
-    // Desconectar escuchador anterior de Firestore
-    if (kitchenFirestoreUnsubscribe) {
-        kitchenFirestoreUnsubscribe();
-        kitchenFirestoreUnsubscribe = null;
-    }
+//     // Desconectar escuchador anterior de Firestore
+//     if (kitchenFirestoreUnsubscribe) {
+//         kitchenFirestoreUnsubscribe();
+//         kitchenFirestoreUnsubscribe = null;
+//     }
 
-    if (tablesRefreshInterval) {
-        clearInterval(tablesRefreshInterval);
-        tablesRefreshInterval = null;
-    }
-    document.querySelectorAll('.admin-back-btn').forEach(btn => {
-        btn.style.display = (role === 'admin') ? 'block' : 'none';
-    });
+//     if (tablesRefreshInterval) {
+//         clearInterval(tablesRefreshInterval);
+//         tablesRefreshInterval = null;
+//     }
+//     document.querySelectorAll('.admin-back-btn').forEach(btn => {
+//         btn.style.display = (role === 'admin') ? 'block' : 'none';
+//     });
 
-    if (sectionId === 'dashboard-view') {
-        renderDashboardMenu(role);
-    } else if (sectionId === 'tables-section') {
-        const headerBar = document.getElementById('tablesHeaderBar');
-        const userTitle = document.getElementById('tablesUserTitle');
-        const roleBadge = document.getElementById('tablesRoleBadge');
-        const alarmCard = document.getElementById('waiterAlarmConfigCard');
+//     if (sectionId === 'dashboard-view') {
+//         renderDashboardMenu(role);
+//     } else if (sectionId === 'tables-section') {
+//         const headerBar = document.getElementById('tablesHeaderBar');
+//         const userTitle = document.getElementById('tablesUserTitle');
+//         const roleBadge = document.getElementById('tablesRoleBadge');
+//         const alarmCard = document.getElementById('waiterAlarmConfigCard');
 
-        if (role === 'mesero') {
-            userTitle.innerText = "Gestión de Mesas";
-            if (roleBadge) roleBadge.style.display = 'none';
-            headerBar.style.display = 'flex';
-            if (alarmCard) alarmCard.style.display = 'none';
-        } else if (role === 'admin') {
-            headerBar.style.display = 'none';
-            if (alarmCard) alarmCard.style.display = 'block';
-        }
+//         if (role === 'mesero') {
+//             userTitle.innerText = "Gestión de Mesas";
+//             if (roleBadge) roleBadge.style.display = 'none';
+//             headerBar.style.display = 'flex';
+//             if (alarmCard) alarmCard.style.display = 'none';
+//         } else if (role === 'admin') {
+//             headerBar.style.display = 'none';
+//             if (alarmCard) alarmCard.style.display = 'block';
+//         }
 
-        // Carga inicial de mesas desde Firebase
-        try {
-            console.log('RESTOPOS: Consultando mesas en Firebase...');
+//         // Carga inicial de mesas desde Firebase
+//         try {
+//             console.log('RESTOPOS: Consultando mesas en Firebase...');
 
-            const cloudTables = await window.RestoposDB.getAll('mesas');
+//             const cloudTables = await window.RestoposDB.getAll('mesas');
 
-            if (Array.isArray(cloudTables)) {
-                tables = cloudTables;
-                saveData();
+//             if (Array.isArray(cloudTables)) {
+//                 tables = cloudTables;
+//                 saveData();
 
-                console.log(
-                    'RESTOPOS: Mesas cargadas desde Firebase:',
-                    tables.length
-                );
-            }
+//                 console.log(
+//                     'RESTOPOS: Mesas cargadas desde Firebase:',
+//                     tables.length
+//                 );
+//             }
 
-        } catch (e) {
-            console.error(
-                'RESTOPOS: Error cargando mesas desde Firebase:',
-                e.code,
-                e.message
-            );
+//         } catch (e) {
+//             console.error(
+//                 'RESTOPOS: Error cargando mesas desde Firebase:',
+//                 e.code,
+//                 e.message
+//             );
 
-            console.warn('Se conservarán las mesas locales.');
-        }
+//             console.warn('Se conservarán las mesas locales.');
+//         }
 
-        renderTables();
+//         renderTables();
 
-        // ⬇️ AGREGAN AQUÍ LA LÍNEA NUEVA: ⬇️
-        checkWaiterReadyAlarm();
+//         // ⬇️ AGREGAN AQUÍ LA LÍNEA NUEVA: ⬇️
+//         checkWaiterReadyAlarm();
 
-        // Actualización automática de mesas desde Firebase cada 60 segundos
-        // let isRefreshingTables = false;
+//         // Actualización automática de mesas desde Firebase cada 60 segundos
+//         // let isRefreshingTables = false;
 
         
-        // Escuchar cambios de mesas en tiempo real desde Firebase.
-        console.log(
-            'RESTOPOS: Activando escucha en tiempo real para mesas...'
-        );
+//         // Escuchar cambios de mesas en tiempo real desde Firebase.
+//         console.log(
+//             'RESTOPOS: Activando escucha en tiempo real para mesas...'
+//         );
 
-        kitchenFirestoreUnsubscribe = window.RestoposDB.listenCollection(
-            'mesas',
+//         kitchenFirestoreUnsubscribe = window.RestoposDB.listenCollection(
+//             'mesas',
 
-            (cloudTables) => {
+//             (cloudTables) => {
 
-                const tablesSec = document.getElementById('tables-section');
+//                 const tablesSec = document.getElementById('tables-section');
 
-                // Comprobar que la pantalla de mesas siga abierta.
-                if (
-                    !tablesSec ||
-                    tablesSec.classList.contains('hidden')
-                ) {
-                    return;
-                }
+//                 // Comprobar que la pantalla de mesas siga abierta.
+//                 if (
+//                     !tablesSec ||
+//                     tablesSec.classList.contains('hidden')
+//                 ) {
+//                     return;
+//                 }
 
-                if (Array.isArray(cloudTables)) {
+//                 if (Array.isArray(cloudTables)) {
 
-                    // Actualizar las mesas con los datos de Firebase.
-                    tables = cloudTables;
+//                     // Actualizar las mesas con los datos de Firebase.
+//                     tables = cloudTables;
 
-                    // Guardar los datos locales.
-                    saveData();
+//                     // Guardar los datos locales.
+//                     saveData();
 
-                    // Actualizar visualmente las mesas.
-                    renderTables();
+//                     // Actualizar visualmente las mesas.
+//                     renderTables();
 
-                    // Comprobar si cocina atendió alguna comanda.
-                    checkWaiterReadyAlarm();
+//                     // Comprobar si cocina atendió alguna comanda.
+//                     checkWaiterReadyAlarm();
 
-                    console.log(
-                        'RESTOPOS: Mesas sincronizadas en tiempo real.',
-                        'Mesas:',
-                        tables.length
-                    );
-                }
-            },
+//                     console.log(
+//                         'RESTOPOS: Mesas sincronizadas en tiempo real.',
+//                         'Mesas:',
+//                         tables.length
+//                     );
+//                 }
+//             },
 
-            (error) => {
-                console.error(
-                    'RESTOPOS: Error en escucha de mesas:',
-                    error.code,
-                    error.message
-                );
-            }
-        );
-
-
-    } else if (sectionId === 'tables-admin-section') {
-        cancelEditTable();
-
-        // Consultar mesas desde Firebase
-        try {
-            console.log('RESTOPOS: Cargando administración de mesas desde Firebase...');
-
-            const cloudTables = await window.RestoposDB.getAll('mesas');
-
-            if (Array.isArray(cloudTables)) {
-                tables = cloudTables;
-                saveData();
-
-                console.log(
-                    'RESTOPOS: Mesas disponibles para administración:',
-                    tables.length
-                );
-            }
-
-        } catch (e) {
-            console.error(
-                'RESTOPOS: Error cargando administración de mesas:',
-                e.code,
-                e.message
-            );
-        }
-
-        renderTablesAdmin();
-
-    } else if (sectionId === 'kitchen-section') {
-        const kitchenSection = document.getElementById('kitchen-section');
-        if (!kitchenSection) return;
-
-        const timerConfigBox = document.getElementById('kitchenTimerConfigBox');
-
-        if (timerConfigBox) {
-            timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
-        }
-
-        // Carga inicial: descargar exclusivamente las mesas y comandas.
-        // Carga inicial: consultar mesas y comandas desde Firebase.
-        try {
-            console.log('RESTOPOS: Cargando comandas de cocina desde Firebase...');
-
-            const cloudTables = await window.RestoposDB.getAll('mesas');
-
-            if (!Array.isArray(cloudTables)) {
-                throw new Error('Firebase no devolvió una lista válida de mesas.');
-            }
-
-            tables = cloudTables;
-
-            saveData();
-
-            console.log(
-                'RESTOPOS: Comandas cargadas desde Firebase:',
-                tables.length
-            );
-
-        } catch (e) {
-            console.error(
-                'RESTOPOS: Error cargando comandas desde Firebase:',
-                e.code,
-                e.message
-            );
-
-            console.warn('Se conservarán las comandas locales de cocina.');
-        }
-
-        renderKitchenOrders();
-
-        // Actualización visual local cada segundo.
-        kitchenInterval = setInterval(() => {
-            if (
-                kitchenSection &&
-                !kitchenSection.classList.contains('hidden')
-            ) {
-                renderKitchenOrders();
-            } else {
-                clearInterval(kitchenInterval);
-                kitchenInterval = null;
-            }
-        }, 1000);
-
-        // Escuchar cambios de mesas y comandas en tiempo real desde Firebase.
-        console.log('RESTOPOS: Activando escucha en tiempo real para cocina...');
-
-        kitchenFirestoreUnsubscribe = window.RestoposDB.listenCollection(
-            'mesas',
-
-            (cloudTables) => {
-                const kitchenSection = document.getElementById('kitchen-section');
-
-                if (
-                    !kitchenSection ||
-                    kitchenSection.classList.contains('hidden')
-                ) {
-                    return;
-                }
-
-                if (Array.isArray(cloudTables)) {
-                    tables = cloudTables;
-
-                    saveData();
-
-                    renderKitchenOrders();
-
-                    console.log(
-                        'RESTOPOS: Cocina sincronizada en tiempo real.',
-                        'Mesas:',
-                        tables.length
-                    );
-                }
-            },
-
-            (error) => {
-                console.error(
-                    'RESTOPOS: Error en escucha de cocina:',
-                    error.code,
-                    error.message
-                );
-            }
-        );
+//             (error) => {
+//                 console.error(
+//                     'RESTOPOS: Error en escucha de mesas:',
+//                     error.code,
+//                     error.message
+//                 );
+//             }
+//         );
 
 
-    } else if (sectionId === 'users-admin-section') {
-        cancelEditUser();
+//     } else if (sectionId === 'tables-admin-section') {
+//         cancelEditTable();
 
-        // Cargar usuarios desde Firestore antes de mostrarlos.
-        try {
-            console.log('RESTOPOS: Cargando usuarios desde Firebase...');
+//         // Consultar mesas desde Firebase
+//         try {
+//             console.log('RESTOPOS: Cargando administración de mesas desde Firebase...');
 
-            const cloudUsers = await window.RestoposDB.getAll('usuarios');
+//             const cloudTables = await window.RestoposDB.getAll('mesas');
 
-            if (Array.isArray(cloudUsers)) {
-                users = cloudUsers;
+//             if (Array.isArray(cloudTables)) {
+//                 tables = cloudTables;
+//                 saveData();
 
-                localStorage.setItem(
-                    'restopos_users',
-                    JSON.stringify(users)
-                );
+//                 console.log(
+//                     'RESTOPOS: Mesas disponibles para administración:',
+//                     tables.length
+//                 );
+//             }
 
-                console.log(
-                    'RESTOPOS: Usuarios cargados desde Firebase:',
-                    users.length
-                );
-            }
+//         } catch (e) {
+//             console.error(
+//                 'RESTOPOS: Error cargando administración de mesas:',
+//                 e.code,
+//                 e.message
+//             );
+//         }
 
-        } catch (error) {
-            console.error(
-                'RESTOPOS: Error cargando usuarios desde Firebase:',
-                error.code,
-                error.message
-            );
+//         renderTablesAdmin();
 
-            showCustomAlert('No fue posible cargar los usuarios desde Firebase.');
-            return;
-        }
+//     } else if (sectionId === 'kitchen-section') {
+//         const kitchenSection = document.getElementById('kitchen-section');
+//         if (!kitchenSection) return;
 
-        renderUsersAdmin();
-    } else if (sectionId === 'catalog-section') {
-        cancelEditProduct();
+//         const timerConfigBox = document.getElementById('kitchenTimerConfigBox');
 
-        // Consultar productos desde Firebase
-        try {
-            console.log('RESTOPOS: Cargando catálogo desde Firebase...');
+//         if (timerConfigBox) {
+//             timerConfigBox.style.display = (role === 'admin') ? 'flex' : 'none';
+//         }
 
-            const cloudProducts = await window.RestoposDB.getAll('productos');
+//         // Carga inicial: descargar exclusivamente las mesas y comandas.
+//         // Carga inicial: consultar mesas y comandas desde Firebase.
+//         try {
+//             console.log('RESTOPOS: Cargando comandas de cocina desde Firebase...');
 
-            if (Array.isArray(cloudProducts)) {
-                products = cloudProducts;
+//             const cloudTables = await window.RestoposDB.getAll('mesas');
 
-                // Mantener compatibilidad con bebidas y adicionales
-                drinks = products.filter(product =>
-                    String(product.category || '').toLowerCase() === 'bebidas'
-                );
+//             if (!Array.isArray(cloudTables)) {
+//                 throw new Error('Firebase no devolvió una lista válida de mesas.');
+//             }
 
-                addons = products.filter(product =>
-                    String(product.category || '').toLowerCase() === 'adicionales'
-                );
+//             tables = cloudTables;
 
-                saveData();
+//             saveData();
 
-                console.log(
-                    'RESTOPOS: Catálogo cargado desde Firebase:',
-                    products.length
-                );
-            }
+//             console.log(
+//                 'RESTOPOS: Comandas cargadas desde Firebase:',
+//                 tables.length
+//             );
 
-        } catch (e) {
-            console.error(
-                'RESTOPOS: Error cargando catálogo desde Firebase:',
-                e.code,
-                e.message
-            );
-        }
+//         } catch (e) {
+//             console.error(
+//                 'RESTOPOS: Error cargando comandas desde Firebase:',
+//                 e.code,
+//                 e.message
+//             );
 
-        renderRecipeCheckboxes();
-        renderProducts();
-    } else if (sectionId === 'dashboard-analytics-section') {
-        renderSalesDashboard();
-    }
-}
+//             console.warn('Se conservarán las comandas locales de cocina.');
+//         }
+
+//         renderKitchenOrders();
+
+//         // Actualización visual local cada segundo.
+//         kitchenInterval = setInterval(() => {
+//             if (
+//                 kitchenSection &&
+//                 !kitchenSection.classList.contains('hidden')
+//             ) {
+//                 renderKitchenOrders();
+//             } else {
+//                 clearInterval(kitchenInterval);
+//                 kitchenInterval = null;
+//             }
+//         }, 1000);
+
+//         // Escuchar cambios de mesas y comandas en tiempo real desde Firebase.
+//         console.log('RESTOPOS: Activando escucha en tiempo real para cocina...');
+
+//         kitchenFirestoreUnsubscribe = window.RestoposDB.listenCollection(
+//             'mesas',
+
+//             (cloudTables) => {
+//                 const kitchenSection = document.getElementById('kitchen-section');
+
+//                 if (
+//                     !kitchenSection ||
+//                     kitchenSection.classList.contains('hidden')
+//                 ) {
+//                     return;
+//                 }
+
+//                 if (Array.isArray(cloudTables)) {
+//                     tables = cloudTables;
+
+//                     saveData();
+
+//                     renderKitchenOrders();
+
+//                     console.log(
+//                         'RESTOPOS: Cocina sincronizada en tiempo real.',
+//                         'Mesas:',
+//                         tables.length
+//                     );
+//                 }
+//             },
+
+//             (error) => {
+//                 console.error(
+//                     'RESTOPOS: Error en escucha de cocina:',
+//                     error.code,
+//                     error.message
+//                 );
+//             }
+//         );
+
+
+//     } else if (sectionId === 'users-admin-section') {
+//         cancelEditUser();
+
+//         // Cargar usuarios desde Firestore antes de mostrarlos.
+//         try {
+//             console.log('RESTOPOS: Cargando usuarios desde Firebase...');
+
+//             const cloudUsers = await window.RestoposDB.getAll('usuarios');
+
+//             if (Array.isArray(cloudUsers)) {
+//                 users = cloudUsers;
+
+//                 localStorage.setItem(
+//                     'restopos_users',
+//                     JSON.stringify(users)
+//                 );
+
+//                 console.log(
+//                     'RESTOPOS: Usuarios cargados desde Firebase:',
+//                     users.length
+//                 );
+//             }
+
+//         } catch (error) {
+//             console.error(
+//                 'RESTOPOS: Error cargando usuarios desde Firebase:',
+//                 error.code,
+//                 error.message
+//             );
+
+//             showCustomAlert('No fue posible cargar los usuarios desde Firebase.');
+//             return;
+//         }
+
+//         renderUsersAdmin();
+//     } else if (sectionId === 'catalog-section') {
+//         cancelEditProduct();
+
+//         // Consultar productos desde Firebase
+//         try {
+//             console.log('RESTOPOS: Cargando catálogo desde Firebase...');
+
+//             const cloudProducts = await window.RestoposDB.getAll('productos');
+
+//             if (Array.isArray(cloudProducts)) {
+//                 products = cloudProducts;
+
+//                 // Mantener compatibilidad con bebidas y adicionales
+//                 drinks = products.filter(product =>
+//                     String(product.category || '').toLowerCase() === 'bebidas'
+//                 );
+
+//                 addons = products.filter(product =>
+//                     String(product.category || '').toLowerCase() === 'adicionales'
+//                 );
+
+//                 saveData();
+
+//                 console.log(
+//                     'RESTOPOS: Catálogo cargado desde Firebase:',
+//                     products.length
+//                 );
+//             }
+
+//         } catch (e) {
+//             console.error(
+//                 'RESTOPOS: Error cargando catálogo desde Firebase:',
+//                 e.code,
+//                 e.message
+//             );
+//         }
+
+//         renderRecipeCheckboxes();
+//         renderProducts();
+//     } else if (sectionId === 'dashboard-analytics-section') {
+//         renderSalesDashboard();
+//     }
+// }
 
 
 /**
@@ -822,26 +822,26 @@ async function showSection(sectionId) {
  * Cómo lo realiza: Compara el tiempo transcurrido desde la última alerta.
  * Consulta a Sheets: Ninguna.
  */
-function checkWaiterReadyAlarm() {
-    const now = Date.now();
-    const tablesArray = Array.isArray(tables) ? tables : [];
+// function checkWaiterReadyAlarm() {
+//     const now = Date.now();
+//     const tablesArray = Array.isArray(tables) ? tables : [];
 
-    const hasReadyTables = tablesArray.some(t => {
-        let items = t.items;
-        if (typeof items === 'string') {
-            try { items = JSON.parse(items); } catch (e) { items = []; }
-        }
-        return Array.isArray(items) && items.some(i => i.sentToKitchen && i.served && !i.pickedUp);
-    });
+//     const hasReadyTables = tablesArray.some(t => {
+//         let items = t.items;
+//         if (typeof items === 'string') {
+//             try { items = JSON.parse(items); } catch (e) { items = []; }
+//         }
+//         return Array.isArray(items) && items.some(i => i.sentToKitchen && i.served && !i.pickedUp);
+//     });
 
-    if (hasReadyTables) {
-        const intervalMs = (appConfig.waiterAlarmInterval || 20) * 1000;
-        if (now - lastWaiterAlarmTime >= intervalMs) {
-            playAlarmBeep();
-            lastWaiterAlarmTime = now;
-        }
-    }
-}
+//     if (hasReadyTables) {
+//         const intervalMs = (appConfig.waiterAlarmInterval || 20) * 1000;
+//         if (now - lastWaiterAlarmTime >= intervalMs) {
+//             playAlarmBeep();
+//             lastWaiterAlarmTime = now;
+//         }
+//     }
+// }
 
 
 
