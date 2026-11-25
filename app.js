@@ -53,62 +53,62 @@ let lastWaiterAlarmTime = 0;
  * Cómo lo realiza: Restaura la sesión activa si existe o precarga exclusivamente los usuarios.
  * Consulta a Sheets: Llama a `loadUsersAndConfigFromCloud()` (Tablas: `Usuarios` y `Config`).
  */
-window.onload = function() {
-    auth.onAuthStateChanged(async function(firebaseUser) {
+// window.onload = function() {
+//     auth.onAuthStateChanged(async function(firebaseUser) {
 
-        if (!firebaseUser) {
-            localStorage.removeItem('restopos_logged');
-            localStorage.removeItem('restopos_current_user');
-            localStorage.removeItem('restopos_current_role');
+//         if (!firebaseUser) {
+//             localStorage.removeItem('restopos_logged');
+//             localStorage.removeItem('restopos_current_user');
+//             localStorage.removeItem('restopos_current_role');
 
-            document.getElementById('login-view').classList.remove('hidden');
-            return;
-        }
+//             document.getElementById('login-view').classList.remove('hidden');
+//             return;
+//         }
 
-        try {
-            const userDoc = await db
-                .collection('usuarios')
-                .doc(firebaseUser.uid)
-                .get();
+//         try {
+//             const userDoc = await db
+//                 .collection('usuarios')
+//                 .doc(firebaseUser.uid)
+//                 .get();
 
-            if (!userDoc.exists) {
-                await auth.signOut();
-                showCustomAlert('La cuenta no tiene un perfil registrado en RESTOPOS.');
-                return;
-            }
+//             if (!userDoc.exists) {
+//                 await auth.signOut();
+//                 showCustomAlert('La cuenta no tiene un perfil registrado en RESTOPOS.');
+//                 return;
+//             }
 
-            const userData = userDoc.data();
-            const validRoles = ['admin', 'mesero', 'cocinero'];
+//             const userData = userDoc.data();
+//             const validRoles = ['admin', 'mesero', 'cocinero'];
 
-            if (userData.activo !== true || !validRoles.includes(userData.rol)) {
-                await auth.signOut();
-                showCustomAlert('La cuenta está desactivada o no tiene un rol válido.');
-                return;
-            }
+//             if (userData.activo !== true || !validRoles.includes(userData.rol)) {
+//                 await auth.signOut();
+//                 showCustomAlert('La cuenta está desactivada o no tiene un rol válido.');
+//                 return;
+//             }
 
-            localStorage.setItem('restopos_current_user', userData.nombre || userData.email);
-            localStorage.setItem('restopos_current_role', userData.rol);
+//             localStorage.setItem('restopos_current_user', userData.nombre || userData.email);
+//             localStorage.setItem('restopos_current_role', userData.rol);
 
-            setupUserSession(
-                userData.nombre || userData.email,
-                userData.rol,
-                false
-            );
+//             setupUserSession(
+//                 userData.nombre || userData.email,
+//                 userData.rol,
+//                 false
+//             );
 
-        } catch (error) {
-            console.error('RESTOPOS - Error al restaurar sesión:', error);
+//         } catch (error) {
+//             console.error('RESTOPOS - Error al restaurar sesión:', error);
 
-            showCustomAlert(
-                'Error verificando perfil: ' +
-                (error.code || 'sin código') +
-                ' - ' +
-                (error.message || 'Sin descripción')
-            );
+//             showCustomAlert(
+//                 'Error verificando perfil: ' +
+//                 (error.code || 'sin código') +
+//                 ' - ' +
+//                 (error.message || 'Sin descripción')
+//             );
 
-            await auth.signOut();
-        }
-    });
-};
+//             await auth.signOut();
+//         }
+//     });
+// };
 
 
 
@@ -193,58 +193,58 @@ async function loadUsersAndConfigFromCloud() {
  * Consulta a Sheets: Llama a `loadUsersAndConfigFromCloud()` (Tabla: `Usuarios`).
  */
 
-async function login() {
-    const emailInput = document.getElementById('userInput').value.trim();
-    const passInput = document.getElementById('passInput').value;
+// async function login() {
+//     const emailInput = document.getElementById('userInput').value.trim();
+//     const passInput = document.getElementById('passInput').value;
 
-    if (!emailInput || !passInput) {
-        showCustomAlert('Ingrese correo electrónico y contraseña.');
-        return;
-    }
+//     if (!emailInput || !passInput) {
+//         showCustomAlert('Ingrese correo electrónico y contraseña.');
+//         return;
+//     }
 
-    if (!navigator.onLine) {
-        showCustomAlert('Se necesita conexión a internet para iniciar sesión.');
-        return;
-    }
+//     if (!navigator.onLine) {
+//         showCustomAlert('Se necesita conexión a internet para iniciar sesión.');
+//         return;
+//     }
 
-    try {
-        showCustomAlert('🔄 Verificando credenciales con Firebase...');
+//     try {
+//         showCustomAlert('🔄 Verificando credenciales con Firebase...');
 
-        await auth.signInWithEmailAndPassword(
-            emailInput,
-            passInput
-        );
+//         await auth.signInWithEmailAndPassword(
+//             emailInput,
+//             passInput
+//         );
 
-        const alertOverlay = document.getElementById('customAlertModal');
-        if (alertOverlay) alertOverlay.style.display = 'none';
+//         const alertOverlay = document.getElementById('customAlertModal');
+//         if (alertOverlay) alertOverlay.style.display = 'none';
 
-        // La sesión y el perfil se procesan en onAuthStateChanged.
+//         // La sesión y el perfil se procesan en onAuthStateChanged.
 
-    } catch (error) {
-        console.error('RESTOPOS - Error de inicio de sesión:', error);
+//     } catch (error) {
+//         console.error('RESTOPOS - Error de inicio de sesión:', error);
 
-        const alertOverlay = document.getElementById('customAlertModal');
-        if (alertOverlay) alertOverlay.style.display = 'none';
+//         const alertOverlay = document.getElementById('customAlertModal');
+//         if (alertOverlay) alertOverlay.style.display = 'none';
 
-        let message = 'No fue posible iniciar sesión.';
+//         let message = 'No fue posible iniciar sesión.';
 
-        if (error.code === 'auth/invalid-email') {
-            message = 'El correo electrónico no tiene un formato válido.';
-        } else if (
-            error.code === 'auth/invalid-credential' ||
-            error.code === 'auth/wrong-password' ||
-            error.code === 'auth/user-not-found'
-        ) {
-            message = 'Correo electrónico o contraseña incorrectos.';
-        } else if (error.code === 'auth/too-many-requests') {
-            message = 'Demasiados intentos. Espera unos minutos.';
-        } else if (error.code === 'auth/network-request-failed') {
-            message = 'Error de conexión. Comprueba tu internet.';
-        }
+//         if (error.code === 'auth/invalid-email') {
+//             message = 'El correo electrónico no tiene un formato válido.';
+//         } else if (
+//             error.code === 'auth/invalid-credential' ||
+//             error.code === 'auth/wrong-password' ||
+//             error.code === 'auth/user-not-found'
+//         ) {
+//             message = 'Correo electrónico o contraseña incorrectos.';
+//         } else if (error.code === 'auth/too-many-requests') {
+//             message = 'Demasiados intentos. Espera unos minutos.';
+//         } else if (error.code === 'auth/network-request-failed') {
+//             message = 'Error de conexión. Comprueba tu internet.';
+//         }
 
-        showCustomAlert(message);
-    }
-}
+//         showCustomAlert(message);
+//     }
+// }
 
 
 /**
@@ -252,35 +252,35 @@ async function login() {
  * Cómo lo realiza: Muestra el rol y nombre, y direcciona al módulo correspondiente.
  * Consulta a Sheets: Ninguna directa.
  */
-function setupUserSession(username, role, isNewLogin = false) {
-    document.getElementById('login-view').classList.add('hidden');
-    document.getElementById('welcome-msg').innerText = `Usuario: ${username}`;
-    document.getElementById('userRoleBadge').innerText = `Rol: ${role}`;
+// function setupUserSession(username, role, isNewLogin = false) {
+//     document.getElementById('login-view').classList.add('hidden');
+//     document.getElementById('welcome-msg').innerText = `Usuario: ${username}`;
+//     document.getElementById('userRoleBadge').innerText = `Rol: ${role}`;
 
-    const alarmParamInput = document.getElementById('waiterAlarmIntervalParam');
-    if (alarmParamInput) {
-        alarmParamInput.value = appConfig.waiterAlarmInterval || 20;
-    }
+//     const alarmParamInput = document.getElementById('waiterAlarmIntervalParam');
+//     if (alarmParamInput) {
+//         alarmParamInput.value = appConfig.waiterAlarmInterval || 20;
+//     }
 
-    if (isNewLogin) {
-        if (role === 'cocinero') {
-            showSection('kitchen-section');
-            return;
-        } else if (role === 'mesero') {
-            showSection('tables-section');
-            return;
-        }
-    }
+//     if (isNewLogin) {
+//         if (role === 'cocinero') {
+//             showSection('kitchen-section');
+//             return;
+//         } else if (role === 'mesero') {
+//             showSection('tables-section');
+//             return;
+//         }
+//     }
 
-    if (role === 'admin') {
-        showSection('dashboard-view');
-        renderDashboardMenu(role);
-    } else if (role === 'cocinero') {
-        showSection('kitchen-section');
-    } else if (role === 'mesero') {
-        showSection('tables-section');
-    }
-}
+//     if (role === 'admin') {
+//         showSection('dashboard-view');
+//         renderDashboardMenu(role);
+//     } else if (role === 'cocinero') {
+//         showSection('kitchen-section');
+//     } else if (role === 'mesero') {
+//         showSection('tables-section');
+//     }
+// }
 
 
 /**
@@ -394,40 +394,40 @@ function renderDashboardMenu(role) {
  * Consulta a Sheets: Ninguna.
  */
 
-async function logout() {
-    try {
-        await auth.signOut();
+// async function logout() {
+//     try {
+//         await auth.signOut();
 
-        localStorage.removeItem('restopos_logged');
-        localStorage.removeItem('restopos_current_user');
-        localStorage.removeItem('restopos_current_role');
+//         localStorage.removeItem('restopos_logged');
+//         localStorage.removeItem('restopos_current_user');
+//         localStorage.removeItem('restopos_current_role');
 
-        const sections = [
-            'dashboard-view',
-            'tables-section',
-            'kitchen-section',
-            'users-admin-section',
-            'tables-admin-section',
-            'order-section',
-            'bill-section',
-            'catalog-section',
-            'dashboard-analytics-section'
-        ];
+//         const sections = [
+//             'dashboard-view',
+//             'tables-section',
+//             'kitchen-section',
+//             'users-admin-section',
+//             'tables-admin-section',
+//             'order-section',
+//             'bill-section',
+//             'catalog-section',
+//             'dashboard-analytics-section'
+//         ];
 
-        sections.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.classList.add('hidden');
-        });
+//         sections.forEach(id => {
+//             const el = document.getElementById(id);
+//             if (el) el.classList.add('hidden');
+//         });
 
-        document.getElementById('login-view').classList.remove('hidden');
-        document.getElementById('userInput').value = '';
-        document.getElementById('passInput').value = '';
+//         document.getElementById('login-view').classList.remove('hidden');
+//         document.getElementById('userInput').value = '';
+//         document.getElementById('passInput').value = '';
 
-    } catch (error) {
-        console.error('RESTOPOS - Error al cerrar sesión:', error);
-        showCustomAlert('No fue posible cerrar la sesión. Intenta nuevamente.');
-    }
-}
+//     } catch (error) {
+//         console.error('RESTOPOS - Error al cerrar sesión:', error);
+//         showCustomAlert('No fue posible cerrar la sesión. Intenta nuevamente.');
+//     }
+// }
 
 /**
  * Gestiona la navegación entre secciones aplicando control de acceso y limpiando intervalos.
