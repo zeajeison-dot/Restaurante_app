@@ -4413,6 +4413,7 @@ function backToOrderSection() {
 /* 8. ALERTAS Y MODALES                                       */
 /* ========================================================== */
 
+/* ESTE CODIGONSE MIGRO A ALERTS.JS
 function showCustomAlert(message, callback) {
     let alertOverlay = document.getElementById('customAlertModal');
     if (!alertOverlay) {
@@ -4435,7 +4436,8 @@ function showCustomAlert(message, callback) {
         if (typeof callback === 'function') callback();
     };
 }
-
+*/
+/*
 /**
  * ==========================================================
  * CONFIRMACIÓN PERSONALIZADA
@@ -4443,6 +4445,8 @@ function showCustomAlert(message, callback) {
  * Devuelve true si el usuario confirma y false si cancela.
  * ==========================================================
  */
+
+/* FUNCION TAMBIEN MIGRADA A ALERTS.JS
 function showCustomConfirm(message) {
 
     // Buscar el modal existente para evitar crear duplicados.
@@ -4557,6 +4561,7 @@ function showCustomConfirm(message) {
         deleteBtn.onclick = () => finishConfirmation(true);
     });
 }
+*/
 
 
 /* ========================================================== */
@@ -4910,11 +4915,13 @@ function cancelEditAddon() {
 /* 10. SINCRONIZACIÓN CON GOOGLE SHEETS                       */
 /* ========================================================== */
 
-/**
+/*
  * Descarga todos los datos operativos desde Google Apps Script.
  * Cómo lo realiza: Ejecuta una petición GET con `action=getData`.
  * Consulta a Sheets: Lee las tablas `Mesas`, `Productos`, `Bebidas`, `Adicionales`, `Usuarios` y `Config`.
  */
+
+/* MIGRADA A STORAGE.JS
 async function loadDataFromCloud() {
     try {
         console.log('RESTOPOS: Cargando datos desde Firebase...');
@@ -4972,6 +4979,7 @@ async function loadDataFromCloud() {
         return false;
     }
 }
+*/
 
 /* eliminar funcion solo consulta a sheets
         async function saveDataAndSyncCloudSync(msg) {
@@ -5085,7 +5093,7 @@ async function loadDataFromCloud() {
             }
         }
 */
-
+/* MIGRADA A STORAGE.JS
 function saveData() {
     localStorage.setItem('restopos_tables', JSON.stringify(tables));
     localStorage.setItem('restopos_addons', JSON.stringify(addons));
@@ -5095,6 +5103,7 @@ function saveData() {
     localStorage.setItem('restopos_users', JSON.stringify(users));
     localStorage.setItem('restopos_config', JSON.stringify(appConfig));
 }
+*/
 
 
 /* ========================================================== */
