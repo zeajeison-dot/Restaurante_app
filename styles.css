@@ -509,3 +509,81 @@ body:has(#kitchen-section:not(.hidden)) {
     flex: 0 0 auto !important;
 }
 
+
+/* ==========================================
+   COCINA - CORRECCIÓN DE ALTURA DE TARJETAS
+========================================== */
+
+#kitchenOrdersContainer > div {
+    display: block !important;
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    height: fit-content !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    align-self: stretch;
+    overflow: visible !important;
+}
+
+/* Lista de productos: altura según su contenido */
+#kitchenOrdersContainer > div > div:nth-child(2) {
+    display: block !important;
+    flex: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+/* Botón debajo de los productos */
+#kitchenOrdersContainer > div > button {
+    display: block !important;
+    width: 100% !important;
+    margin-top: 12px !important;
+}
+
+
+
+
+/* ==========================================
+   COCINA - CONTENEDOR Y DESPLAZAMIENTO
+========================================== */
+
+/* Limitar la pantalla de cocina a la altura disponible */
+.container:has(#kitchen-section:not(.hidden)) {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* La sección de cocina ocupa el espacio disponible */
+#kitchen-section:not(.hidden) {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+}
+
+/* Mantener visibles el encabezado y la configuración */
+#kitchen-section > header,
+#kitchenTimerConfigBox,
+#kitchen-section > button {
+    flex-shrink: 0;
+}
+
+/* Área desplazable de las comandas */
+#kitchenOrdersContainer {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+}

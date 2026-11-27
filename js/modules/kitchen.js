@@ -197,15 +197,19 @@ async function sendOrderToKitchen() {
 
 
 
+
+
 /**
  * ==========================================================
  * RENDERIZAR COMANDAS EN PANTALLA DE COCINA
+ *
  * Agrupa los productos por lotes y calcula los umbrales
  * de tiempo para las alertas visuales y sonoras.
  * ==========================================================
  */
 
 function renderKitchenOrders() {
+
     const container = document.getElementById('kitchenOrdersContainer');
 
     if (!container) return;
@@ -214,10 +218,16 @@ function renderKitchenOrders() {
 
     const now = Date.now();
     const activeBatches = [];
+
     let triggerAlarm = false;
 
-    // Recopilar los lotes pendientes de todas las mesas.
+
+    /* ======================================================
+       1. RECOPILAR LOS LOTES PENDIENTES DE TODAS LAS MESAS
+    ====================================================== */
+
     tables.forEach(table => {
+
         const activeItems = (Array.isArray(table.items) ? table.items : [])
             .filter(item => item.sentToKitchen === true && !item.served);
 
@@ -226,6 +236,7 @@ function renderKitchenOrders() {
         const batchesMap = {};
 
         activeItems.forEach(item => {
+
             // Compatibilidad con comandas antiguas.
             const batchKey = item.kitchenBatchId || `legacy_${item.sentAt || now}`;
 
@@ -234,23 +245,34 @@ function renderKitchenOrders() {
             }
 
             batchesMap[batchKey].push(item);
+
         });
 
+
+        /* ==================================================
+           2. PROCESAR CADA LOTE
+        ================================================== */
+
         Object.entries(batchesMap).forEach(([batchKey, batchItems]) => {
+
             const firstItem = batchItems[0];
 
             const batchTime = Number(firstItem.sentAt) || now;
 
             const isEntryGroup = firstItem.kitchenGroup === 'entradas';
 
-            const timerMinutes = Number(firstItem.kitchenTimerMinutes) ||
+            const timerMinutes =
+                Number(firstItem.kitchenTimerMinutes) ||
                 Number(appConfig.kitchenTimerMinutes) ||
                 (isEntryGroup ? 5 : 15);
 
-            const alarmPercent = Number(firstItem.kitchenAlarmPercent) ||
-                (isEntryGroup
-                    ? Number(appConfig.kitchenEntryAlarmPercent) || 25
-                    : Number(appConfig.kitchenMainAlarmPercent) || 25);
+            const alarmPercent =
+                Number(firstItem.kitchenAlarmPercent) ||
+                (
+                    isEntryGroup
+                        ? Number(appConfig.kitchenEntryAlarmPercent) || 25
+                        : Number(appConfig.kitchenMainAlarmPercent) || 25
+                );
 
             activeBatches.push({
                 tableId: table.id,
@@ -262,77 +284,129 @@ function renderKitchenOrders() {
                 timerMinutes,
                 alarmPercent
             });
+
         });
+
     });
 
-    // Ordenar los lotes del más antiguo al más reciente.
+
+    /* ======================================================
+       3. ORDENAR LOS LOTES DEL MÁS ANTIGUO AL MÁS RECIENTE
+    ====================================================== */
+
     activeBatches.sort((a, b) => a.sentAt - b.sentAt);
 
     // Activar desplazamiento cuando existan más de cuatro comandas.
     container.classList.toggle('kitchen-many', activeBatches.length > 4);
 
-    // Comprobar si algún lote necesita activar la alarma.
+
+    /* ======================================================
+       4. COMPROBAR SI ALGÚN LOTE NECESITA ACTIVAR LA ALARMA
+    ====================================================== */
+
     activeBatches.forEach(batch => {
+
         const limitSeconds = batch.timerMinutes * 60;
+
         const elapsedSeconds = Math.floor((now - batch.sentAt) / 1000);
+
         const remainingSeconds = limitSeconds - elapsedSeconds;
+
         const redThresholdSeconds = limitSeconds * (batch.alarmPercent / 100);
 
         if (remainingSeconds <= redThresholdSeconds) {
             triggerAlarm = true;
         }
+
     });
 
+
+    // Reproducir alarma como máximo cada 30 segundos.
     if (triggerAlarm && (now - lastKitchenAlarmTime >= 30000)) {
+
         playAlarmBeep();
+
         lastKitchenAlarmTime = now;
+
     }
 
+
+    /* ======================================================
+       5. MOSTRAR MENSAJE CUANDO NO HAY COMANDAS PENDIENTES
+    ====================================================== */
+
     if (activeBatches.length === 0) {
+
         container.innerHTML = `
-            <div style="text-align:center; padding:30px; color:#64748b;">
+            <div style="
+                text-align:center;
+                padding:30px;
+                color:#64748b;
+            ">
                 <div style="font-size:40px;">🍽️</div>
                 <p>No hay comandas pendientes</p>
             </div>
         `;
+
         return;
+
     }
 
-    // Dibujar cada lote con su propio temporizador.
+
+    /* ======================================================
+       6. DIBUJAR CADA LOTE CON SU PROPIO TEMPORIZADOR
+    ====================================================== */
+
     activeBatches.forEach(batch => {
+
         const limitSeconds = batch.timerMinutes * 60;
+
         const elapsedSeconds = Math.floor((now - batch.sentAt) / 1000);
+
         const remainingSeconds = limitSeconds - elapsedSeconds;
 
         const redThresholdSeconds = limitSeconds * (batch.alarmPercent / 100);
+
         const yellowThresholdSeconds = limitSeconds * 0.50;
 
         const isExpired = remainingSeconds <= 0;
+
         const absRemaining = Math.abs(remainingSeconds);
 
         const remMins = Math.floor(absRemaining / 60);
+
         const remSecs = absRemaining % 60;
 
         const timeFormatted =
             `${isExpired ? '-' : ''}${remMins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
+
+
+        /* ==================================================
+           7. DETERMINAR LOS COLORES SEGÚN EL TIEMPO
+        ================================================== */
 
         let cardBg = '#dcfce7';
         let borderColor = '#22c55e';
         let textColor = '#15803d';
 
         if (remainingSeconds <= redThresholdSeconds) {
+
             cardBg = '#fee2e2';
             borderColor = '#ef4444';
             textColor = '#b91c1c';
+
         } else if (remainingSeconds <= yellowThresholdSeconds) {
+
             cardBg = '#fef9c3';
             borderColor = '#eab308';
             textColor = '#854d0e';
+
         }
 
-        const groupTitle = batch.kitchenGroup === 'entradas'
-            ? 'Entradas, sopas y bebidas'
-            : 'Platos principales y adicionales';
+
+        /* ==================================================
+           8. CREAR LA TARJETA DE LA COMANDA
+        ================================================== */
 
         const card = document.createElement('div');
 
@@ -345,58 +419,112 @@ function renderKitchenOrders() {
             color:${textColor};
         `;
 
+
+        /* ==================================================
+           9. CONSTRUIR LA LISTA DE PRODUCTOS
+        ================================================== */
+
         let itemsHtml = '';
 
         batch.items.forEach(item => {
+
             itemsHtml += `
                 <div style="
                     padding:8px 0;
                     border-bottom:1px solid rgba(0,0,0,0.1);
                 ">
                     <strong>${item.name}</strong>
+
                     ${item.observation
-                    ? `<div style="font-size:13px;">${item.observation}</div>`
-                    : ''}
+                        ? `<div style="font-size:13px;">${item.observation}</div>`
+                        : ''
+                    }
                 </div>
             `;
+
         });
+
+
+        /* ==================================================
+           10. PREPARAR EL IDENTIFICADOR DEL LOTE
+        ================================================== */
 
         const safeBatchId = String(batch.batchId)
             .replace(/\\/g, '\\\\')
             .replace(/'/g, "\\'");
 
+
+        /* ==================================================
+           11. CONSTRUIR EL CONTENIDO DE LA TARJETA
+        ================================================== */
+
         card.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-                <div>
-                    <h3 style="margin:0;">${batch.tableName}</h3>
-                    <div style="font-size:13px; margin-top:4px;">
-                        ${groupTitle}
-                    </div>
-                    <div style="font-size:12px; margin-top:4px;">
-                        Lote #${new Date(batch.sentAt).toLocaleTimeString('es-CO', {
-            hour: '2-digit',
-            minute: '2-digit'
-        })}
-                    </div>
+            <div style="
+                display:grid;
+                grid-template-columns: 1fr auto 1fr;
+                align-items:center;
+                gap:8px;
+            ">
+
+                <!-- MESA -->
+                <div style="
+                    font-size:20px;
+                    font-weight:800;
+                    text-align:left;
+                ">
+                    ${batch.tableName}
                 </div>
 
+                <!-- HORA DEL LOTE -->
+                <div style="
+                    font-size:11px;
+                    font-weight:600;
+                    text-align:center;
+                    white-space:nowrap;
+                ">
+                    Lote ${new Date(batch.sentAt).toLocaleTimeString('es-CO', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                    })}
+                </div>
+
+                <!-- TEMPORIZADOR -->
                 <div style="text-align:right;">
-                    <div style="font-size:12px;">Tiempo restante</div>
-                    <strong style="font-size:26px;">⏱️ ${timeFormatted}</strong>
+
+                    <div style="
+                        font-size:12px;
+                        font-weight:600;
+                    ">
+                        Tiempo restante
+                    </div>
+
+                    <strong style="
+                        display:block;
+                        font-size:24px;
+                        white-space:nowrap;
+                    ">
+                        ⏱️ ${timeFormatted}
+                    </strong>
+
                     <div style="font-size:11px;">
                         Límite: ${batch.timerMinutes} min
                     </div>
+
                 </div>
+
             </div>
 
-            <div style="margin-top:12px;">
+            <!-- PRODUCTOS -->
+            <div style="margin-top:8px;">
                 ${itemsHtml}
             </div>
 
+            <!-- BOTÓN DE SERVIDO -->
             <button
                 style="
                     width:100%;
-                    margin-top:15px;
+                    margin-top:12px;
                     padding:12px;
                     border:none;
                     border-radius:8px;
@@ -411,8 +539,15 @@ function renderKitchenOrders() {
             </button>
         `;
 
+
+        /* ==================================================
+           12. AGREGAR LA TARJETA A LA PANTALLA DE COCINA
+        ================================================== */
+
         container.appendChild(card);
+
     });
+
 }
 
 
