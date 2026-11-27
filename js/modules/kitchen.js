@@ -466,7 +466,7 @@ function renderKitchenOrders() {
                     border-bottom:1px solid rgba(0,0,0,0.1);
                 ">
                     <!-- NOMBRE DEL PRODUCTO HTML-->
-                    <strong style="font-size:40px;">
+                    <strong style="font-size:20px;">
                     ${item.name}
                     </strong>
 
@@ -520,7 +520,7 @@ function renderKitchenOrders() {
 
                 <!-- MESA -->
                 <div style="
-                    font-size:20px;
+                    font-size:40px;
                     font-weight:800;
                     text-align:left;
                 ">
@@ -571,7 +571,7 @@ function renderKitchenOrders() {
 
 
             <!-- PRODUCTOS -->
-            <div style="margin-top:8px;">
+            <div style="margin-top:20px;">
                 ${itemsHtml}
             </div>
 
