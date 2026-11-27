@@ -466,7 +466,7 @@ function renderKitchenOrders() {
                     border-bottom:1px solid rgba(0,0,0,0.1);
                 ">
                     <!-- NOMBRE DEL PRODUCTO HTML-->
-                    <strong style="font-size:28px;">
+                    <strong style="font-size:40px;">
                     ${item.name}
                     </strong>
 
