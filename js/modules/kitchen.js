@@ -465,7 +465,6 @@ function renderKitchenOrders() {
                     padding:8px 0;
                     border-bottom:1px solid rgba(0,0,0,0.1);
                 ">
-                    //NOMBRE DEL PRODUCTO
                     <!-- NOMBRE DEL PRODUCTO HTML-->
                     <strong style="font-size:28px;">
                     ${item.name}
