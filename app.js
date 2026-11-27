@@ -232,503 +232,503 @@ function playAlarmBeep() {
 }
 
 
-/**
- * ==========================================================
- * ENVIAR COMANDA A COCINA
- * Consulta primero los datos actualizados de Firestore
- * para identificar correctamente los productos seleccionados.
- * ==========================================================
- */
-async function sendOrderToKitchen() {
-
-    // Comprobar conexión a internet.
-    if (!navigator.onLine) {
-        showCustomAlert(
-            'No hay conexión a internet. La comanda no se pudo enviar a cocina.'
-        );
-        return;
-    }
-
-    // Buscar la mesa seleccionada.
-    const localTable = tables.find(
-        t => Number(t.id) === Number(currentTableId)
-    );
-
-    if (!localTable) {
-        showCustomAlert('No se encontró la mesa seleccionada.');
-        return;
-    }
-
-    try {
-
-        console.log(
-            'RESTOPOS: Consultando estado actualizado de la mesa en Firebase...'
-        );
-
-        // Obtener el identificador del documento de Firestore.
-        const documentId =
-            localTable._docId || `mesa_${localTable.id}`;
-
-        // Esperar a que terminen todos los guardados de los checkbox.
-        if (window.kitchenCheckSaveQueue) {
-
-            console.log(
-                'RESTOPOS: Esperando guardados pendientes de selección...'
-            );
-
-            await window.kitchenCheckSaveQueue;
-        }
-
-        // Consultar directamente la mesa en Firebase.
-        const cloudTable = await window.RestoposDB.getById(
-            'mesas',
-            documentId
-        );
-
-        if (!cloudTable) {
-            showCustomAlert(
-                'No se encontró la mesa en Firebase.'
-            );
-            return;
-        }
-
-        // Actualizar la copia local con los datos más recientes.
-        localTable.items = Array.isArray(cloudTable.items)
-            ? cloudTable.items
-            : [];
-
-        localTable.status = cloudTable.status || 'libre';
-
-        // Identificar los productos nuevos seleccionados.
-        const itemsToSend = localTable.items.filter(
-            item =>
-                item.sentToKitchen !== true &&
-                item.kitchenChecked === true
-        );
-
-        console.log(
-            'RESTOPOS: Productos seleccionados para cocina:',
-            itemsToSend.length
-        );
-
-        // Mostrar los estados encontrados para diagnóstico.
-        console.log(
-            'RESTOPOS: Estado de productos:',
-            localTable.items.map(item => ({
-                nombre: item.name,
-                kitchenChecked: item.kitchenChecked,
-                sentToKitchen: item.sentToKitchen
-            }))
-        );
-
-        // Detener el envío si no hay productos seleccionados.
-        if (itemsToSend.length === 0) {
-
-            saveData();
-            renderPlusOrderItems();
-
-            showCustomAlert(
-                '⚠️ No hay productos nuevos seleccionados para enviar a cocina.'
-            );
-
-            return;
-        }
-
-        // Registrar el momento exacto del envío.
-        const now = Date.now();
-
-        // Preparar los productos seleccionados para cocina.
-        const updatedItems = localTable.items.map(item => {
-
-            // Conservar los productos que no fueron seleccionados.
-            if (
-                item.sentToKitchen === true ||
-                item.kitchenChecked !== true
-            ) {
-                return item;
-            }
-
-            // Marcar el producto como enviado.
-            return {
-                ...item,
-                sentToKitchen: true,
-                served: false,
-                pickedUp: false,
-                sentAt: now,
-                kitchenChecked: true
-            };
-        });
-
-        // Guardar la comanda directamente en Firestore.
-        await window.RestoposDB.update(
-            'mesas',
-            documentId,
-            {
-                items: updatedItems,
-                status: 'ocupada'
-            }
-        );
-
-        // Actualizar los datos locales después del guardado.
-        localTable.items = updatedItems;
-        localTable.status = 'ocupada';
-
-        appConfig.lastUpdated = now;
-
-        // Guardar el estado local.
-        saveData();
-
-        // Actualizar visualmente la comanda.
-        renderPlusOrderItems();
-
-        console.log(
-            'RESTOPOS: Comanda enviada correctamente a Firebase.',
-            'Productos:',
-            itemsToSend.length
-        );
-
-        // Informar el resultado.
-        showCustomAlert(
-            `👨‍🍳 Comanda enviada a cocina exitosamente (${itemsToSend.length} ítem(s)).`
-        );
-
-        // Regresar a la pantalla de mesas.
-        await showSection('tables-section');
-
-    } catch (error) {
-
-        console.error(
-            'RESTOPOS: Error enviando comanda a Firebase:',
-            error.code,
-            error.message
-        );
-
-        showCustomAlert(
-            '⚠️ No se pudo enviar la comanda a cocina. Verifique su conexión e inténtelo nuevamente.'
-        );
-    }
-}
-
-
-
-/**
- * Renderiza comandas en pantalla de cocina con alertas de color según porcentaje y umbral.
- * Cómo lo realiza: Agrupa por lotes y calcula umbrales porcentuales.
- * Consulta a Sheets: Ninguna.
- */
-function renderKitchenOrders() {
-    const container = document.getElementById('kitchenOrdersContainer');
-    if (!container) return;
-    container.innerHTML = '';
-
-    const limitMinutes = parseInt(document.getElementById('kitchenTimerParam').value, 10) || 15;
-    const limitSeconds = limitMinutes * 60;
-
-    const alarmPercent = parseInt(document.getElementById('kitchenAlarmParam')?.value, 10) || 25;
-    const redThresholdSeconds = limitSeconds * (alarmPercent / 100);
-    const yellowThresholdSeconds = limitSeconds * 0.50;
-
-    const now = Date.now();
-    const activeBatches = [];
-    let triggerAlarm = false;
-
-    tables.forEach(table => {
-        const activeItems = table.items.filter(item => item.sentToKitchen && !item.served);
-
-        if (activeItems.length > 0) {
-            const batchesMap = {};
-            activeItems.forEach(item => {
-                const batchKey = item.sentAt || now;
-                if (!batchesMap[batchKey]) batchesMap[batchKey] = [];
-                batchesMap[batchKey].push(item);
-            });
-
-            Object.keys(batchesMap).forEach(batchKey => {
-                const batchTime = parseInt(batchKey, 10);
-                activeBatches.push({
-                    tableId: table.id,
-                    tableName: table.name,
-                    batchId: batchTime,
-                    items: batchesMap[batchKey],
-                    sentAt: batchTime
-                });
-            });
-        }
-    });
-
-    activeBatches.sort((a, b) => a.sentAt - b.sentAt);
-
-    activeBatches.forEach(batch => {
-        const elapsedSecs = Math.floor((now - batch.sentAt) / 1000);
-        const remainingSecs = limitSeconds - elapsedSecs;
-        if (remainingSecs <= redThresholdSeconds) {
-            triggerAlarm = true;
-        }
-    });
-
-    if (triggerAlarm && (now - lastKitchenAlarmTime >= 30000)) {
-        playAlarmBeep();
-        lastKitchenAlarmTime = now;
-    }
-
-    if (activeBatches.length === 0) {
-        container.innerHTML = `
-            <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
-                <h3>No hay comandas pendientes</h3>
-            </div>
-        `;
-        return;
-    }
-
-    activeBatches.forEach(batch => {
-        const elapsedSecs = Math.floor((now - batch.sentAt) / 1000);
-        const remainingSecs = limitSeconds - elapsedSecs;
-        const isExpired = remainingSecs <= 0;
-        const absRemaining = Math.abs(remainingSecs);
-        const remMins = Math.floor(absRemaining / 60);
-        const remSecs = absRemaining % 60;
-        const timeFormatted = `${isExpired ? '-' : ''}${remMins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
-
-        let cardBg = '#dcfce7';
-        let borderColor = '#22c55e';
-        let textColor = '#15803d';
-
-        if (remainingSecs <= redThresholdSeconds) {
-            cardBg = '#fee2e2';
-            borderColor = '#ef4444';
-            textColor = '#b91c1c';
-        } else if (remainingSecs <= yellowThresholdSeconds) {
-            cardBg = '#fef9c3';
-            borderColor = '#eab308';
-            textColor = '#854d0e';
-        }
-
-        const card = document.createElement('div');
-        card.style.cssText = `background: ${cardBg}; border: 2px solid ${borderColor}; border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; justify-content: space-between;`;
-
-        let itemsHtml = '';
-        batch.items.forEach(item => {
-            itemsHtml += `
-                <div style="border-bottom: 1px dashed rgba(0,0,0,0.15); padding: 0.4rem 0;">
-                    <strong>• ${item.name}</strong>
-                    ${item.observation ? `<div style="font-size:0.8rem; color:#2563eb;">Nota: ${item.observation}</div>` : ''}
-                </div>
-            `;
-        });
-
-        card.innerHTML = `
-            <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${borderColor}; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
-                    <h3 style="margin: 0; font-size: 1.1rem;">${batch.tableName} <span style="font-size:0.75rem; color:var(--text-secondary);">(Lote #${new Date(batch.batchId).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})</span></h3>
-                    <span style="font-size: 0.85rem; background: #fff; color: ${textColor}; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: bold;">⏱️ ${timeFormatted}</span>
-                </div>
-                <div>${itemsHtml}</div>
-            </div>
-            <button class="btn btn-secondary" style="margin-top: 1rem; padding: 0.4rem; background: ${borderColor}; color: white;" onclick="markBatchServed(${batch.tableId}, ${batch.batchId})">✅ Marcar Lote Servido</button>
-        `;
-        container.appendChild(card);
-    });
-}
-
-
-
-/**
- * ==========================================================
- * MARCAR LOTE COMO SERVIDO
- * Actualiza el estado de los platos preparados directamente
- * en Firebase Firestore.
- * ==========================================================
- */
-async function markBatchServed(tableId, batchId) {
-
-    // Buscar la mesa correspondiente al lote seleccionado.
-    const table = tables.find(
-        t => Number(t.id) === Number(tableId)
-    );
-
-    // Detener la operación si la mesa no existe.
-    if (!table) return;
-
-    // Comprobar que exista conexión a internet.
-    if (!navigator.onLine) {
-        showCustomAlert(
-            'No hay conexión a internet. No se puede atender la comanda.'
-        );
-        return;
-    }
-
-    // Crear la ventana personalizada de confirmación.
-    let modal = document.getElementById('serveBatchModal');
-
-    if (!modal) {
-
-        // Crear el contenedor del popup.
-        modal = document.createElement('div');
-        modal.id = 'serveBatchModal';
-
-        modal.style.cssText = `
-            position:fixed;
-            inset:0;
-            background:rgba(0,0,0,0.6);
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            z-index:10002;
-            padding:1rem;
-        `;
-
-        // Construir el contenido y los botones del popup.
-        modal.innerHTML = `
-            <div style="
-                background:#fff;
-                color:#1e293b;
-                padding:1.5rem;
-                border-radius:12px;
-                width:100%;
-                max-width:320px;
-                text-align:center;
-                box-shadow:0 10px 30px rgba(0,0,0,0.2);
-            ">
-                <h3 style="margin-top:0;">Atender comanda</h3>
-
-                <p id="serveBatchMessage"
-                   style="font-size:0.9rem;">
-                </p>
-
-                <div style="
-                    display:flex;
-                    gap:0.6rem;
-                    margin-top:1.2rem;
-                ">
-                    <button id="serveBatchCancel"
-                        class="btn"
-                        style="
-                            flex:1;
-                            background:#e2e8f0;
-                            color:#1e293b;
-                        ">
-                        Cancelar
-                    </button>
-
-                    <button id="serveBatchConfirm"
-                        class="btn btn-success"
-                        style="flex:1;">
-                        Sí, atender
-                    </button>
-                </div>
-            </div>
-        `;
-
-        // Incorporar el popup al documento.
-        document.body.appendChild(modal);
-    }
-
-    // Mostrar el nombre de la mesa en el mensaje.
-    document.getElementById('serveBatchMessage').textContent =
-        `¿Marcar este lote de la ${table.name} como servido?`;
-
-    // Obtener las referencias de los botones.
-    const confirmButton =
-        document.getElementById('serveBatchConfirm');
-
-    const cancelButton =
-        document.getElementById('serveBatchCancel');
-
-    // Mostrar la ventana de confirmación.
-    modal.style.display = 'flex';
-
-    // Configurar la cancelación de la operación.
-    cancelButton.onclick = () => {
-        modal.style.display = 'none';
-    };
-
-    // Configurar la confirmación y actualización del lote.
-    confirmButton.onclick = async () => {
-
-        // Evitar múltiples envíos mientras se procesa la operación.
-        confirmButton.disabled = true;
-        confirmButton.textContent = 'Procesando...';
-
-        try {
-
-            // Crear una copia de los platos con el estado actualizado.
-            const updatedItems = table.items.map(item => {
-
-                // Identificar únicamente los platos del lote seleccionado.
-                if (
-                    item.sentToKitchen &&
-                    item.sentAt === batchId
-                ) {
-
-                    // Marcar el plato como servido.
-                    return {
-                        ...item,
-                        served: true,
-                        pickedUp: false
-                    };
-                }
-
-                // Conservar sin cambios los demás platos.
-                return item;
-            });
-
-            // Obtener el identificador del documento de Firestore.
-            const documentId = table._docId || `mesa_${table.id}`;
-
-            // Guardar los estados actualizados directamente en Firebase.
-            await window.RestoposDB.update(
-                'mesas',
-                documentId,
-                {
-                    items: updatedItems
-                }
-            );
-
-            // Actualizar los datos locales después del guardado exitoso.
-            table.items = updatedItems;
-
-            // Actualizar la fecha de modificación local.
-            appConfig.lastUpdated = Date.now();
-
-            // Guardar los cambios en el almacenamiento local.
-            saveData();
-
-            // Actualizar visualmente las comandas de cocina.
-            renderKitchenOrders();
-
-            // Cerrar la ventana de confirmación.
-            modal.style.display = 'none';
-
-            // Informar que la comanda fue atendida correctamente.
-            showCustomAlert(
-                'Comanda atendida correctamente.'
-            );
-
-        } catch (error) {
-
-            // Registrar los detalles del error.
-            console.error(
-                'RESTOPOS: Error atendiendo comanda en Firebase:',
-                error.code,
-                error.message
-            );
-
-            // Cerrar el popup después del error.
-            modal.style.display = 'none';
-
-            // Informar que no se pudo actualizar el lote.
-            showCustomAlert(
-                'No se pudo actualizar la comanda en Firebase. Verifique la conexión.'
-            );
-
-        } finally {
-
-            // Restaurar el botón para futuras operaciones.
-            confirmButton.disabled = false;
-            confirmButton.textContent = 'Sí, atender';
-        }
-    };
-}
+// /**
+//  * ==========================================================
+//  * ENVIAR COMANDA A COCINA
+//  * Consulta primero los datos actualizados de Firestore
+//  * para identificar correctamente los productos seleccionados.
+//  * ==========================================================
+//  */
+// async function sendOrderToKitchen() {
+
+//     // Comprobar conexión a internet.
+//     if (!navigator.onLine) {
+//         showCustomAlert(
+//             'No hay conexión a internet. La comanda no se pudo enviar a cocina.'
+//         );
+//         return;
+//     }
+
+//     // Buscar la mesa seleccionada.
+//     const localTable = tables.find(
+//         t => Number(t.id) === Number(currentTableId)
+//     );
+
+//     if (!localTable) {
+//         showCustomAlert('No se encontró la mesa seleccionada.');
+//         return;
+//     }
+
+//     try {
+
+//         console.log(
+//             'RESTOPOS: Consultando estado actualizado de la mesa en Firebase...'
+//         );
+
+//         // Obtener el identificador del documento de Firestore.
+//         const documentId =
+//             localTable._docId || `mesa_${localTable.id}`;
+
+//         // Esperar a que terminen todos los guardados de los checkbox.
+//         if (window.kitchenCheckSaveQueue) {
+
+//             console.log(
+//                 'RESTOPOS: Esperando guardados pendientes de selección...'
+//             );
+
+//             await window.kitchenCheckSaveQueue;
+//         }
+
+//         // Consultar directamente la mesa en Firebase.
+//         const cloudTable = await window.RestoposDB.getById(
+//             'mesas',
+//             documentId
+//         );
+
+//         if (!cloudTable) {
+//             showCustomAlert(
+//                 'No se encontró la mesa en Firebase.'
+//             );
+//             return;
+//         }
+
+//         // Actualizar la copia local con los datos más recientes.
+//         localTable.items = Array.isArray(cloudTable.items)
+//             ? cloudTable.items
+//             : [];
+
+//         localTable.status = cloudTable.status || 'libre';
+
+//         // Identificar los productos nuevos seleccionados.
+//         const itemsToSend = localTable.items.filter(
+//             item =>
+//                 item.sentToKitchen !== true &&
+//                 item.kitchenChecked === true
+//         );
+
+//         console.log(
+//             'RESTOPOS: Productos seleccionados para cocina:',
+//             itemsToSend.length
+//         );
+
+//         // Mostrar los estados encontrados para diagnóstico.
+//         console.log(
+//             'RESTOPOS: Estado de productos:',
+//             localTable.items.map(item => ({
+//                 nombre: item.name,
+//                 kitchenChecked: item.kitchenChecked,
+//                 sentToKitchen: item.sentToKitchen
+//             }))
+//         );
+
+//         // Detener el envío si no hay productos seleccionados.
+//         if (itemsToSend.length === 0) {
+
+//             saveData();
+//             renderPlusOrderItems();
+
+//             showCustomAlert(
+//                 '⚠️ No hay productos nuevos seleccionados para enviar a cocina.'
+//             );
+
+//             return;
+//         }
+
+//         // Registrar el momento exacto del envío.
+//         const now = Date.now();
+
+//         // Preparar los productos seleccionados para cocina.
+//         const updatedItems = localTable.items.map(item => {
+
+//             // Conservar los productos que no fueron seleccionados.
+//             if (
+//                 item.sentToKitchen === true ||
+//                 item.kitchenChecked !== true
+//             ) {
+//                 return item;
+//             }
+
+//             // Marcar el producto como enviado.
+//             return {
+//                 ...item,
+//                 sentToKitchen: true,
+//                 served: false,
+//                 pickedUp: false,
+//                 sentAt: now,
+//                 kitchenChecked: true
+//             };
+//         });
+
+//         // Guardar la comanda directamente en Firestore.
+//         await window.RestoposDB.update(
+//             'mesas',
+//             documentId,
+//             {
+//                 items: updatedItems,
+//                 status: 'ocupada'
+//             }
+//         );
+
+//         // Actualizar los datos locales después del guardado.
+//         localTable.items = updatedItems;
+//         localTable.status = 'ocupada';
+
+//         appConfig.lastUpdated = now;
+
+//         // Guardar el estado local.
+//         saveData();
+
+//         // Actualizar visualmente la comanda.
+//         renderPlusOrderItems();
+
+//         console.log(
+//             'RESTOPOS: Comanda enviada correctamente a Firebase.',
+//             'Productos:',
+//             itemsToSend.length
+//         );
+
+//         // Informar el resultado.
+//         showCustomAlert(
+//             `👨‍🍳 Comanda enviada a cocina exitosamente (${itemsToSend.length} ítem(s)).`
+//         );
+
+//         // Regresar a la pantalla de mesas.
+//         await showSection('tables-section');
+
+//     } catch (error) {
+
+//         console.error(
+//             'RESTOPOS: Error enviando comanda a Firebase:',
+//             error.code,
+//             error.message
+//         );
+
+//         showCustomAlert(
+//             '⚠️ No se pudo enviar la comanda a cocina. Verifique su conexión e inténtelo nuevamente.'
+//         );
+//     }
+// }
+
+
+
+// /**
+//  * Renderiza comandas en pantalla de cocina con alertas de color según porcentaje y umbral.
+//  * Cómo lo realiza: Agrupa por lotes y calcula umbrales porcentuales.
+//  * Consulta a Sheets: Ninguna.
+//  */
+// function renderKitchenOrders() {
+//     const container = document.getElementById('kitchenOrdersContainer');
+//     if (!container) return;
+//     container.innerHTML = '';
+
+//     const limitMinutes = parseInt(document.getElementById('kitchenTimerParam').value, 10) || 15;
+//     const limitSeconds = limitMinutes * 60;
+
+//     const alarmPercent = parseInt(document.getElementById('kitchenAlarmParam')?.value, 10) || 25;
+//     const redThresholdSeconds = limitSeconds * (alarmPercent / 100);
+//     const yellowThresholdSeconds = limitSeconds * 0.50;
+
+//     const now = Date.now();
+//     const activeBatches = [];
+//     let triggerAlarm = false;
+
+//     tables.forEach(table => {
+//         const activeItems = table.items.filter(item => item.sentToKitchen && !item.served);
+
+//         if (activeItems.length > 0) {
+//             const batchesMap = {};
+//             activeItems.forEach(item => {
+//                 const batchKey = item.sentAt || now;
+//                 if (!batchesMap[batchKey]) batchesMap[batchKey] = [];
+//                 batchesMap[batchKey].push(item);
+//             });
+
+//             Object.keys(batchesMap).forEach(batchKey => {
+//                 const batchTime = parseInt(batchKey, 10);
+//                 activeBatches.push({
+//                     tableId: table.id,
+//                     tableName: table.name,
+//                     batchId: batchTime,
+//                     items: batchesMap[batchKey],
+//                     sentAt: batchTime
+//                 });
+//             });
+//         }
+//     });
+
+//     activeBatches.sort((a, b) => a.sentAt - b.sentAt);
+
+//     activeBatches.forEach(batch => {
+//         const elapsedSecs = Math.floor((now - batch.sentAt) / 1000);
+//         const remainingSecs = limitSeconds - elapsedSecs;
+//         if (remainingSecs <= redThresholdSeconds) {
+//             triggerAlarm = true;
+//         }
+//     });
+
+//     if (triggerAlarm && (now - lastKitchenAlarmTime >= 30000)) {
+//         playAlarmBeep();
+//         lastKitchenAlarmTime = now;
+//     }
+
+//     if (activeBatches.length === 0) {
+//         container.innerHTML = `
+//             <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
+//                 <h3>No hay comandas pendientes</h3>
+//             </div>
+//         `;
+//         return;
+//     }
+
+//     activeBatches.forEach(batch => {
+//         const elapsedSecs = Math.floor((now - batch.sentAt) / 1000);
+//         const remainingSecs = limitSeconds - elapsedSecs;
+//         const isExpired = remainingSecs <= 0;
+//         const absRemaining = Math.abs(remainingSecs);
+//         const remMins = Math.floor(absRemaining / 60);
+//         const remSecs = absRemaining % 60;
+//         const timeFormatted = `${isExpired ? '-' : ''}${remMins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
+
+//         let cardBg = '#dcfce7';
+//         let borderColor = '#22c55e';
+//         let textColor = '#15803d';
+
+//         if (remainingSecs <= redThresholdSeconds) {
+//             cardBg = '#fee2e2';
+//             borderColor = '#ef4444';
+//             textColor = '#b91c1c';
+//         } else if (remainingSecs <= yellowThresholdSeconds) {
+//             cardBg = '#fef9c3';
+//             borderColor = '#eab308';
+//             textColor = '#854d0e';
+//         }
+
+//         const card = document.createElement('div');
+//         card.style.cssText = `background: ${cardBg}; border: 2px solid ${borderColor}; border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; justify-content: space-between;`;
+
+//         let itemsHtml = '';
+//         batch.items.forEach(item => {
+//             itemsHtml += `
+//                 <div style="border-bottom: 1px dashed rgba(0,0,0,0.15); padding: 0.4rem 0;">
+//                     <strong>• ${item.name}</strong>
+//                     ${item.observation ? `<div style="font-size:0.8rem; color:#2563eb;">Nota: ${item.observation}</div>` : ''}
+//                 </div>
+//             `;
+//         });
+
+//         card.innerHTML = `
+//             <div>
+//                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${borderColor}; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+//                     <h3 style="margin: 0; font-size: 1.1rem;">${batch.tableName} <span style="font-size:0.75rem; color:var(--text-secondary);">(Lote #${new Date(batch.batchId).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})</span></h3>
+//                     <span style="font-size: 0.85rem; background: #fff; color: ${textColor}; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: bold;">⏱️ ${timeFormatted}</span>
+//                 </div>
+//                 <div>${itemsHtml}</div>
+//             </div>
+//             <button class="btn btn-secondary" style="margin-top: 1rem; padding: 0.4rem; background: ${borderColor}; color: white;" onclick="markBatchServed(${batch.tableId}, ${batch.batchId})">✅ Marcar Lote Servido</button>
+//         `;
+//         container.appendChild(card);
+//     });
+// }
+
+
+
+// /**
+//  * ==========================================================
+//  * MARCAR LOTE COMO SERVIDO
+//  * Actualiza el estado de los platos preparados directamente
+//  * en Firebase Firestore.
+//  * ==========================================================
+//  */
+// async function markBatchServed(tableId, batchId) {
+
+//     // Buscar la mesa correspondiente al lote seleccionado.
+//     const table = tables.find(
+//         t => Number(t.id) === Number(tableId)
+//     );
+
+//     // Detener la operación si la mesa no existe.
+//     if (!table) return;
+
+//     // Comprobar que exista conexión a internet.
+//     if (!navigator.onLine) {
+//         showCustomAlert(
+//             'No hay conexión a internet. No se puede atender la comanda.'
+//         );
+//         return;
+//     }
+
+//     // Crear la ventana personalizada de confirmación.
+//     let modal = document.getElementById('serveBatchModal');
+
+//     if (!modal) {
+
+//         // Crear el contenedor del popup.
+//         modal = document.createElement('div');
+//         modal.id = 'serveBatchModal';
+
+//         modal.style.cssText = `
+//             position:fixed;
+//             inset:0;
+//             background:rgba(0,0,0,0.6);
+//             display:flex;
+//             align-items:center;
+//             justify-content:center;
+//             z-index:10002;
+//             padding:1rem;
+//         `;
+
+//         // Construir el contenido y los botones del popup.
+//         modal.innerHTML = `
+//             <div style="
+//                 background:#fff;
+//                 color:#1e293b;
+//                 padding:1.5rem;
+//                 border-radius:12px;
+//                 width:100%;
+//                 max-width:320px;
+//                 text-align:center;
+//                 box-shadow:0 10px 30px rgba(0,0,0,0.2);
+//             ">
+//                 <h3 style="margin-top:0;">Atender comanda</h3>
+
+//                 <p id="serveBatchMessage"
+//                    style="font-size:0.9rem;">
+//                 </p>
+
+//                 <div style="
+//                     display:flex;
+//                     gap:0.6rem;
+//                     margin-top:1.2rem;
+//                 ">
+//                     <button id="serveBatchCancel"
+//                         class="btn"
+//                         style="
+//                             flex:1;
+//                             background:#e2e8f0;
+//                             color:#1e293b;
+//                         ">
+//                         Cancelar
+//                     </button>
+
+//                     <button id="serveBatchConfirm"
+//                         class="btn btn-success"
+//                         style="flex:1;">
+//                         Sí, atender
+//                     </button>
+//                 </div>
+//             </div>
+//         `;
+
+//         // Incorporar el popup al documento.
+//         document.body.appendChild(modal);
+//     }
+
+//     // Mostrar el nombre de la mesa en el mensaje.
+//     document.getElementById('serveBatchMessage').textContent =
+//         `¿Marcar este lote de la ${table.name} como servido?`;
+
+//     // Obtener las referencias de los botones.
+//     const confirmButton =
+//         document.getElementById('serveBatchConfirm');
+
+//     const cancelButton =
+//         document.getElementById('serveBatchCancel');
+
+//     // Mostrar la ventana de confirmación.
+//     modal.style.display = 'flex';
+
+//     // Configurar la cancelación de la operación.
+//     cancelButton.onclick = () => {
+//         modal.style.display = 'none';
+//     };
+
+//     // Configurar la confirmación y actualización del lote.
+//     confirmButton.onclick = async () => {
+
+//         // Evitar múltiples envíos mientras se procesa la operación.
+//         confirmButton.disabled = true;
+//         confirmButton.textContent = 'Procesando...';
+
+//         try {
+
+//             // Crear una copia de los platos con el estado actualizado.
+//             const updatedItems = table.items.map(item => {
+
+//                 // Identificar únicamente los platos del lote seleccionado.
+//                 if (
+//                     item.sentToKitchen &&
+//                     item.sentAt === batchId
+//                 ) {
+
+//                     // Marcar el plato como servido.
+//                     return {
+//                         ...item,
+//                         served: true,
+//                         pickedUp: false
+//                     };
+//                 }
+
+//                 // Conservar sin cambios los demás platos.
+//                 return item;
+//             });
+
+//             // Obtener el identificador del documento de Firestore.
+//             const documentId = table._docId || `mesa_${table.id}`;
+
+//             // Guardar los estados actualizados directamente en Firebase.
+//             await window.RestoposDB.update(
+//                 'mesas',
+//                 documentId,
+//                 {
+//                     items: updatedItems
+//                 }
+//             );
+
+//             // Actualizar los datos locales después del guardado exitoso.
+//             table.items = updatedItems;
+
+//             // Actualizar la fecha de modificación local.
+//             appConfig.lastUpdated = Date.now();
+
+//             // Guardar los cambios en el almacenamiento local.
+//             saveData();
+
+//             // Actualizar visualmente las comandas de cocina.
+//             renderKitchenOrders();
+
+//             // Cerrar la ventana de confirmación.
+//             modal.style.display = 'none';
+
+//             // Informar que la comanda fue atendida correctamente.
+//             showCustomAlert(
+//                 'Comanda atendida correctamente.'
+//             );
+
+//         } catch (error) {
+
+//             // Registrar los detalles del error.
+//             console.error(
+//                 'RESTOPOS: Error atendiendo comanda en Firebase:',
+//                 error.code,
+//                 error.message
+//             );
+
+//             // Cerrar el popup después del error.
+//             modal.style.display = 'none';
+
+//             // Informar que no se pudo actualizar el lote.
+//             showCustomAlert(
+//                 'No se pudo actualizar la comanda en Firebase. Verifique la conexión.'
+//             );
+
+//         } finally {
+
+//             // Restaurar el botón para futuras operaciones.
+//             confirmButton.disabled = false;
+//             confirmButton.textContent = 'Sí, atender';
+//         }
+//     };
+// }
 
 
 

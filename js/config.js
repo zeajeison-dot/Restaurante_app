@@ -18,6 +18,13 @@ let salesHistory = [];
 let appConfig = {
     waiterAlarmInterval: 20,
     waiterCanGenerateReceipt: true,
+
+    // Configuración de tiempos y alarmas de cocina.
+    kitchenEntryTimerMinutes: 5,
+    kitchenEntryAlarmPercent: 25,
+    kitchenMainTimerMinutes: 15,
+    kitchenMainAlarmPercent: 25,
+
     lastUpdated: Date.now()
 };
 
@@ -33,6 +40,8 @@ let currentPlusCategory = 'sopas';
 let kitchenInterval = null;
 let kitchenCloudPollInterval = null;
 let kitchenFirestoreUnsubscribe = null;
+// Listener independiente para la configuración de cocina.
+let kitchenConfigUnsubscribe = null;
 let tablesRefreshInterval = null;
 
 let lastKitchenAlarmTime = 0;

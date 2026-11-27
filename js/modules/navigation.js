@@ -171,6 +171,11 @@ async function showSection(sectionId) {
         kitchenFirestoreUnsubscribe = null;
     }
 
+    if (kitchenConfigUnsubscribe) {
+        kitchenConfigUnsubscribe();
+        kitchenConfigUnsubscribe = null;
+    }
+
     if (tablesRefreshInterval) {
         clearInterval(tablesRefreshInterval);
         tablesRefreshInterval = null;
@@ -231,7 +236,7 @@ async function showSection(sectionId) {
         // Actualización automática de mesas desde Firebase cada 60 segundos
         // let isRefreshingTables = false;
 
-        
+
         // Escuchar cambios de mesas en tiempo real desde Firebase.
         console.log(
             'RESTOPOS: Activando escucha en tiempo real para mesas...'
@@ -407,6 +412,80 @@ async function showSection(sectionId) {
                 );
             }
         );
+
+        // Escuchar cambios de configuración de cocina en tiempo real.
+        console.log('RESTOPOS: Activando escucha de configuración de cocina...');
+
+
+        // Escuchar cambios de configuración de cocina en tiempo real.
+        console.log('RESTOPOS: Activando escucha de configuración de cocina...');
+
+        kitchenConfigUnsubscribe = window.RestoposDB.listenDocument(
+            'configuracion',
+            'general',
+
+            (cloudConfig) => {
+                if (!cloudConfig) return;
+
+                const entryTimer = Number(cloudConfig.kitchenEntryTimerMinutes);
+                const entryAlarm = Number(cloudConfig.kitchenEntryAlarmPercent);
+                const mainTimer = Number(cloudConfig.kitchenMainTimerMinutes);
+                const mainAlarm = Number(cloudConfig.kitchenMainAlarmPercent);
+
+                const validConfig =
+                    Number.isInteger(entryTimer) && entryTimer >= 1 && entryTimer <= 60 &&
+                    Number.isInteger(entryAlarm) && entryAlarm >= 1 && entryAlarm <= 99 &&
+                    Number.isInteger(mainTimer) && mainTimer >= 1 && mainTimer <= 60 &&
+                    Number.isInteger(mainAlarm) && mainAlarm >= 1 && mainAlarm <= 99;
+
+                if (!validConfig) {
+                    console.warn('RESTOPOS: Configuración de cocina incompleta o inválida.');
+                    return;
+                }
+
+                appConfig = {
+                    ...appConfig,
+                    ...cloudConfig
+                };
+
+                localStorage.setItem(
+                    'restopos_config',
+                    JSON.stringify(appConfig)
+                );
+
+                const entryTimerInput = document.getElementById('kitchenEntryTimerParam');
+                const entryAlarmInput = document.getElementById('kitchenEntryAlarmParam');
+                const mainTimerInput = document.getElementById('kitchenMainTimerParam');
+                const mainAlarmInput = document.getElementById('kitchenMainAlarmParam');
+
+                if (entryTimerInput) entryTimerInput.value = entryTimer;
+                if (entryAlarmInput) entryAlarmInput.value = entryAlarm;
+                if (mainTimerInput) mainTimerInput.value = mainTimer;
+                if (mainAlarmInput) mainAlarmInput.value = mainAlarm;
+
+                renderKitchenOrders();
+
+                console.log('RESTOPOS: Configuración de cocina sincronizada:', {
+                    entradas: {
+                        tiempo: entryTimer,
+                        alarma: entryAlarm
+                    },
+                    principales: {
+                        tiempo: mainTimer,
+                        alarma: mainAlarm
+                    }
+                });
+            },
+
+            (error) => {
+                console.error(
+                    'RESTOPOS: Error escuchando configuración de cocina:',
+                    error.code,
+                    error.message
+                );
+            }
+        );
+
 
 
     } else if (sectionId === 'users-admin-section') {

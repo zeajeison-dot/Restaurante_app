@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -16,9 +16,20 @@
         ========================================== */
 
         @keyframes blink-animation {
-            0% { opacity: 1; border-color: #ef4444; }
-            50% { opacity: 0.4; border-color: #b91c1c; }
-            100% { opacity: 1; border-color: #ef4444; }
+            0% {
+                opacity: 1;
+                border-color: #ef4444;
+            }
+
+            50% {
+                opacity: 0.4;
+                border-color: #b91c1c;
+            }
+
+            100% {
+                opacity: 1;
+                border-color: #ef4444;
+            }
         }
 
         .kitchen-card-alert {
@@ -31,11 +42,13 @@
                 border-color: #eab308;
                 transform: scale(1);
             }
+
             50% {
                 background-color: #fef9c3;
                 border-color: #ca8a04;
                 transform: scale(1.02);
             }
+
             100% {
                 background-color: #fef08a;
                 border-color: #eab308;
@@ -56,539 +69,577 @@
 
         /* Pantalla completa del módulo de pedidos */
 
-        
-/* ==========================================
+
+        /* ==========================================
    RESTOPOS - MÓDULO DE PEDIDOS
    TARJETA RESPONSIVE PARA MÓVILES
 ========================================== */
 
-#order-section:not(.hidden) {
-    position: relative !important;
+        #order-section:not(.hidden) {
+            position: relative !important;
 
-    width: calc(100% - 1rem) !important;
-    max-width: 600px !important;
+            width: calc(100% - 1rem) !important;
+            max-width: 600px !important;
 
-    height: 88dvh !important;
-    max-height: 900px !important;
-    min-height: 0 !important;
+            height: 88dvh !important;
+            max-height: 900px !important;
+            min-height: 0 !important;
 
-    margin: 1rem auto !important;
-    padding: 0.75rem !important;
+            margin: 1rem auto !important;
+            padding: 0.75rem !important;
 
-    box-sizing: border-box !important;
+            box-sizing: border-box !important;
 
-    display: flex !important;
-    flex-direction: column !important;
+            display: flex !important;
+            flex-direction: column !important;
 
-    overflow: hidden !important;
+            overflow: hidden !important;
 
-    background: #ffffff !important;
-    border-radius: 18px !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-}
+            background: #ffffff !important;
+            border-radius: 18px !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+        }
 
-/* Encabezado */
-#order-section > div:first-child {
-    flex: 0 0 auto !important;
-}
+        /* Encabezado */
+        #order-section>div:first-child {
+            flex: 0 0 auto !important;
+        }
 
-/* Banner */
-#readyForPickupBanner {
-    flex: 0 0 auto !important;
-}
+        /* Banner */
+        #readyForPickupBanner {
+            flex: 0 0 auto !important;
+        }
 
-/* Categorías */
-#plusCategoriesBar {
-    flex: 0 0 auto !important;
-}
+        /* Categorías */
+        #plusCategoriesBar {
+            flex: 0 0 auto !important;
+        }
 
-/* Catálogo */
-/* Catálogo de productos */
-#plusCatalogGrid {
-    flex: 0 0 135px !important;
-    min-height: 135px !important;
-    max-height: 135px !important;
-    min-width: 0 !important;
-    width: 100% !important;
+        /* Catálogo */
+        /* Catálogo de productos */
+        #plusCatalogGrid {
+            flex: 0 0 135px !important;
+            min-height: 135px !important;
+            max-height: 135px !important;
+            min-width: 0 !important;
+            width: 100% !important;
 
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
 
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
-    overscroll-behavior-x: contain;
-}
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-x;
+            overscroll-behavior-x: contain;
+        }
 
-/* Comanda */
-#order-section .order-items-panel {
-    flex: 1 1 0 !important;
-    min-height: 0 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    overflow: hidden !important;
-}
+        /* Comanda */
+        #order-section .order-items-panel {
+            flex: 1 1 0 !important;
+            min-height: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+        }
 
-/* Productos */
-#plusOrderItemsList {
-    flex: 1 1 0 !important;
-    min-height: 0 !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
-}
+        /* Productos */
+        #plusOrderItemsList {
+            flex: 1 1 0 !important;
+            min-height: 0 !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch;
+        }
 
-/* Pie */
-#orderActionsFooter {
-    flex: 0 0 auto !important;
-    width: 100%;
-    background: #ffffff;
-}
+        /* Pie */
+        #orderActionsFooter {
+            flex: 0 0 auto !important;
+            width: 100%;
+            background: #ffffff;
+        }
 
-/* Botones */
-#orderActionsFooter > div:last-child {
-    flex: 0 0 42px !important;
-    min-height: 42px !important;
-    width: 100%;
-}
+        /* Botones */
+        #orderActionsFooter>div:last-child {
+            flex: 0 0 42px !important;
+            min-height: 42px !important;
+            width: 100%;
+        }
 
-#orderActionsFooter button {
-    min-width: 0;
-}
+        #orderActionsFooter button {
+            min-width: 0;
+        }
 
-/* Pantallas pequeñas */
-@media (max-height: 700px) {
-    #plusCatalogGrid {
-        flex-basis: 110px !important;
-        min-height: 110px !important;
-        max-height: 110px !important;
-    }
-}
+        /* Pantallas pequeñas */
+        @media (max-height: 700px) {
+            #plusCatalogGrid {
+                flex-basis: 110px !important;
+                min-height: 110px !important;
+                max-height: 110px !important;
+            }
+        }
 
-@media (max-height: 600px) {
-    #plusCatalogGrid {
-        flex-basis: 90px !important;
-        min-height: 90px !important;
-        max-height: 90px !important;
-    }
-}
+        @media (max-height: 600px) {
+            #plusCatalogGrid {
+                flex-basis: 90px !important;
+                min-height: 90px !important;
+                max-height: 90px !important;
+            }
+        }
 
-body:has(#order-section:not(.hidden)) {
-    overflow: hidden !important;
-}
-
-
+        body:has(#order-section:not(.hidden)) {
+            overflow: hidden !important;
+        }
     </style>
 </head>
 
 <body>
 
-<div class="container">
+    <div class="container">
 
-    <!-- ==========================================
+        <!-- ==========================================
          1. VISTA DE AUTENTICACIÓN / LOGIN
     ========================================== -->
 
-    <div id="login-view" class="card">
+        <div id="login-view" class="card">
 
-        <div style="text-align: center; margin-bottom: 1.5rem;">
-            <h2>RestoPOS</h2>
-            <p style="color: var(--text-secondary);">
-                Ingrese sus credenciales 5.59
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <h2>RestoPOS</h2>
+                <p style="color: var(--text-secondary);">
+                    Ingrese sus credenciales 5.59
+                </p>
+            </div>
+
+            <div class="input-group">
+                <label>Usuario</label>
+                <input type="text" id="userInput" placeholder="Correo@ejemplo.com" autocomplete="email" required>
+            </div>
+
+            <div class="input-group">
+                <label>Contraseña / PIN</label>
+                <input type="password" id="passInput" placeholder="••••">
+            </div>
+
+            <button class="btn" onclick="login()">
+                Iniciar Sesión
+            </button>
+
+            <p style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
             </p>
+
         </div>
 
-        <div class="input-group">
-            <label>Usuario</label>
-            <input type="text" id="userInput" placeholder="Correo@ejemplo.com" autocomplete="email" required>
-        </div>
 
-        <div class="input-group">
-            <label>Contraseña / PIN</label>
-            <input type="password" id="passInput" placeholder="••••">
-        </div>
-
-        <button class="btn" onclick="login()">
-            Iniciar Sesión
-        </button>
-
-        <p style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
-        </p>
-
-    </div>
-
-
-    <!-- ==========================================
+        <!-- ==========================================
          2. PANEL PRINCIPAL
     ========================================== -->
 
-    <div id="dashboard-view" class="hidden">
+        <div id="dashboard-view" class="hidden">
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
 
-            <div>
-                <h2 id="welcome-msg" style="margin: 0; font-size: 1.2rem;">
-                    Panel
-                </h2>
+                <div>
+                    <h2 id="welcome-msg" style="margin: 0; font-size: 1.2rem;">
+                        Panel
+                    </h2>
 
-                <span id="userRoleBadge" style="font-size: 0.75rem; background: #e2e8f0; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: bold; text-transform: uppercase;"></span>
+                    <span id="userRoleBadge"
+                        style="font-size: 0.75rem; background: #e2e8f0; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: bold; text-transform: uppercase;"></span>
+                </div>
+
+                <button class="btn btn-secondary" style="width: auto; padding: 0.5rem 1rem; margin: 0;"
+                    onclick="logout()">
+                    Salir
+                </button>
+
             </div>
 
-            <button class="btn btn-secondary" style="width: auto; padding: 0.5rem 1rem; margin: 0;" onclick="logout()">
-                Salir
-            </button>
+            <div class="grid" id="dashboardMenuGrid"></div>
 
         </div>
 
-        <div class="grid" id="dashboardMenuGrid"></div>
 
-    </div>
-
-
-    <!-- ==========================================
+        <!-- ==========================================
          3. DASHBOARD ANALÍTICO DE VENTAS
     ========================================== -->
 
-    <div id="dashboard-analytics-section" class="hidden" style="padding: 1rem;">
+        <div id="dashboard-analytics-section" class="hidden" style="padding: 1rem;">
 
-        <h2>📊 Dashboard de Ventas</h2>
+            <h2>📊 Dashboard de Ventas</h2>
 
-        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-            Resumen de rendimiento y analíticas del restaurante
-        </p>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                Resumen de rendimiento y analíticas del restaurante
+            </p>
 
-        <div id="dashboardAnalyticsContainer"></div>
+            <div id="dashboardAnalyticsContainer"></div>
 
-        <button class="btn btn-secondary admin-back-btn" onclick="showSection('dashboard-view')" style="margin-top: 1.5rem;">
-            Volver al Menú
-        </button>
+            <button class="btn btn-secondary admin-back-btn" onclick="showSection('dashboard-view')"
+                style="margin-top: 1.5rem;">
+                Volver al Menú
+            </button>
 
-    </div>
+        </div>
 
 
-    <!-- ==========================================
+        <!-- ==========================================
          4. GESTIÓN DE MESAS
     ========================================== -->
 
-    <div id="tables-section" class="card hidden">
+        <div id="tables-section" class="card hidden">
 
-        <div id="tablesHeaderBar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+            <div id="tablesHeaderBar"
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
 
-            <div>
-                <h2 style="margin: 0; font-size: 1.1rem;" id="tablesUserTitle">
-                    Gestión de Mesas
-                </h2>
+                <div>
+                    <h2 style="margin: 0; font-size: 1.1rem;" id="tablesUserTitle">
+                        Gestión de Mesas
+                    </h2>
 
-                <span id="tablesRoleBadge" style="font-size: 0.7rem; background: #e2e8f0; padding: 0.1rem 0.3rem; border-radius: 4px; font-weight: bold; text-transform: uppercase;"></span>
+                    <span id="tablesRoleBadge"
+                        style="font-size: 0.7rem; background: #e2e8f0; padding: 0.1rem 0.3rem; border-radius: 4px; font-weight: bold; text-transform: uppercase;"></span>
+                </div>
+
+                <button class="btn btn-secondary"
+                    style="width: auto; padding: 0.4rem 0.8rem; margin: 0; font-size: 0.85rem;" onclick="logout()">
+                    Salir
+                </button>
+
             </div>
 
-            <button class="btn btn-secondary" style="width: auto; padding: 0.4rem 0.8rem; margin: 0; font-size: 0.85rem;" onclick="logout()">
-                Salir
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                Toca una mesa para ver o tomar su pedido:
+            </p>
+
+            <div class="table-grid" id="tableGridContainer"></div>
+
+
+            <div id="waiterAlarmConfigCard"
+                style="margin-top: 1.5rem; background: #f1f5f9; padding: 1rem; border-radius: 8px; display: none;">
+
+                <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">
+                    ⚙️ Configuración de Alarma de Meseros
+                </h3>
+
+                <div class="input-group" style="margin-bottom: 0.5rem;">
+                    <label style="font-size: 0.85rem;">
+                        Intervalo de sonido (segundos) para platos listos:
+                    </label>
+
+                    <input type="number" id="waiterAlarmIntervalParam" value="20" min="5" max="120"
+                        style="padding: 0.4rem;">
+                </div>
+
+                <button class="btn" style="padding: 0.5rem; font-size: 0.85rem;" onclick="saveWaiterAlarmConfig()">
+                    Guardar Configuración de Alarma
+                </button>
+
+            </div>
+
+            <button class="btn btn-secondary admin-back-btn" style="margin-top: 1.5rem;"
+                onclick="showSection('dashboard-view')">
+                Volver al Menú
             </button>
 
         </div>
 
-        <p style="color: var(--text-secondary); font-size: 0.9rem;">
-            Toca una mesa para ver o tomar su pedido:
-        </p>
 
-        <div class="table-grid" id="tableGridContainer"></div>
-
-
-        <div id="waiterAlarmConfigCard" style="margin-top: 1.5rem; background: #f1f5f9; padding: 1rem; border-radius: 8px; display: none;">
-
-            <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">
-                ⚙️ Configuración de Alarma de Meseros
-            </h3>
-
-            <div class="input-group" style="margin-bottom: 0.5rem;">
-                <label style="font-size: 0.85rem;">
-                    Intervalo de sonido (segundos) para platos listos:
-                </label>
-
-                <input type="number" id="waiterAlarmIntervalParam" value="20" min="5" max="120" style="padding: 0.4rem;">
-            </div>
-
-            <button class="btn" style="padding: 0.5rem; font-size: 0.85rem;" onclick="saveWaiterAlarmConfig()">
-                Guardar Configuración de Alarma
-            </button>
-
-        </div>
-
-        <button class="btn btn-secondary admin-back-btn" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
-            Volver al Menú
-        </button>
-
-    </div>
-
-
-    <!-- ==========================================
+        <!-- ==========================================
          5. MÓDULO DE COCINA
     ========================================== -->
 
-    <div id="kitchen-section" class="card hidden">
+        <div id="kitchen-section" class="card hidden">
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
 
-            <h2 style="margin: 0; font-size: 1.1rem;">
-                👨‍🍳 Comandas en Cocina
-            </h2>
+                <h2 style="margin: 0; font-size: 1.1rem;">
+                    👨‍🍳 Comandas en Cocina
+                </h2>
 
-            <button class="btn btn-secondary" style="width: auto; padding: 0.4rem 0.8rem; margin: 0; font-size: 0.85rem;" onclick="logout()">
-                Salir
+                <button class="btn btn-secondary"
+                    style="width: auto; padding: 0.4rem 0.8rem; margin: 0; font-size: 0.85rem;" onclick="logout()">
+                    Salir
+                </button>
+
+            </div>
+
+
+            <div id="kitchenTimerConfigBox"
+                style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 1rem; background: #f1f5f9; padding: 0.75rem; border-radius: 8px;">
+
+                <!-- CONFIGURACIÓN DE ENTRADAS, SOPAS Y BEBIDAS -->
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 1rem;">
+
+                    <strong style="width: 100%; font-size: 0.9rem;">
+                        Entradas, sopas y bebidas
+                    </strong>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="kitchenEntryTimerParam" style="font-size: 0.85rem; margin:0; font-weight: bold;">
+                            Tiempo límite (min):
+                        </label>
+
+                        <input type="number" id="kitchenEntryTimerParam" value="5" min="1" max="60"
+                            style="width: 70px; padding: 0.3rem;" onchange="saveKitchenTimerConfig()">
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="kitchenEntryAlarmParam" style="font-size: 0.85rem; margin:0; font-weight: bold;">
+                            Alarma umbral (%):
+                        </label>
+
+                        <input type="number" id="kitchenEntryAlarmParam" value="25" min="1" max="99"
+                            style="width: 70px; padding: 0.3rem;" onchange="saveKitchenTimerConfig()">
+                    </div>
+
+                </div>
+
+                <div style="border-top: 1px solid #cbd5e1;"></div>
+
+                <!-- CONFIGURACIÓN DE PLATOS PRINCIPALES Y ADICIONALES -->
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 1rem;">
+
+                    <strong style="width: 100%; font-size: 0.9rem;">
+                        Platos principales y adicionales
+                    </strong>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="kitchenMainTimerParam" style="font-size: 0.85rem; margin:0; font-weight: bold;">
+                            Tiempo límite (min):
+                        </label>
+
+                        <input type="number" id="kitchenMainTimerParam" value="15" min="1" max="60"
+                            style="width: 70px; padding: 0.3rem;" onchange="saveKitchenTimerConfig()">
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="kitchenMainAlarmParam" style="font-size: 0.85rem; margin:0; font-weight: bold;">
+                            Alarma umbral (%):
+                        </label>
+
+                        <input type="number" id="kitchenMainAlarmParam" value="25" min="1" max="99"
+                            style="width: 70px; padding: 0.3rem;" onchange="saveKitchenTimerConfig()">
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div id="kitchenOrdersContainer"
+                style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; max-height: 55vh; overflow-y: auto;">
+            </div>
+
+            <button class="btn btn-secondary admin-back-btn" style="margin-top: 1.5rem;"
+                onclick="showSection('dashboard-view')">
+                Volver al Menú
             </button>
 
         </div>
 
-        <div id="kitchenTimerConfigBox" style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; background: #f1f5f9; padding: 0.75rem; border-radius: 8px;">
 
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <label style="font-size: 0.85rem; margin:0; font-weight: bold;">
-                    Tiempo límite (min):
-                </label>
-
-                <input type="number" id="kitchenTimerParam" value="15" min="1" max="60" style="width: 70px; padding: 0.3rem;" onchange="renderKitchenOrders()">
-            </div>
-
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <label style="font-size: 0.85rem; margin:0; font-weight: bold;">
-                    Alarma umbral (%):
-                </label>
-
-                <input type="number" id="kitchenAlarmParam" value="25" min="1" max="99" style="width: 70px; padding: 0.3rem;">
-            </div>
-
-        </div>
-
-        <div id="kitchenOrdersContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; max-height: 55vh; overflow-y: auto;"></div>
-
-        <button class="btn btn-secondary admin-back-btn" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
-            Volver al Menú
-        </button>
-
-    </div>
-
-
-    <!-- ==========================================
+        <!-- ==========================================
          6. GESTIÓN DE USUARIOS Y PERMISOS
     ========================================== -->
 
-    
-<div id="users-admin-section" class="card hidden">
 
-    <h2 id="formUserTitle">👥 Gestión de Usuarios y Permisos</h2>
+        <div id="users-admin-section" class="card hidden">
 
-    <!-- Nombre del empleado -->
-    <div class="input-group">
-        <label for="newUserName">Nombre del empleado</label>
-        <input
-            type="text"
-            id="newUserName"
-            placeholder="Ej: Carlos Pérez"
-            autocomplete="name"
-        >
-    </div>
+            <h2 id="formUserTitle">👥 Gestión de Usuarios y Permisos</h2>
 
-    <!-- Correo electrónico -->
-    <div class="input-group">
-        <label for="newUserEmail">Correo electrónico</label>
-        <input
-            type="email"
-            id="newUserEmail"
-            placeholder="Ej: carlos@gmail.com"
-            autocomplete="email"
-        >
-    </div>
+            <!-- Nombre del empleado -->
+            <div class="input-group">
+                <label for="newUserName">Nombre del empleado</label>
+                <input type="text" id="newUserName" placeholder="Ej: Carlos Pérez" autocomplete="name">
+            </div>
 
-    <!-- Contraseña -->
-    <div class="input-group">
-        <label for="newUserPass">Contraseña</label>
-        <input
-            type="password"
-            id="newUserPass"
-            placeholder="Mínimo 6 caracteres"
-            autocomplete="new-password"
-        >
-        <small id="userPasswordHelp">
-            Obligatoria para crear una cuenta. Déjala vacía al editar.
-        </small>
-    </div>
+            <!-- Correo electrónico -->
+            <div class="input-group">
+                <label for="newUserEmail">Correo electrónico</label>
+                <input type="email" id="newUserEmail" placeholder="Ej: carlos@gmail.com" autocomplete="email">
+            </div>
 
-    <!-- Rol y permisos -->
-    <div class="input-group">
-        <label for="newUserRole">Rol / Permisos en el Sistema</label>
+            <!-- Contraseña -->
+            <div class="input-group">
+                <label for="newUserPass">Contraseña</label>
+                <input type="password" id="newUserPass" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+                <small id="userPasswordHelp">
+                    Obligatoria para crear una cuenta. Déjala vacía al editar.
+                </small>
+            </div>
 
-        <select id="newUserRole">
-            <option value="mesero">Mesero (Solo Mesas y Pedidos)</option>
-            <option value="cocinero">Cocinero (Solo Módulo de Cocina)</option>
-            <option value="admin">Administrador (Acceso Total)</option>
-        </select>
-    </div>
-    <!-- Estado del empleado -->
-    <div class="input-group">
-        <label for="newUserStatus">Estado del empleado</label>
-        <select id="newUserStatus">
-            <option value="true">Activo</option>
-            <option value="false">Desactivado</option>
-        </select>
-    </div>
+            <!-- Rol y permisos -->
+            <div class="input-group">
+                <label for="newUserRole">Rol / Permisos en el Sistema</label>
 
-    <!-- Guardar usuario -->
-    <button class="btn" id="btnSaveUser" onclick="saveUser()">
-        Crear Usuario
-    </button>
+                <select id="newUserRole">
+                    <option value="mesero">Mesero (Solo Mesas y Pedidos)</option>
+                    <option value="cocinero">Cocinero (Solo Módulo de Cocina)</option>
+                    <option value="admin">Administrador (Acceso Total)</option>
+                </select>
+            </div>
+            <!-- Estado del empleado -->
+            <div class="input-group">
+                <label for="newUserStatus">Estado del empleado</label>
+                <select id="newUserStatus">
+                    <option value="true">Activo</option>
+                    <option value="false">Desactivado</option>
+                </select>
+            </div>
 
-    <!-- Cancelar edición -->
-    <button
-        class="btn btn-secondary hidden"
-        id="btnCancelUserEdit"
-        onclick="cancelEditUser()"
-    >
-        Cancelar Edición
-    </button>
+            <!-- Guardar usuario -->
+            <button class="btn" id="btnSaveUser" onclick="saveUser()">
+                Crear Usuario
+            </button>
 
-    <!-- Listado de usuarios -->
-    <div style="margin-top: 1.5rem;">
+            <!-- Cancelar edición -->
+            <button class="btn btn-secondary hidden" id="btnCancelUserEdit" onclick="cancelEditUser()">
+                Cancelar Edición
+            </button>
 
-        <h3>Usuarios Registrados</h3>
+            <!-- Listado de usuarios -->
+            <div style="margin-top: 1.5rem;">
 
-        <div
-            id="usersList"
-            style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"
-        ></div>
+                <h3>Usuarios Registrados</h3>
 
-    </div>
+                <div id="usersList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
 
-    <!-- Regresar al menú -->
-    <button
-        class="btn btn-secondary"
-        style="margin-top: 1.5rem;"
-        onclick="showSection('dashboard-view')"
-    >
-        Volver al Menú
-    </button>
+            </div>
 
-</div>
+            <!-- Regresar al menú -->
+            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
+                Volver al Menú
+            </button>
+
+        </div>
 
 
 
-    <!-- ==========================================
+        <!-- ==========================================
          7. ADMINISTRACIÓN DE MESAS
     ========================================== -->
 
-    <div id="tables-admin-section" class="card hidden">
+        <div id="tables-admin-section" class="card hidden">
 
-        <h2>Administración de Mesas</h2>
+            <h2>Administración de Mesas</h2>
 
-        <div class="input-group">
-            <label>Nombre de la Mesa</label>
-            <input type="text" id="newTableName" placeholder="Ej: Mesa VIP, Terraza 1">
+            <div class="input-group">
+                <label>Nombre de la Mesa</label>
+                <input type="text" id="newTableName" placeholder="Ej: Mesa VIP, Terraza 1">
+            </div>
+
+            <button class="btn" onclick="saveNewTable()">
+                Guardar Mesa
+            </button>
+
+            <button class="btn btn-secondary hidden" id="btnCancelTableEdit" onclick="cancelEditTable()">
+                Cancelar Edición
+            </button>
+
+            <div style="margin-top: 1.5rem;">
+
+                <h3>Mesas Existentes</h3>
+
+                <div id="tablesAdminList" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
+
+            </div>
+
+            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
+                Volver al Menú
+            </button>
+
         </div>
 
-        <button class="btn" onclick="saveNewTable()">
-            Guardar Mesa
-        </button>
 
-        <button class="btn btn-secondary hidden" id="btnCancelTableEdit" onclick="cancelEditTable()">
-            Cancelar Edición
-        </button>
-
-        <div style="margin-top: 1.5rem;">
-
-            <h3>Mesas Existentes</h3>
-
-            <div id="tablesAdminList" style="margin-top: 0.5rem; max-height: 220px; overflow-y: auto;"></div>
-
-        </div>
-
-        <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
-            Volver al Menú
-        </button>
-
-    </div>
-
-
-    <!-- ==========================================
+        <!-- ==========================================
          8. MÓDULO DE TOMA DE PEDIDOS
          DISEÑO CON 4 SECCIONES
     ========================================== -->
 
-    <div id="order-section" class="card hidden" style="padding: 0.75rem; max-width: 600px; margin: auto; display: flex; flex-direction: column; height: 88vh; box-sizing: border-box;">
+        <div id="order-section" class="card hidden"
+            style="padding: 0.75rem; max-width: 600px; margin: auto; display: flex; flex-direction: column; height: 88vh; box-sizing: border-box;">
 
 
-        <!-- ENCABEZADO DE MESA -->
+            <!-- ENCABEZADO DE MESA -->
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
 
-            <h2 id="order-title" style="margin: 0; font-size: 1.1rem;">
-                Pedido - Mesa
-            </h2>
+                <h2 id="order-title" style="margin: 0; font-size: 1.1rem;">
+                    Pedido - Mesa
+                </h2>
 
-            <button onclick="showSection('tables-section')" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; width: auto; margin:0;">
-                ⬅️ Volver
-            </button>
+                <button onclick="showSection('tables-section')" class="btn btn-secondary"
+                    style="padding: 0.2rem 0.5rem; font-size: 0.75rem; width: auto; margin:0;">
+                    ⬅️ Volver
+                </button>
 
-        </div>
-
-
-        <!-- BANNER DE PLATOS LISTOS -->
-
-        <div id="readyForPickupBanner" style="display: none; background: #fef08a; border: 2px solid #eab308; padding: 0.5rem; border-radius: 6px; margin-bottom: 0.5rem; text-align: center;">
-
-            <strong style="color: #854d0e; display: block; font-size: 0.85rem;">
-                🔔 ¡Platos listos para recoger en cocina!
-            </strong>
-
-            <button class="btn" style="background: #eab308; color: #713f12; margin-top: 0.3rem; font-weight: bold; width: auto; padding: 0.3rem 0.8rem; font-size: 0.8rem;" onclick="markTablePickedUp()">
-                ✅ Marcar como Recogido
-            </button>
-
-        </div>
+            </div>
 
 
-        <!-- ==========================================
+            <!-- BANNER DE PLATOS LISTOS -->
+
+            <div id="readyForPickupBanner"
+                style="display: none; background: #fef08a; border: 2px solid #eab308; padding: 0.5rem; border-radius: 6px; margin-bottom: 0.5rem; text-align: center;">
+
+                <strong style="color: #854d0e; display: block; font-size: 0.85rem;">
+                    🔔 ¡Platos listos para recoger en cocina!
+                </strong>
+
+                <button class="btn"
+                    style="background: #eab308; color: #713f12; margin-top: 0.3rem; font-weight: bold; width: auto; padding: 0.3rem 0.8rem; font-size: 0.8rem;"
+                    onclick="markTablePickedUp()">
+                    ✅ Marcar como Recogido
+                </button>
+
+            </div>
+
+
+            <!-- ==========================================
              SECCIÓN 1: CATEGORÍAS
              POSICIÓN FIJA SUPERIOR
         ========================================== -->
 
-        <div id="plusCategoriesBar" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3rem; margin-bottom: 0.5rem;">
+            <div id="plusCategoriesBar"
+                style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3rem; margin-bottom: 0.5rem;">
 
-            <button class="plus-cat-btn active-cat" onclick="filterPlusCategory('sopas', event)" style="background: #e2e8f0; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
+                <button class="plus-cat-btn active-cat" onclick="filterPlusCategory('sopas', event)"
+                    style="background: #e2e8f0; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
 
-                <span>Sopas y Entradas</span>
-                <span style="font-size: 0.65rem; margin-top: 2px;">🍲</span>
+                    <span>Sopas y Entradas</span>
+                    <span style="font-size: 0.65rem; margin-top: 2px;">🍲</span>
 
-            </button>
+                </button>
 
-            <button class="plus-cat-btn" onclick="filterPlusCategory('principales', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
+                <button class="plus-cat-btn" onclick="filterPlusCategory('principales', event)"
+                    style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
 
-                <span>Plato Principal</span>
-                <span style="font-size: 0.65rem; margin-top: 2px;">🍛</span>
+                    <span>Plato Principal</span>
+                    <span style="font-size: 0.65rem; margin-top: 2px;">🍛</span>
 
-            </button>
+                </button>
 
-            <button class="plus-cat-btn" onclick="filterPlusCategory('bebidas', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
+                <button class="plus-cat-btn" onclick="filterPlusCategory('bebidas', event)"
+                    style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
 
-                <span>Bebida</span>
-                <span style="font-size: 0.65rem; margin-top: 2px;">🥛</span>
+                    <span>Bebida</span>
+                    <span style="font-size: 0.65rem; margin-top: 2px;">🥛</span>
 
-            </button>
+                </button>
 
-            <button class="plus-cat-btn" onclick="filterPlusCategory('adicionales', event)" style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
+                <button class="plus-cat-btn" onclick="filterPlusCategory('adicionales', event)"
+                    style="background: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 0.1rem; text-align: center; font-weight: bold; font-size: 0.7rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;">
 
-                <span>Adicionales</span>
-                <span style="font-size: 0.65rem; margin-top: 2px;">➕</span>
+                    <span>Adicionales</span>
+                    <span style="font-size: 0.65rem; margin-top: 2px;">➕</span>
 
-            </button>
+                </button>
 
-        </div>
+            </div>
 
 
-        <!-- ==========================================
+            <!-- ==========================================
              SECCIÓN 2: CATÁLOGO DE PRODUCTOS
              POSICIÓN FIJA DEBAJO DE CATEGORÍAS
         ========================================== -->
 
-        <div id="plusCatalogGrid"
-        style="
+            <div id="plusCatalogGrid" style="
         flex: 0 0 135px;
         min-height: 135px;
         max-height: 135px;
@@ -601,38 +652,104 @@ body:has(#order-section:not(.hidden)) {
         box-sizing: border-box;
         ">
 
-        <!-- Productos inyectados dinámicamente por app.js -->
+                <!-- Productos inyectados dinámicamente por app.js -->
 
-        </div>
-        
-        
+            </div>
 
 
-        <!-- ==========================================
+
+
+            <!-- ==========================================
              SECCIÓN 3: COMANDA
              CONTENIDO CON SCROLL INDEPENDIENTE
         ========================================== -->
 
-        <div class="order-items-panel" style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 0.5rem; box-sizing: border-box;">
+            <div class="order-items-panel"
+                style="flex: 1; display: flex; flex-direction: column; background: #ffffff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 0.5rem; box-sizing: border-box;">
 
 
-            <!-- ENCABEZADO DE LA COMANDA -->
+                <!-- ENCABEZADO DE LA COMANDA -->
 
-            <div style="background: var(--primary); color: white; display: grid; grid-template-columns: 35px 2.2fr 2.5fr 40px; padding: 0.4rem 0.2rem; font-size: 0.75rem; font-weight: bold; text-align: center; align-items: center;">
+                <div
+                    style="background: var(--primary); color: white; display: grid; grid-template-columns: 35px 2.2fr 2.5fr 40px; padding: 0.4rem 0.2rem; font-size: 0.75rem; font-weight: bold; text-align: center; align-items: center;">
 
-                <div>🧑‍🍳</div>
-                <div>Plató</div>
-                <div>Observaciones</div>
-                <div>🚥 Acción</div>
+                    <div>🧑‍🍳</div>
+                    <div>Plató</div>
+                    <div>Observaciones</div>
+                    <div>🚥 Acción</div>
+
+                </div>
+
+
+                <!-- LISTA DE PRODUCTOS -->
+
+                <div id="plusOrderItemsList" style="flex: 1; overflow-y: auto; padding: 0.2rem;">
+
+                    <!-- Productos de la comanda inyectados dinámicamente -->
+
+                </div>
 
             </div>
 
 
-            <!-- LISTA DE PRODUCTOS -->
+            <!-- ==========================================
+             SECCIÓN 4: TOTAL Y BOTONES
+             POSICIÓN FIJA INFERIOR
+        ========================================== -->
 
-            <div id="plusOrderItemsList" style="flex: 1; overflow-y: auto; padding: 0.2rem;">
+            <div id="orderActionsFooter">
 
-                <!-- Productos de la comanda inyectados dinámicamente -->
+
+                <!-- TOTAL ACUMULADO -->
+
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; padding: 0.3rem 0.5rem; background: #f1f5f9; border-radius: 6px; margin-bottom: 0.5rem;">
+
+                    <strong style="font-size: 0.9rem;">
+                        Total a Pagar:
+                    </strong>
+
+                    <strong id="orderTotal" style="font-size: 1.1rem; color: var(--primary);">
+                        $ 0
+                    </strong>
+
+                </div>
+
+
+                <!-- TRES BOTONES INFERIORES -->
+
+                <div
+                    style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; height: 42px; min-height: 42px;">
+
+
+                    <button onclick="sendOrderToKitchen()" class="btn btn-warning"
+                        style="padding: 0.2rem; font-size: 0.75rem; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; margin: 0; width: 100%;">
+
+                        <span>Enviar a Cocina</span>
+                        <span style="font-size: 0.7rem;">🧑‍🍳</span>
+
+                    </button>
+
+
+                    <button onclick="openBillSection()" class="btn btn-success"
+                        style="padding: 0.2rem; font-size: 0.75rem; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; margin: 0; width: 100%; background: #10b981;">
+
+                        <span>Ver Cuenta</span>
+                        <span style="font-size: 0.7rem;">💳 / Recibos</span>
+
+                    </button>
+
+
+                    <button onclick="showSection('tables-section')" class="btn btn-secondary"
+                        style="padding: 0.2rem; font-size: 0.75rem; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; margin: 0; width: 100%;">
+
+                        <span>Volver a Mesas</span>
+                        <span style="font-size: 0.7rem;">👈</span>
+
+                    </button>
+
+
+                </div>
 
             </div>
 
@@ -640,317 +757,270 @@ body:has(#order-section:not(.hidden)) {
 
 
         <!-- ==========================================
-             SECCIÓN 4: TOTAL Y BOTONES
-             POSICIÓN FIJA INFERIOR
-        ========================================== -->
-
-        <div id="orderActionsFooter">
-
-
-            <!-- TOTAL ACUMULADO -->
-
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.3rem 0.5rem; background: #f1f5f9; border-radius: 6px; margin-bottom: 0.5rem;">
-
-                <strong style="font-size: 0.9rem;">
-                    Total a Pagar:
-                </strong>
-
-                <strong id="orderTotal" style="font-size: 1.1rem; color: var(--primary);">
-                    $ 0
-                </strong>
-
-            </div>
-
-
-            <!-- TRES BOTONES INFERIORES -->
-
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; height: 42px; min-height: 42px;">
-
-
-                <button onclick="sendOrderToKitchen()" class="btn btn-warning" style="padding: 0.2rem; font-size: 0.75rem; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; margin: 0; width: 100%;">
-
-                    <span>Enviar a Cocina</span>
-                    <span style="font-size: 0.7rem;">🧑‍🍳</span>
-
-                </button>
-
-
-                <button onclick="openBillSection()" class="btn btn-success" style="padding: 0.2rem; font-size: 0.75rem; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; margin: 0; width: 100%; background: #10b981;">
-
-                    <span>Ver Cuenta</span>
-                    <span style="font-size: 0.7rem;">💳 / Recibos</span>
-
-                </button>
-
-
-                <button onclick="showSection('tables-section')" class="btn btn-secondary" style="padding: 0.2rem; font-size: 0.75rem; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; margin: 0; width: 100%;">
-
-                    <span>Volver a Mesas</span>
-                    <span style="font-size: 0.7rem;">👈</span>
-
-                </button>
-
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <!-- ==========================================
          9. GESTIÓN DE CUENTAS Y FACTURACIÓN
     ========================================== -->
 
-    <div id="bill-section" class="card hidden">
+        <div id="bill-section" class="card hidden">
 
-        <h2 id="bill-title">Resumen de Cuenta</h2>
+            <h2 id="bill-title">Resumen de Cuenta</h2>
 
-        <div id="billItemsList" style="max-height: 160px; overflow-y: auto; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;"></div>
+            <div id="billItemsList"
+                style="max-height: 160px; overflow-y: auto; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+            </div>
 
-        <div style="background: #f1f5f9; padding: 0.6rem; border-radius: 8px; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+            <div
+                style="background: #f1f5f9; padding: 0.6rem; border-radius: 8px; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
 
-            <span style="font-weight: bold; font-size: 0.9rem;">
-                Subtotal Selección:
-            </span>
+                <span style="font-weight: bold; font-size: 0.9rem;">
+                    Subtotal Selección:
+                </span>
 
-            <span id="selectedPartialTotal" style="font-weight: bold; font-size: 1.05rem; color: var(--primary);">
-                $ 0
-            </span>
+                <span id="selectedPartialTotal" style="font-weight: bold; font-size: 1.05rem; color: var(--primary);">
+                    $ 0
+                </span>
+
+            </div>
+
+            <button class="btn" style="background: var(--primary); margin-top: 0;" onclick="generateReceipt()">
+                📄 Generar Recibo (Bloquear Ítems)
+            </button>
+
+            <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="backToOrderSection()">
+                Volver al Pedido
+            </button>
 
         </div>
 
-        <button class="btn" style="background: var(--primary); margin-top: 0;" onclick="generateReceipt()">
-            📄 Generar Recibo (Bloquear Ítems)
-        </button>
 
-        <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="backToOrderSection()">
-            Volver al Pedido
-        </button>
-
-    </div>
-
-
-    <!-- ==========================================
+        <!-- ==========================================
          10. CATÁLOGO DE PLATOS Y RECETAS
     ========================================== -->
 
-    <div id="catalog-section" class="card hidden" style="max-width: 600px; margin: auto;">
+        <div id="catalog-section" class="card hidden" style="max-width: 600px; margin: auto;">
 
-        <h2>Catálogo de Platos & Recetas</h2>
+            <h2>Catálogo de Platos & Recetas</h2>
 
-        <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+            <div
+                style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
 
-            <h3 id="formProductTitle" style="font-size: 1rem; margin-bottom: 0.75rem; color: var(--text);">
-                Registro de Nuevo Plato
-            </h3>
-
-            <div class="input-group">
-                <label>Nombre del Plato:</label>
-                <input type="text" id="newProdName" placeholder="Ej: Costillas BBQ">
-            </div>
-
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <h3 id="formProductTitle" style="font-size: 1rem; margin-bottom: 0.75rem; color: var(--text);">
+                    Registro de Nuevo Plato
+                </h3>
 
                 <div class="input-group">
-                    <label>Precio del Plato ($):</label>
-                    <input type="text" id="newProdPrice" inputmode="numeric" pattern="[0-9]*" placeholder="$ 0" oninput="formatProductPriceInput(this)">
+                    <label>Nombre del Plato:</label>
+                    <input type="text" id="newProdName" placeholder="Ej: Costillas BBQ">
                 </div>
 
-                <div class="input-group">
-                    <label>Categoría del Plato:</label>
 
-                    <select id="newProdCategory" style="padding: 0.5rem; font-size: 0.85rem; border-radius: 6px; border: 1px solid var(--border);">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
 
-                        <option value="principales">🍛 Platos Principales</option>
-                        <option value="sopas">🍲 Sopas y Entradas</option>
-                        <option value="bebidas">🥛 Bebidas</option>
-                        <option value="adicionales">➕ Adicionales</option>
+                    <div class="input-group">
+                        <label>Precio del Plato ($):</label>
+                        <input type="text" id="newProdPrice" inputmode="numeric" pattern="[0-9]*" placeholder="$ 0"
+                            oninput="formatProductPriceInput(this)">
+                    </div>
 
-                    </select>
+                    <div class="input-group">
+                        <label>Categoría del Plato:</label>
+
+                        <select id="newProdCategory"
+                            style="padding: 0.5rem; font-size: 0.85rem; border-radius: 6px; border: 1px solid var(--border);">
+
+                            <option value="principales">🍛 Platos Principales</option>
+                            <option value="sopas">🍲 Sopas y Entradas</option>
+                            <option value="bebidas">🥛 Bebidas</option>
+                            <option value="adicionales">➕ Adicionales</option>
+
+                        </select>
+
+                    </div>
 
                 </div>
 
-            </div>
 
+                <div
+                    style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; background: #ffffff; padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border);">
 
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; background: #ffffff; padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border);">
-
-                <span style="font-weight: bold; font-size: 0.85rem;">
-                    Estado del Plato:
-                </span>
-
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
-
-                    <input type="checkbox" id="newProdActive" checked style="width: 18px; height: 18px; cursor: pointer;">
-
-                    <span id="prodActiveStatusLabel" style="font-size: 0.85rem; font-weight: bold; color: #16a34a;">
-                        Activo
+                    <span style="font-weight: bold; font-size: 0.85rem;">
+                        Estado del Plato:
                     </span>
 
-                </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+
+                        <input type="checkbox" id="newProdActive" checked
+                            style="width: 18px; height: 18px; cursor: pointer;">
+
+                        <span id="prodActiveStatusLabel" style="font-size: 0.85rem; font-weight: bold; color: #16a34a;">
+                            Activo
+                        </span>
+
+                    </label>
+
+                </div>
+
+
+                <button class="btn" id="btnSaveProduct" onclick="saveProduct()">
+                    Guardar Plato
+                </button>
+
+                <button class="btn btn-secondary hidden" id="btnCancelEdit" onclick="cancelEditProduct()"
+                    style="margin-top: 0.5rem;">
+                    Cancelar Edición
+                </button>
 
             </div>
 
 
-            <button class="btn" id="btnSaveProduct" onclick="saveProduct()">
-                Guardar Plato
-            </button>
+            <div>
 
-            <button class="btn btn-secondary hidden" id="btnCancelEdit" onclick="cancelEditProduct()" style="margin-top: 0.5rem;">
-                Cancelar Edición
+                <h3>Platos Registrados</h3>
+
+                <div id="productList" style="margin-top: 0.5rem; max-height: 280px; overflow-y: auto;"></div>
+
+            </div>
+
+            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
+                Volver al Menú
             </button>
 
         </div>
 
 
-        <div>
-
-            <h3>Platos Registrados</h3>
-
-            <div id="productList" style="margin-top: 0.5rem; max-height: 280px; overflow-y: auto;"></div>
-
-        </div>
-
-        <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
-            Volver al Menú
-        </button>
-
-    </div>
-
-
-    <!-- ==========================================
+        <!-- ==========================================
          11. GESTIÓN DE BEBIDAS
     ========================================== -->
 
-    <div id="drinks-section" class="card hidden">
+        <div id="drinks-section" class="card hidden">
 
-        <h2>🥤 Gestión de Bebidas</h2>
+            <h2>🥤 Gestión de Bebidas</h2>
 
-        <div class="input-group">
-            <label id="formDrinkTitle">Nombre de la Bebida</label>
-            <input type="text" id="drinkName" placeholder="Ej: Gaseosa 400ml">
+            <div class="input-group">
+                <label id="formDrinkTitle">Nombre de la Bebida</label>
+                <input type="text" id="drinkName" placeholder="Ej: Gaseosa 400ml">
+            </div>
+
+            <div class="input-group">
+                <label>Precio ($)</label>
+                <input type="number" id="drinkPrice" placeholder="Ej: 4000">
+            </div>
+
+            <div class="input-group">
+                <label>Insumo asociado en inventario (para descuento automático):</label>
+                <select id="drinkInventoryItem" style="padding: 0.4rem;"></select>
+            </div>
+
+            <button class="btn" id="btnSaveDrink" onclick="saveDrink()">
+                Guardar y Sincronizar Bebida (Online)
+            </button>
+
+            <button class="btn btn-secondary hidden" id="btnCancelDrinkEdit" onclick="cancelEditDrink()">
+                Cancelar Edición
+            </button>
+
+            <div style="margin-top: 1.5rem;">
+
+                <h3>Bebidas Registradas</h3>
+
+                <div id="drinksList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
+
+            </div>
+
+            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
+                Volver al Menú
+            </button>
+
         </div>
 
-        <div class="input-group">
-            <label>Precio ($)</label>
-            <input type="number" id="drinkPrice" placeholder="Ej: 4000">
+
+        <!-- ==========================================
+         12. MÓDULO DE ADICIONALES Y ACOMPAÑAMIENTOS
+    ========================================== -->
+
+        <div id="addons-section" class="card hidden">
+
+            <h2>Gestión de Adicionales y Acompañamientos</h2>
+
+            <div class="input-group">
+                <label id="formAddonTitle">Nombre del Adicional</label>
+                <input type="text" id="addonName" placeholder="Ej: Tocineta extra">
+            </div>
+
+            <div class="input-group">
+                <label>Precio Adicional ($) [0 si es sustituto]</label>
+                <input type="number" id="addonPrice" placeholder="Ej: 3000 o 0">
+            </div>
+
+            <div class="input-group">
+                <label>Insumo asociado en inventario:</label>
+                <select id="addonInventoryItem" style="padding: 0.4rem;"></select>
+            </div>
+
+            <button class="btn" id="btnSaveAddon" onclick="saveAddon()">
+                Guardar Adicional
+            </button>
+
+            <button class="btn btn-secondary hidden" id="btnCancelAddonEdit" onclick="cancelEditAddon()">
+                Cancelar Edición
+            </button>
+
+            <div style="margin-top: 1.5rem;">
+
+                <h3>Adicionales Registrados</h3>
+
+                <div id="addonsList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
+
+            </div>
+
+            <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
+                Volver al Menú
+            </button>
+
         </div>
 
-        <div class="input-group">
-            <label>Insumo asociado en inventario (para descuento automático):</label>
-            <select id="drinkInventoryItem" style="padding: 0.4rem;"></select>
-        </div>
-
-        <button class="btn" id="btnSaveDrink" onclick="saveDrink()">
-            Guardar y Sincronizar Bebida (Online)
-        </button>
-
-        <button class="btn btn-secondary hidden" id="btnCancelDrinkEdit" onclick="cancelEditDrink()">
-            Cancelar Edición
-        </button>
-
-        <div style="margin-top: 1.5rem;">
-
-            <h3>Bebidas Registradas</h3>
-
-            <div id="drinksList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
-
-        </div>
-
-        <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
-            Volver al Menú
-        </button>
 
     </div>
 
 
     <!-- ==========================================
-         12. MÓDULO DE ADICIONALES Y ACOMPAÑAMIENTOS
-    ========================================== -->
-
-    <div id="addons-section" class="card hidden">
-
-        <h2>Gestión de Adicionales y Acompañamientos</h2>
-
-        <div class="input-group">
-            <label id="formAddonTitle">Nombre del Adicional</label>
-            <input type="text" id="addonName" placeholder="Ej: Tocineta extra">
-        </div>
-
-        <div class="input-group">
-            <label>Precio Adicional ($) [0 si es sustituto]</label>
-            <input type="number" id="addonPrice" placeholder="Ej: 3000 o 0">
-        </div>
-
-        <div class="input-group">
-            <label>Insumo asociado en inventario:</label>
-            <select id="addonInventoryItem" style="padding: 0.4rem;"></select>
-        </div>
-
-        <button class="btn" id="btnSaveAddon" onclick="saveAddon()">
-            Guardar Adicional
-        </button>
-
-        <button class="btn btn-secondary hidden" id="btnCancelAddonEdit" onclick="cancelEditAddon()">
-            Cancelar Edición
-        </button>
-
-        <div style="margin-top: 1.5rem;">
-
-            <h3>Adicionales Registrados</h3>
-
-            <div id="addonsList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
-
-        </div>
-
-        <button class="btn btn-secondary" style="margin-top: 1.5rem;" onclick="showSection('dashboard-view')">
-            Volver al Menú
-        </button>
-
-    </div>
-
-
-</div>
-
-
-<!-- ==========================================
      SCRIPT PRINCIPAL
      NO MODIFICAR LA LÓGICA DE app.js
 ========================================== -->
-<!-- FIREBASE SDK -->
-<script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore-compat.js"></script>
+    <!-- FIREBASE SDK -->
+    <script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore-compat.js"></script>
 
-<!-- CONFIGURACIÓN Y CONEXIÓN -->
-<script src="./js/config.js"></script>
-<script src="./js/firebase-init.js"></script>
+    <!-- CONFIGURACIÓN Y CONEXIÓN -->
+    <script src="./js/config.js"></script>
+    <script src="./js/firebase-init.js"></script>
 
-<!-- SERVICIOS DE DATOS FIREBASE -->
-<script src="./js/firebase-data.js"></script>
+    <!-- SERVICIOS DE DATOS FIREBASE -->
+    <script src="./js/firebase-data.js"></script>
 
-<!-- MÓDULOS DE LA APLICACIÓN -->
-<script src="./js/modules/alerts.js"></script>
+    <!-- MÓDULOS DE LA APLICACIÓN -->
+    <script src="./js/modules/alerts.js"></script>
 
-<!-- MÓDULO DE CARGA Y ALMACENAMIENTO LOCAL DE DATOS -->
-<script src="./js/modules/storage.js"></script>
+    <!-- MÓDULO DE CARGA Y ALMACENAMIENTO LOCAL DE DATOS -->
+    <script src="./js/modules/storage.js"></script>
 
-<!-- MÓDULO DE GESTIÓN DE USUARIOS Y PERMISOS -->
-<script src="./js/modules/users.js"></script>
+    <!-- MÓDULO DE GESTIÓN DE USUARIOS Y PERMISOS -->
+    <script src="./js/modules/users.js"></script>
 
-<!-- MÓDULO DE GESTIÓN Y ADMINISTRACIÓN DE MESAS -->
-<script src="./js/modules/tables.js"></script>
+    <!-- MÓDULO DE GESTIÓN Y ADMINISTRACIÓN DE MESAS -->
+    <script src="./js/modules/tables.js"></script>
 
-<!-- MÓDULO DE PEDIDOS Y COMANDAS -->
-<script src="./js/modules/orders.js"></script>
+    <!-- MÓDULO DE PEDIDOS Y COMANDAS -->
+    <script src="./js/modules/orders.js"></script>
 
-<!-- MÓDULO DE NAVEGACIÓN Y GESTIÓN DE SECCIONES -->
-<script src="./js/modules/navigation.js"></script>
+    <!-- MÓDULO DE COCINA (KDS) -->
+    <script src="./js/modules/kitchen.js"></script>
 
-<!-- MÓDULO DE AUTENTICACIÓN Y GESTIÓN DE SESIONES -->
-<script src="./js/modules/auth.js"></script>
+    <!-- MÓDULO DE NAVEGACIÓN Y GESTIÓN DE SECCIONES -->
+    <script src="./js/modules/navigation.js"></script>
 
-<!-- APLICACIÓN PRINCIPAL -->
-<script src="./app.js"></script>
+    <!-- MÓDULO DE AUTENTICACIÓN Y GESTIÓN DE SESIONES -->
+    <script src="./js/modules/auth.js"></script>
+
+    <!-- APLICACIÓN PRINCIPAL -->
+    <script src="./app.js"></script>
