@@ -426,6 +426,8 @@ body:has(#kitchen-section:not(.hidden)) {
     padding: 0.75rem;
 }
 
+
+
 #kitchenOrdersContainer {
     display: flex;
     flex-direction: column;
@@ -435,7 +437,11 @@ body:has(#kitchen-section:not(.hidden)) {
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    padding-bottom: 0.5rem;
 }
+
+
 
 
 /* ==========================================
@@ -478,12 +484,3 @@ body:has(#kitchen-section:not(.hidden)) {
 
 
 
-/* ==========================================
-   COCINA - MÁS DE CUATRO COMANDAS
-========================================== */
-
-/* Cada tarjeta ocupa el espacio de una de cuatro posiciones */
-#kitchenOrdersContainer.kitchen-many > div {
-    flex: 0 0 calc((100% - 1.5rem) / 4);
-    min-height: 0;
-}
