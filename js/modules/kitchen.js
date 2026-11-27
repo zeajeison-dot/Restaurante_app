@@ -268,6 +268,9 @@ function renderKitchenOrders() {
     // Ordenar los lotes del más antiguo al más reciente.
     activeBatches.sort((a, b) => a.sentAt - b.sentAt);
 
+    // Activar desplazamiento cuando existan más de cuatro comandas.
+    container.classList.toggle('kitchen-many', activeBatches.length > 4);
+
     // Comprobar si algún lote necesita activar la alarma.
     activeBatches.forEach(batch => {
         const limitSeconds = batch.timerMinutes * 60;

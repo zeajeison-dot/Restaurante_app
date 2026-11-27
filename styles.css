@@ -392,3 +392,98 @@ body:has(#bill-section:not(.hidden)) {
     margin: 0 !important;
     box-sizing: border-box !important;
 }
+
+
+
+/* ==========================================
+   RESTOPOS - PANTALLA DE COCINA
+   DISTRIBUCIÓN VERTICAL RESPONSIVE
+========================================== */
+
+body:has(#kitchen-section:not(.hidden)) {
+    align-items: flex-start !important;
+    justify-content: center !important;
+    min-height: 100dvh !important;
+}
+
+.container:has(#kitchen-section:not(.hidden)) {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 480px;
+    min-height: 100dvh;
+    padding: 0.5rem;
+    box-sizing: border-box;
+}
+
+#kitchen-section:not(.hidden) {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: calc(100dvh - 1rem);
+    box-sizing: border-box;
+    margin-bottom: 0;
+    padding: 0.75rem;
+}
+
+#kitchenOrdersContainer {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 0.5rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+
+/* ==========================================
+   TARJETAS DE COMANDAS DE COCINA
+========================================== */
+
+/* Distribución vertical de las tarjetas */
+#kitchenOrdersContainer > div {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    margin-bottom: 0 !important;
+    padding: 10px !important;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Encabezado y temporizador */
+#kitchenOrdersContainer > div > div:first-child {
+    flex: 0 0 auto;
+}
+
+/* Productos de cada comanda */
+#kitchenOrdersContainer > div > div:nth-child(2) {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    margin-top: 6px !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Botón de marcar como servido */
+#kitchenOrdersContainer > div > button {
+    flex: 0 0 auto;
+    margin-top: 8px !important;
+    padding: 9px !important;
+}
+
+
+
+/* ==========================================
+   COCINA - MÁS DE CUATRO COMANDAS
+========================================== */
+
+/* Cada tarjeta ocupa el espacio de una de cuatro posiciones */
+#kitchenOrdersContainer.kitchen-many > div {
+    flex: 0 0 calc((100% - 1.5rem) / 4);
+    min-height: 0;
+}
