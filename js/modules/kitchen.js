@@ -736,13 +736,34 @@ async function markBatchServed(tableId, batchId) {
         modal.style.display = 'none';
     };
 
+    // ==================================================
+        // CONFIRMAR SERVICIO DEL LOTE
+        // Consultar la versión más reciente de Firestore
+        // para evitar sobrescribir cambios de otros usuarios.
+        // ==================================================
     confirmButton.onclick = async () => {
         confirmButton.disabled = true;
         confirmButton.textContent = 'Procesando...';
 
         try {
-            // Actualizar únicamente los productos de este lote.
-            const updatedItems = table.items.map(item => {
+            // Obtener nuevamente la mesa actualizada desde Firebase.
+            const documentId = table._docId || `mesa_${table.id}`;
+
+            const latestTable = await window.RestoposDB.getById(
+                'mesas',
+                documentId
+            );
+
+            if (!latestTable) {
+                throw new Error('No se encontró la mesa en Firebase.');
+            }
+
+            const latestItems = Array.isArray(latestTable.items)
+                ? latestTable.items
+                : [];
+
+            // Actualizar únicamente los productos del lote seleccionado.
+            const updatedItems = latestItems.map(item => {
                 if (!item.sentToKitchen || item.served) {
                     return item;
                 }
@@ -762,8 +783,6 @@ async function markBatchServed(tableId, batchId) {
                 };
             });
 
-            const documentId = table._docId || `mesa_${table.id}`;
-
             await window.RestoposDB.update(
                 'mesas',
                 documentId,
@@ -772,7 +791,14 @@ async function markBatchServed(tableId, batchId) {
                 }
             );
 
-            table.items = updatedItems;
+            // Actualizar la mesa local más reciente.
+            const currentTable = tables.find(
+                t => Number(t.id) === Number(tableId)
+            );
+
+            if (currentTable) {
+                currentTable.items = updatedItems;
+            }
 
             appConfig.lastUpdated = Date.now();
             saveData();
