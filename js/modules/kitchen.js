@@ -49,9 +49,34 @@ async function sendOrderToKitchen() {
             return;
         }
 
-        localTable.items = Array.isArray(cloudTable.items)
+        // Conservar las observaciones locales antes de sincronizar.
+        const localItems = Array.isArray(localTable.items)
+            ? localTable.items
+            : [];
+
+        const cloudItems = Array.isArray(cloudTable.items)
             ? cloudTable.items
             : [];
+
+        // Recuperar los datos más recientes de Firebase
+        // sin perder las observaciones que aún están en memoria.
+        localTable.items = cloudItems.map(cloudItem => {
+
+            const localItem = localItems.find(
+                item => item.uid && item.uid === cloudItem.uid
+            );
+
+            if (!localItem) {
+                return cloudItem;
+            }
+
+            return {
+                ...cloudItem,
+                observation: localItem.observation ?? cloudItem.observation ?? '',
+                modifications: localItem.modifications ?? cloudItem.modifications ?? []
+            };
+
+        });
 
         localTable.status = cloudTable.status || 'libre';
 
