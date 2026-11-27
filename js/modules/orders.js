@@ -605,9 +605,12 @@ function renderPlusOrderItems() {
 
 async function updateItemKitchenCheck(index, isChecked) {
 
+    // Capturar el identificador de la mesa al iniciar la operación.
+    const targetTableId = currentTableId;
+
     // Buscar la mesa que tiene abierta el usuario.
     const table = tables.find(
-        t => Number(t.id) === Number(currentTableId)
+        t => Number(t.id) === Number(targetTableId)
     );
 
     if (!table || !Array.isArray(table.items)) return;
@@ -668,9 +671,9 @@ async function updateItemKitchenCheck(index, isChecked) {
             .catch(() => { })
             .then(async () => {
 
-                // Buscar nuevamente la mesa con los últimos cambios.
+                // Buscar nuevamente la mesa original de esta operación.
                 const latestTable = tables.find(
-                    t => Number(t.id) === Number(currentTableId)
+                    t => Number(t.id) === Number(targetTableId)
                 );
 
                 if (!latestTable) {
