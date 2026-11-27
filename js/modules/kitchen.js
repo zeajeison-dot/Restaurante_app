@@ -465,8 +465,11 @@ function renderKitchenOrders() {
                     padding:8px 0;
                     border-bottom:1px solid rgba(0,0,0,0.1);
                 ">
-
-                    <strong>${item.name}</strong>
+                    //NOMBRE DEL PRODUCTO
+                    <!-- NOMBRE DEL PRODUCTO HTML-->
+                    <strong style="font-size:28px;">
+                    ${item.name}
+                    </strong>
 
                     ${item.observation
                     ? `
@@ -477,7 +480,7 @@ function renderKitchenOrders() {
                                 border-left:4px solid #dc2626;
                                 border-radius:5px;
                                 color:#b91c1c;
-                                font-size:15px;
+                                font-size:20px;
                                 font-weight:800;
                                 text-transform:uppercase;
                                 line-height:1.4;
@@ -528,7 +531,7 @@ function renderKitchenOrders() {
 
                 <!-- HORA DEL LOTE -->
                 <div style="
-                    font-size:11px;
+                    font-size:10px;
                     font-weight:600;
                     text-align:center;
                     white-space:nowrap;
