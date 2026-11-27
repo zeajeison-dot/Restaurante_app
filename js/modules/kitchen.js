@@ -199,6 +199,7 @@ async function sendOrderToKitchen() {
 
 
 
+
 /**
  * ==========================================================
  * RENDERIZAR COMANDAS EN PANTALLA DE COCINA
@@ -294,7 +295,13 @@ function renderKitchenOrders() {
        3. ORDENAR LOS LOTES DEL MÁS ANTIGUO AL MÁS RECIENTE
     ====================================================== */
 
-    activeBatches.sort((a, b) => a.sentAt - b.sentAt);
+    /* 3. ORDENAR LOS LOTES POR PRIORIDAD DE SERVICIO */
+    activeBatches.sort((a, b) => {
+        const deadlineA = a.sentAt + (a.timerMinutes * 60 * 1000);
+        const deadlineB = b.sentAt + (b.timerMinutes * 60 * 1000);
+
+        return deadlineA - deadlineB || a.sentAt - b.sentAt;
+    });
 
     // Activar desplazamiento cuando existan más de cuatro comandas.
     container.classList.toggle('kitchen-many', activeBatches.length > 4);
@@ -421,7 +428,7 @@ function renderKitchenOrders() {
 
 
         /* ==================================================
-           9. CONSTRUIR LA LISTA DE PRODUCTOS
+           9. CONSTRUIR LA LISTA DE PRODUCTOS Y OBSERVACIONES
         ================================================== */
 
         let itemsHtml = '';
@@ -433,12 +440,30 @@ function renderKitchenOrders() {
                     padding:8px 0;
                     border-bottom:1px solid rgba(0,0,0,0.1);
                 ">
+
                     <strong>${item.name}</strong>
 
                     ${item.observation
-                        ? `<div style="font-size:13px;">${item.observation}</div>`
-                        : ''
-                    }
+                    ? `
+                            <div style="
+                                margin-top:6px;
+                                padding:7px 9px;
+                                background:#fee2e2;
+                                border-left:4px solid #dc2626;
+                                border-radius:5px;
+                                color:#b91c1c;
+                                font-size:15px;
+                                font-weight:800;
+                                text-transform:uppercase;
+                                line-height:1.4;
+                            ">
+                                ⚠️ OBSERVACIÓN:
+                                <div>${item.observation}</div>
+                            </div>
+                        `
+                    : ''
+                }
+
                 </div>
             `;
 
@@ -461,7 +486,7 @@ function renderKitchenOrders() {
         card.innerHTML = `
             <div style="
                 display:grid;
-                grid-template-columns: 1fr auto 1fr;
+                grid-template-columns:1fr auto 1fr;
                 align-items:center;
                 gap:8px;
             ">
@@ -475,6 +500,7 @@ function renderKitchenOrders() {
                     ${batch.tableName}
                 </div>
 
+
                 <!-- HORA DEL LOTE -->
                 <div style="
                     font-size:11px;
@@ -483,11 +509,12 @@ function renderKitchenOrders() {
                     white-space:nowrap;
                 ">
                     Lote ${new Date(batch.sentAt).toLocaleTimeString('es-CO', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true
-                    })}
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        })}
                 </div>
+
 
                 <!-- TEMPORIZADOR -->
                 <div style="text-align:right;">
@@ -515,10 +542,12 @@ function renderKitchenOrders() {
 
             </div>
 
+
             <!-- PRODUCTOS -->
             <div style="margin-top:8px;">
                 ${itemsHtml}
             </div>
+
 
             <!-- BOTÓN DE SERVIDO -->
             <button
@@ -549,6 +578,7 @@ function renderKitchenOrders() {
     });
 
 }
+
 
 
 
