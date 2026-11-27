@@ -484,3 +484,28 @@ body:has(#kitchen-section:not(.hidden)) {
 
 
 
+/* ==========================================
+   COCINA - ALTURA NATURAL DE LAS COMANDAS
+========================================== */
+
+/* La tarjeta no debe crecer para llenar la pantalla */
+#kitchenOrdersContainer > div {
+    flex: 0 0 auto !important;
+    align-self: stretch;
+    height: auto !important;
+    min-height: 0 !important;
+}
+
+/* La lista de platos conserva su altura natural */
+#kitchenOrdersContainer > div > div:nth-child(2) {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+/* El botón conserva su posición al final de la tarjeta */
+#kitchenOrdersContainer > div > button {
+    flex: 0 0 auto !important;
+}
+
